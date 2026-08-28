@@ -14,7 +14,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8.3,<10"]
+test = [
+  "jsonschema>=4.23,<5",
+  "pytest>=8.3,<10",
+]
 
 [project.scripts]
 scanview-agent = "scanview_agent.cli:main"

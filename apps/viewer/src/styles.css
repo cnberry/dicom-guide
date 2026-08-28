@@ -198,6 +198,12 @@ main { min-height: 100vh; }
 .native-badge { color: #9bb0aa; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; white-space: nowrap; }
 .dicom-viewport { height: min(52vw, 600px); min-height: 360px; position: relative; background: #020504; overflow: hidden; }
 .cornerstone-host { position: absolute; inset: 0; }
+.orientation-labels { position: absolute; inset: 0; z-index: 1; pointer-events: none; color: #dce8e4; font: 500 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-shadow: 0 1px 3px #000, 0 0 4px #000; }
+.orientation-labels span { position: absolute; }
+.orientation-left { left: 8px; top: 50%; transform: translateY(-50%); }
+.orientation-right { right: 8px; top: 50%; transform: translateY(-50%); }
+.orientation-top { left: 50%; top: 8px; transform: translateX(-50%); }
+.orientation-bottom { left: 50%; bottom: 8px; transform: translateX(-50%); }
 .viewport-status { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; color: var(--muted); font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: radial-gradient(circle, rgba(29, 74, 63, 0.15), transparent 55%); }
 .slice-control { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 10px 13px; border-top: 1px solid var(--line); background: #0a1715; }
 .slice-control input { accent-color: var(--accent); width: 100%; }

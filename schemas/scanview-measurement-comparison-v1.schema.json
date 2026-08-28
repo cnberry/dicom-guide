@@ -86,7 +86,7 @@
       "required": ["timepoint", "measurement_type", "source", "review_status"],
       "properties": {
         "timepoint": { "enum": ["baseline", "followup"] },
-        "measurement_type": { "enum": ["length", "bidirectional"] },
+        "measurement_type": { "enum": ["length", "bidirectional", "elliptical_roi"] },
         "source": { "$ref": "#/$defs/source" },
         "review_status": { "const": "unreviewed" }
       }
@@ -117,7 +117,15 @@
       ],
       "properties": {
         "metric": {
-          "enum": ["length", "long_axis", "short_axis", "bidimensional_product"]
+          "enum": [
+            "length",
+            "long_axis",
+            "short_axis",
+            "bidimensional_product",
+            "major_axis",
+            "minor_axis",
+            "elliptical_area"
+          ]
         },
         "baseline": { "type": "number", "minimum": 0 },
         "followup": { "type": "number", "minimum": 0 },

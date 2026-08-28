@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import stat
 import sys
 from pathlib import Path
 
+from jsonschema import Draft202012Validator, FormatChecker
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, MRImageStorage, generate_uid
 
@@ -214,7 +216,7 @@ def test_measurement_packet_validation_preserves_unreviewed_source_provenance() 
         "schema_version": "1.0.0",
         "review_status": "unreviewed",
         "measurement_count": 1,
-        "counts_by_type": {"length": 1, "bidirectional": 0},
+        "counts_by_type": {"length": 1, "bidirectional": 0, "elliptical_roi": 0},
         "errors": [],
     }
 
@@ -262,7 +264,11 @@ def test_bidirectional_measurement_packet_validation() -> None:
     summary = measurement_packet_summary(packet)
 
     assert summary["valid"] is True
-    assert summary["counts_by_type"] == {"length": 0, "bidirectional": 1}
+    assert summary["counts_by_type"] == {
+        "length": 0,
+        "bidirectional": 1,
+        "elliptical_roi": 0,
+    }
 
 
 def bidirectional_packet(
@@ -316,6 +322,118 @@ def bidirectional_packet(
         ],
         "limitations": ["Not a response category."],
     }
+
+
+def elliptical_roi_packet(
+    tracking_id: str,
+    major_axis: float,
+    minor_axis: float,
+    *,
+    series_id: str,
+) -> dict:
+    return {
+        "schema_version": "3.0.0",
+        "created_at": "2026-08-28T00:00:00Z",
+        "review_status": "unreviewed",
+        "measurements": [
+            {
+                "tracking_id": tracking_id,
+                "type": "elliptical_roi",
+                "review_status": "unreviewed",
+                "source": {
+                    "series_id": series_id,
+                    "instance_id": "fedcba9876543210",
+                },
+                "geometry": {
+                    "coordinate_system": "DICOM patient LPS",
+                    "world_points": [
+                        [0, -minor_axis / 2, 0],
+                        [0, minor_axis / 2, 0],
+                        [-major_axis / 2, 0, 0],
+                        [major_axis / 2, 0, 0],
+                    ],
+                },
+                "result": {
+                    "major_axis": major_axis,
+                    "minor_axis": minor_axis,
+                    "area": math.pi * (major_axis / 2) * (minor_axis / 2),
+                    "unit": "mm",
+                    "area_unit": "mm2",
+                },
+                "method": {
+                    "name": "manual_elliptical_roi",
+                    "implementation": "Cornerstone3D EllipticalROITool",
+                },
+                "limitations": ["Manual 2D ROI; not a segmentation or response verdict."],
+            }
+        ],
+        "limitations": ["Not a response category."],
+    }
+
+
+def test_elliptical_roi_validation_and_geometry_consistency() -> None:
+    packet = elliptical_roi_packet(
+        "elliptical_roi:test", 10, 4, series_id="0123456789abcdef"
+    )
+
+    summary = measurement_packet_summary(packet)
+
+    assert summary["valid"] is True
+    assert summary["counts_by_type"] == {
+        "length": 0,
+        "bidirectional": 0,
+        "elliptical_roi": 1,
+    }
+
+    packet["measurements"][0]["result"]["area"] = 999
+    summary = measurement_packet_summary(packet)
+    assert summary["valid"] is False
+    assert "disagrees with its geometry" in " ".join(summary["errors"])
+
+
+def test_explicit_elliptical_roi_comparison_is_numeric_and_unreviewed() -> None:
+    comparison = build_measurement_comparison(
+        elliptical_roi_packet(
+            "elliptical_roi:baseline", 10, 4, series_id="0123456789abcdef"
+        ),
+        elliptical_roi_packet(
+            "elliptical_roi:followup", 8, 3, series_id="1123456789abcdef"
+        ),
+        baseline_tracking_id="elliptical_roi:baseline",
+        followup_tracking_id="elliptical_roi:followup",
+    )
+
+    assert comparison["review_status"] == "unreviewed"
+    assert comparison["candidate_interpretations"] == []
+    assert [item["metric"] for item in comparison["computed_results"]] == [
+        "major_axis",
+        "minor_axis",
+        "elliptical_area",
+    ]
+    assert comparison["computed_results"][2]["unit"] == "mm2"
+    assert math.isclose(comparison["computed_results"][2]["percent_change"], -40.0)
+
+    repository_root = Path(__file__).parents[3]
+    packet_schema = json.loads(
+        (repository_root / "schemas" / "scanview-measurements-v3.schema.json").read_text()
+    )
+    comparison_schema = json.loads(
+        (
+            repository_root
+            / "schemas"
+            / "scanview-measurement-comparison-v1.schema.json"
+        ).read_text()
+    )
+    Draft202012Validator.check_schema(packet_schema)
+    Draft202012Validator(packet_schema, format_checker=FormatChecker()).validate(
+        elliptical_roi_packet(
+            "elliptical_roi:schema", 10, 4, series_id="0123456789abcdef"
+        )
+    )
+    Draft202012Validator.check_schema(comparison_schema)
+    Draft202012Validator(
+        comparison_schema, format_checker=FormatChecker()
+    ).validate(comparison)
 
 
 def test_explicit_bidirectional_comparison_is_numeric_and_unreviewed() -> None:

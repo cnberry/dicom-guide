@@ -38,14 +38,25 @@
    and agent API behind one loopback launcher. Service-backed evidence IDs now join
    directly to manifest records.
 
+## Completed in the fourth milestone
+
+1. Added DICOM patient-orientation labels derived locally from validated Image
+   Orientation (Patient) geometry; invalid geometry produces no labels.
+2. Added manual elliptical ROI overlays with major/minor diameters and 2D ellipse area
+   in trusted patient-space units.
+3. Added v3 source-linked measurement packets, v1/v2 import compatibility, ROI
+   geometry/result validation, save/reopen restoration, and numeric-only agent
+   comparison.
+4. Verified the full ROI export/validate/reopen path with a synthetic local DICOM
+   stack and no external runtime request.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
 2. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Add ROI measurements, orientation labels, and key-image export using the existing
-   evidence packet contract.
+3. Add native key-image export using the existing evidence packet contract.
 4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
    links around the self-contained Python wheel.
 5. Define the clinician-reviewed evidence packet and sign-off workflow.

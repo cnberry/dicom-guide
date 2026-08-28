@@ -28,7 +28,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - No external processing API: decoding, metadata, and comparisons stay on-device.
 - Extension-independent DICOM Part 10 parsing.
 - MRI/CT stack rendering through Cornerstone3D's maintained codecs.
-- Window/level, pan, zoom, reset, and manual length/bidirectional measurement tools.
+- Window/level, pan, zoom, reset, DICOM patient-orientation labels, and manual
+  length/bidirectional/elliptical ROI measurement tools.
 - Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
 - Patient-position slice linking for shared compatible DICOM frames, with an explicitly
   approximate normalized fallback everywhere else.
@@ -127,7 +128,7 @@ refuses non-loopback bind addresses.
 
 ## Save and reopen a measurement draft
 
-Choose **Length** or **Bidirectional**, draw a manual measurement, then choose
+Choose **Length**, **Bidirectional**, or **Ellipse ROI**, draw a manual measurement, then choose
 **Export measurement draft**. The local JSON file is sensitive derived medical
 data. It contains opaque source references and DICOM patient-space geometry, but no
 direct patient name/ID or source path. To reopen it, load the source DICOM folder,
@@ -137,7 +138,8 @@ and table rows are restored locally and remain `unreviewed`.
 `compare-measurements` requires explicit baseline and follow-up tracking IDs from
 different source series. It refuses unknown physical units, mismatched tool types,
 and geometry/result disagreements. Its output contains deltas, limitations, missing
-clinical context, and questions—not a treatment-response category.
+clinical context, and questions—not a treatment-response category. An ellipse is a
+2D area draft only; it is not tumor segmentation, volume, or a response verdict.
 
 ## Preserve and verify removable media
 

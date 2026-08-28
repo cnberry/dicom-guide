@@ -66,8 +66,8 @@ def validate_measurement_packet(packet: Any) -> list[str]:
     ):
         errors.append("packet contains unsupported fields")
     schema_version = packet.get("schema_version")
-    if schema_version not in {"1.0.0", "2.0.0"}:
-        errors.append("schema_version must be 1.0.0 or 2.0.0")
+    if schema_version not in {"1.0.0", "2.0.0", "3.0.0"}:
+        errors.append("schema_version must be 1.0.0, 2.0.0, or 3.0.0")
     if packet.get("review_status") != "unreviewed":
         errors.append("review_status must be unreviewed")
     if not isinstance(packet.get("created_at"), str) or not packet["created_at"]:
@@ -108,8 +108,10 @@ def validate_measurement_packet(packet: Any) -> list[str]:
         ):
             errors.append(f"{prefix} contains unsupported fields")
         measurement_type = measurement.get("type")
-        if measurement_type not in {"length", "bidirectional"} or (
-            schema_version == "1.0.0" and measurement_type != "length"
+        if (
+            measurement_type not in {"length", "bidirectional", "elliptical_roi"}
+            or (schema_version == "1.0.0" and measurement_type != "length")
+            or (schema_version == "2.0.0" and measurement_type == "elliptical_roi")
         ):
             errors.append(f"{prefix}.type is unsupported for this schema version")
         if measurement.get("review_status") != "unreviewed":
@@ -143,7 +145,7 @@ def validate_measurement_packet(packet: Any) -> list[str]:
             if not _has_only_keys(geometry, {"coordinate_system", "world_points"}):
                 errors.append(f"{prefix}.geometry contains unsupported fields")
             points = geometry.get("world_points")
-            expected_points = 4 if measurement_type == "bidirectional" else 2
+            expected_points = 2 if measurement_type == "length" else 4
             if not _valid_world_points(points, expected_points):
                 errors.append(
                     f"{prefix}.geometry.world_points must contain {expected_points} finite 3D points"
@@ -185,6 +187,41 @@ def validate_measurement_packet(packet: Any) -> list[str]:
                     and _approximately_equal(result["product"], axes[0] * axes[1])
                 ):
                     errors.append(f"{prefix}.result disagrees with its geometry")
+        elif measurement_type == "elliptical_roi":
+            if not _has_only_keys(
+                result,
+                {"major_axis", "minor_axis", "area", "unit", "area_unit"},
+            ):
+                errors.append(f"{prefix}.result contains unsupported fields")
+            physical_result = (
+                result.get("unit") == "mm"
+                and result.get("area_unit") == "mm2"
+                and _finite_nonnegative(result.get("major_axis"))
+                and _finite_nonnegative(result.get("minor_axis"))
+                and _finite_nonnegative(result.get("area"))
+            )
+            unknown_result = (
+                result.get("unit") == "unknown" and result.get("area_unit") == "unknown"
+            )
+            if not physical_result and not unknown_result:
+                errors.append(f"{prefix}.result elliptical ROI values are invalid")
+            if unknown_result and any(
+                result.get(key) is not None for key in ("major_axis", "minor_axis", "area")
+            ):
+                errors.append(f"{prefix}.result reports values with unknown units")
+            points = geometry.get("world_points") if isinstance(geometry, dict) else None
+            if physical_result and _valid_world_points(points, 4):
+                axes = sorted(
+                    (_distance(points[0], points[1]), _distance(points[2], points[3])),
+                    reverse=True,
+                )
+                expected_area = math.pi * (axes[0] / 2) * (axes[1] / 2)
+                if not (
+                    _approximately_equal(result["major_axis"], axes[0])
+                    and _approximately_equal(result["minor_axis"], axes[1])
+                    and _approximately_equal(result["area"], expected_area)
+                ):
+                    errors.append(f"{prefix}.result disagrees with its geometry")
         else:
             if not _has_only_keys(result, {"value", "unit"}):
                 errors.append(f"{prefix}.result contains unsupported fields")
@@ -204,6 +241,8 @@ def validate_measurement_packet(packet: Any) -> list[str]:
         expected_method = (
             ("manual_perpendicular_bidirectional", "Cornerstone3D BidirectionalTool")
             if measurement_type == "bidirectional"
+            else ("manual_elliptical_roi", "Cornerstone3D EllipticalROITool")
+            if measurement_type == "elliptical_roi"
             else ("manual_two_point_length", "Cornerstone3D LengthTool")
         )
         if not isinstance(method, dict) or method.get("name") != expected_method[0]:
@@ -224,7 +263,7 @@ def validate_measurement_packet(packet: Any) -> list[str]:
 def measurement_packet_summary(packet: Any) -> dict[str, Any]:
     errors = validate_measurement_packet(packet)
     measurements = packet.get("measurements", []) if isinstance(packet, dict) else []
-    measurement_types = {"length": 0, "bidirectional": 0}
+    measurement_types = {"length": 0, "bidirectional": 0, "elliptical_roi": 0}
     if isinstance(measurements, list):
         for measurement in measurements:
             if isinstance(measurement, dict) and measurement.get("type") in measurement_types:
@@ -274,15 +313,20 @@ def build_measurement_comparison(
     if baseline["result"]["unit"] != "mm" or followup["result"]["unit"] != "mm":
         raise ValueError("both measurements require trusted physical millimeter units")
 
-    metrics = (
-        [("length", "value", "mm")]
-        if baseline["type"] == "length"
-        else [
+    if baseline["type"] == "length":
+        metrics = [("length", "value", "mm")]
+    elif baseline["type"] == "elliptical_roi":
+        metrics = [
+            ("major_axis", "major_axis", "mm"),
+            ("minor_axis", "minor_axis", "mm"),
+            ("elliptical_area", "area", "mm2"),
+        ]
+    else:
+        metrics = [
             ("long_axis", "long_axis", "mm"),
             ("short_axis", "short_axis", "mm"),
             ("bidimensional_product", "product", "mm2"),
         ]
-    )
     computed_results = []
     limitations = [
         "The two measurements were paired only because the caller explicitly selected both tracking IDs.",

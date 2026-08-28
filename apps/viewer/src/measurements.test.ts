@@ -150,7 +150,7 @@ describe('measurement evidence export', () => {
       references,
     );
 
-    expect(packet.schema_version).toBe('2.0.0');
+    expect(packet.schema_version).toBe('3.0.0');
     expect(packet.measurements[0]).toMatchObject({
       tracking_id: 'bidirectional:annotation-2',
       type: 'bidirectional',
@@ -208,6 +208,91 @@ describe('measurement evidence export', () => {
       ],
       limitations: ['Not a response category.'],
     };
+
+    const parsed = readMeasurementEvidencePacket(packet);
+
+    expect(parsed.packet).toBeUndefined();
+    expect(parsed.errors.join(' ')).toContain('disagrees with its geometry');
+  });
+
+  it('exports an elliptical ROI with patient-space axes and area', () => {
+    const references = new Map<string, ImageSourceReference>([
+      [
+        'dicomfile:4',
+        {
+          seriesId: 'series_0123456789abcdef0123',
+          instanceId: 'instance_0123456789abcdef0123',
+          spacingTrusted: true,
+        },
+      ],
+    ]);
+    const packet = buildMeasurementEvidencePacket(
+      [
+        {
+          annotationId: 'annotation-3',
+          type: 'elliptical_roi',
+          referencedImageId: 'dicomfile:4',
+          worldPoints: [
+            [0, -2, 0],
+            [0, 2, 0],
+            [-5, 0, 0],
+            [5, 0, 0],
+          ],
+        },
+      ],
+      references,
+      '2026-08-28T00:00:00.000Z',
+    );
+
+    expect(packet.schema_version).toBe('3.0.0');
+    expect(packet.measurements[0]).toMatchObject({
+      tracking_id: 'elliptical_roi:annotation-3',
+      type: 'elliptical_roi',
+      result: {
+        major_axis: 10,
+        minor_axis: 4,
+        area: Math.PI * 10,
+        unit: 'mm',
+        area_unit: 'mm2',
+      },
+      method: {
+        name: 'manual_elliptical_roi',
+        implementation: 'Cornerstone3D EllipticalROITool',
+      },
+    });
+    expect(packet.measurements[0].limitations.join(' ')).toContain('not a segmentation');
+    expect(readMeasurementEvidencePacket(packet)).toEqual({ packet, errors: [] });
+  });
+
+  it('rejects an ROI area that disagrees with its geometry', () => {
+    const references = new Map<string, ImageSourceReference>([
+      [
+        'dicomfile:5',
+        {
+          seriesId: '0123456789abcdef',
+          instanceId: 'fedcba9876543210',
+          spacingTrusted: true,
+        },
+      ],
+    ]);
+    const packet = buildMeasurementEvidencePacket(
+      [
+        {
+          type: 'elliptical_roi',
+          referencedImageId: 'dicomfile:5',
+          worldPoints: [
+            [0, -2, 0],
+            [0, 2, 0],
+            [-5, 0, 0],
+            [5, 0, 0],
+          ],
+        },
+      ],
+      references,
+    );
+    const roi = packet.measurements[0];
+    if (roi.type !== 'elliptical_roi') throw new Error('Expected an elliptical ROI fixture.');
+    roi.result.area = 999;
 
     const parsed = readMeasurementEvidencePacket(packet);
 

@@ -50,7 +50,7 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    measurement IDs join directly to that manifest; legacy folder IDs remain accepted.
 5. **Derivatives:** future transforms, resampled images, masks, additional
    measurements, and reports go to a separate store with source references and
-   review status. Manual length/bidirectional drafts already use this contract as
+   review status. Manual length/bidirectional/elliptical ROI drafts already use this contract as
    versioned local JSON and never modify native instances. Agent comparisons accept
    only explicit, distinct-series measurement selections and emit no response label.
 

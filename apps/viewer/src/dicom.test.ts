@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assessCompatibility,
   formatDicomDate,
+  getPatientOrientationLabels,
   getLinkStrategy,
   mapLinkedIndex,
   mapNormalizedIndex,
@@ -50,6 +51,31 @@ describe('comparison safety', () => {
 });
 
 describe('display formatting', () => {
+  it('labels standard axial DICOM patient orientation without guessing', () => {
+    expect(getPatientOrientationLabels([1, 0, 0, 0, 1, 0])).toEqual({
+      left: 'R',
+      right: 'L',
+      top: 'A',
+      bottom: 'P',
+    });
+  });
+
+  it('orders compound oblique labels by direction-cosine magnitude', () => {
+    const diagonal = 1 / Math.sqrt(2);
+    expect(getPatientOrientationLabels([diagonal, diagonal, 0, 0, 0, -1])).toEqual({
+      left: 'RA',
+      right: 'LP',
+      top: 'H',
+      bottom: 'F',
+    });
+  });
+
+  it('withholds orientation labels for malformed or non-orthogonal geometry', () => {
+    expect(getPatientOrientationLabels([1, 0, 0])).toBeUndefined();
+    expect(getPatientOrientationLabels([1, 0, 0, 1, 0, 0])).toBeUndefined();
+    expect(getPatientOrientationLabels([2, 0, 0, 0, 1, 0])).toBeUndefined();
+  });
+
   it('formats DICOM dates without guessing malformed values', () => {
     expect(formatDicomDate('20260828')).toBe('2026-08-28');
     expect(formatDicomDate('unknown')).toBe('unknown');

@@ -8,6 +8,13 @@ export type Geometry = {
   orientation?: number[];
 };
 
+export type PatientOrientationLabels = {
+  left: string;
+  right: string;
+  top: string;
+  bottom: string;
+};
+
 export type DicomInstance = {
   instanceId: string;
   file?: File;
@@ -62,6 +69,50 @@ const safeId = async (namespace: string, value: string): Promise<string> => {
 
 const dot = (left: number[], right: number[]): number =>
   left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
+
+const orientationStringLps = (vector: number[]): string =>
+  [
+    { magnitude: Math.abs(vector[0]), label: vector[0] < 0 ? 'R' : 'L' },
+    { magnitude: Math.abs(vector[1]), label: vector[1] < 0 ? 'A' : 'P' },
+    { magnitude: Math.abs(vector[2]), label: vector[2] < 0 ? 'F' : 'H' },
+  ]
+    .filter(({ magnitude }) => magnitude > 0.0001)
+    .sort((left, right) => right.magnitude - left.magnitude)
+    .map(({ label }) => label)
+    .join('');
+
+const invertOrientationStringLps = (value: string): string =>
+  [...value]
+    .map((label) => ({ R: 'L', L: 'R', A: 'P', P: 'A', F: 'H', H: 'F' })[label] ?? '')
+    .join('');
+
+export const getPatientOrientationLabels = (
+  orientation?: number[],
+): PatientOrientationLabels | undefined => {
+  if (!orientation || orientation.length !== 6 || !orientation.every(Number.isFinite)) {
+    return undefined;
+  }
+  const row = orientation.slice(0, 3);
+  const column = orientation.slice(3, 6);
+  const rowMagnitude = Math.sqrt(dot(row, row));
+  const columnMagnitude = Math.sqrt(dot(column, column));
+  if (
+    Math.abs(rowMagnitude - 1) > 0.01 ||
+    Math.abs(columnMagnitude - 1) > 0.01 ||
+    Math.abs(dot(row, column)) > 0.01
+  ) {
+    return undefined;
+  }
+  const right = orientationStringLps(row);
+  const bottom = orientationStringLps(column);
+  if (!right || !bottom) return undefined;
+  return {
+    left: invertOrientationStringLps(right),
+    right,
+    top: invertOrientationStringLps(bottom),
+    bottom,
+  };
+};
 
 const normalFromOrientation = (orientation?: number[]): number[] | undefined => {
   if (!orientation || orientation.length < 6) return undefined;

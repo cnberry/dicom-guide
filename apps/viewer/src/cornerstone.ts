@@ -12,6 +12,7 @@ import {
 } from '@cornerstonejs/dicom-image-loader';
 import {
   BidirectionalTool,
+  EllipticalROITool,
   Enums as ToolEnums,
   LengthTool,
   PanTool,
@@ -34,7 +35,7 @@ let initialization: Promise<void> | undefined;
 const imageReferences = new Map<string, ImageSourceReference>();
 const instanceImageIds = new Map<string, string>();
 
-export type ViewerTool = 'window' | 'pan' | 'zoom' | 'length' | 'bidirectional';
+export type ViewerTool = 'window' | 'pan' | 'zoom' | 'length' | 'bidirectional' | 'roi';
 
 const toolClasses = {
   window: WindowLevelTool,
@@ -42,6 +43,7 @@ const toolClasses = {
   zoom: ZoomTool,
   length: LengthTool,
   bidirectional: BidirectionalTool,
+  roi: EllipticalROITool,
 } as const;
 
 export type ViewportToolController = {
@@ -66,14 +68,24 @@ export const initializeCornerstone = (): Promise<void> => {
 export const createMeasurementEvidencePacket = (): MeasurementEvidencePacket => {
   const measurements: RawMeasurementAnnotation[] = annotation.state.getAllAnnotations()
     .filter((item) =>
-      [LengthTool.toolName, BidirectionalTool.toolName].includes(item.metadata?.toolName ?? ''),
+      [LengthTool.toolName, BidirectionalTool.toolName, EllipticalROITool.toolName].includes(
+        item.metadata?.toolName ?? '',
+      ),
     )
-    .map((item) => ({
-      annotationId: item.annotationUID,
-      type: item.metadata?.toolName === BidirectionalTool.toolName ? 'bidirectional' : 'length',
-      referencedImageId: item.metadata?.referencedImageId,
-      worldPoints: item.data.handles?.points?.map((point) => Array.from(point)),
-    }));
+    .map((item) => {
+      const toolName = item.metadata?.toolName;
+      return {
+        annotationId: item.annotationUID,
+        type:
+          toolName === BidirectionalTool.toolName
+            ? 'bidirectional'
+            : toolName === EllipticalROITool.toolName
+              ? 'elliptical_roi'
+              : 'length',
+        referencedImageId: item.metadata?.referencedImageId,
+        worldPoints: item.data.handles?.points?.map((point) => Array.from(point)),
+      };
+    });
   return buildMeasurementEvidencePacket(measurements, imageReferences);
 };
 
@@ -132,6 +144,20 @@ export const restoreMeasurementEvidencePacket = (
         annotationUID: measurement.tracking_id,
         referencedImageId,
       });
+    } else if (measurement.type === 'elliptical_roi') {
+      EllipticalROITool.hydrate(
+        viewportId,
+        measurement.geometry.world_points as [
+          Types.Point3,
+          Types.Point3,
+          Types.Point3,
+          Types.Point3,
+        ],
+        {
+          annotationUID: measurement.tracking_id,
+          referencedImageId,
+        },
+      );
     } else {
       LengthTool.hydrate(
         viewportId,

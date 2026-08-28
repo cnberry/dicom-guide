@@ -47,6 +47,9 @@ are established.
 - Deformable registration and propagated masks are research-only until validated.
 - Pseudoprogression, treatment effect, steroid change, and clinical status cannot be
   resolved from a simple size difference.
+- A manual ellipse is a 2D geometric approximation. Its area is not a tumor mask,
+  tumor volume, total burden, or response classification; sequence and tumor component
+  still require clinician confirmation.
 
 ## Agent output contract
 

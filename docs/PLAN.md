@@ -26,6 +26,8 @@ result into a medical conclusion.
 - Read-only catalog/API and versioned agent JSON contract.
 - Explicit safety, privacy, and provenance UI.
 - Source-linked manual length and bidirectional evidence with a human-readable table.
+- Validated DICOM patient-orientation labels and source-linked 2D elliptical ROI
+  evidence.
 - Explicit, numeric-only local measurement comparison for agents.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
@@ -33,9 +35,8 @@ result into a medical conclusion.
 
 - Orthanc/DICOMweb import with localhost-only configuration.
 - OHIF longitudinal mode or ScanView mode extension.
-- Physical-coordinate linked crosshair, orientation overlays, and MPR.
-- ROI measurements using the implemented source-linked length/bidirectional
-  tracking/evidence contract.
+- Physical-coordinate linked crosshair and MPR.
+- Native key-image export using the implemented source-linked measurement contract.
 - Evidence-packet export for clinician conversations.
 
 ### Phase 3 — reviewed derivatives

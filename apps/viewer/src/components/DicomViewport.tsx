@@ -6,7 +6,7 @@ import {
   type ViewerTool,
   type ViewportToolController,
 } from '../cornerstone';
-import type { DicomSeries } from '../dicom';
+import { getPatientOrientationLabels, type DicomSeries } from '../dicom';
 import type { MeasurementEvidencePacket } from '../measurements';
 
 type Props = {
@@ -122,6 +122,7 @@ export function DicomViewport({
   }, [id, measurementPacket, series]);
 
   const maxIndex = Math.max(0, (series?.instances.length ?? 1) - 1);
+  const orientationLabels = getPatientOrientationLabels(series?.geometry.orientation);
 
   return (
     <section className="viewport-shell" aria-label={`${label} DICOM viewport`}>
@@ -145,6 +146,25 @@ export function DicomViewport({
         }}
       >
         <div ref={elementRef} className="cornerstone-host" />
+        {orientationLabels && (
+          <div
+            className="orientation-labels"
+            aria-label={`DICOM patient orientation: left ${orientationLabels.left}, right ${orientationLabels.right}, top ${orientationLabels.top}, bottom ${orientationLabels.bottom}`}
+          >
+            <span className="orientation-left" aria-hidden="true">
+              {orientationLabels.left}
+            </span>
+            <span className="orientation-right" aria-hidden="true">
+              {orientationLabels.right}
+            </span>
+            <span className="orientation-top" aria-hidden="true">
+              {orientationLabels.top}
+            </span>
+            <span className="orientation-bottom" aria-hidden="true">
+              {orientationLabels.bottom}
+            </span>
+          </div>
+        )}
         {status && <div className="viewport-status">{status}</div>}
       </div>
       <div className="slice-control">

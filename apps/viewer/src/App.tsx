@@ -56,6 +56,16 @@ const formatMeasurementResult = (measurement: MeasurementEvidence): string => {
       ? 'Physical units unavailable'
       : `${measurement.result.value.toFixed(1)} mm`;
   }
+  if (measurement.type === 'elliptical_roi') {
+    if (
+      measurement.result.major_axis === undefined ||
+      measurement.result.minor_axis === undefined ||
+      measurement.result.area === undefined
+    ) {
+      return 'Physical units unavailable';
+    }
+    return `${measurement.result.major_axis.toFixed(1)} × ${measurement.result.minor_axis.toFixed(1)} mm · ${measurement.result.area.toFixed(1)} mm²`;
+  }
   if (
     measurement.result.long_axis === undefined ||
     measurement.result.short_axis === undefined ||
@@ -94,7 +104,13 @@ const MeasurementTable = ({ measurements }: { measurements: MeasurementEvidence[
           {measurements.length ? (
             measurements.map((measurement) => (
               <tr key={measurement.tracking_id}>
-                <td>{measurement.type === 'bidirectional' ? 'Bidirectional' : 'Length'}</td>
+                <td>
+                  {measurement.type === 'bidirectional'
+                    ? 'Bidirectional'
+                    : measurement.type === 'elliptical_roi'
+                      ? 'Ellipse ROI'
+                      : 'Length'}
+                </td>
                 <td>{formatMeasurementResult(measurement)}</td>
                 <td>
                   {formatOpaqueSource(measurement.source.series_id, 'series')} ·{' '}
@@ -233,7 +249,7 @@ export default function App() {
     const packet = createMeasurementEvidencePacket();
     if (packet.measurements.length === 0) {
       setMeasurementMessage(
-        'No measurements to export. Draw a Length or Bidirectional measurement first.',
+        'No measurements to export. Draw a Length, Bidirectional, or Ellipse ROI measurement first.',
       );
       return;
     }
@@ -390,6 +406,7 @@ export default function App() {
                 ['zoom', 'Zoom'],
                 ['length', 'Length'],
                 ['bidirectional', 'Bidirectional'],
+                ['roi', 'Ellipse ROI'],
               ] as const).map(([tool, label]) => (
                 <button
                   key={tool}
@@ -406,7 +423,7 @@ export default function App() {
             </div>
             <p>
               Primary drag:{' '}
-              {['length', 'bidirectional'].includes(activeTool)
+              {['length', 'bidirectional', 'roi'].includes(activeTool)
                 ? 'unreviewed measurement'
                 : activeTool}{' '}
               · wheel: slices · {!baseline || !followup

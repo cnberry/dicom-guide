@@ -32,15 +32,16 @@ Zero candidates is valid and safer than cross-modality or object-type guessing.
 
 ## Measurement evidence packets
 
-The viewer exports manual length and perpendicular bidirectional drafts. New exports
-conform to `schemas/scanview-measurements-v2.schema.json`; the importer and validator
-continue to accept length-only v1 packets. Each accepted record contains:
+The viewer exports manual length, perpendicular bidirectional, and elliptical ROI
+drafts. New exports conform to `schemas/scanview-measurements-v3.schema.json`; the
+importer and validator continue to accept length-only v1 and length/bidirectional v2
+packets. Each accepted record contains:
 
 - a stable tracking ID and `unreviewed` state;
 - opaque source series, instance, and optional frame-of-reference IDs;
-- two length or four bidirectional DICOM patient LPS world points;
-- a length, or long/short axes and bidimensional product, only when pixel spacing is
-  trustworthy;
+- two length or four bidirectional/ellipse DICOM patient LPS world points;
+- a length, long/short axes and bidimensional product, or ellipse major/minor axes and
+  area only when pixel spacing is trustworthy;
 - the exact manual tool implementation and explicit limitations.
 
 Annotations without valid geometry or source mapping are excluded rather than
@@ -79,7 +80,9 @@ types, trusted millimeter values, and distinct source series. Its output conform
 baseline/follow-up values, absolute and percentage changes, limitations, missing
 context, and questions for a clinician. `candidate_interpretations` is deliberately
 empty. The command does not establish same-lesion identity, scan compatibility, or
-the response criteria needed for a medical conclusion.
+the response criteria needed for a medical conclusion. Elliptical ROI comparisons
+report only major/minor diameter and mathematical 2D ellipse-area change; they do not
+establish tumor segmentation, volume, burden, or response.
 
 ## Read-only HTTP surface
 
@@ -134,7 +137,7 @@ it in `missing_context`; do not synthesize a diagnosis or response category.
 
 ## Future write boundary
 
-Registration, segmentation, ROI/volume measurement types, and signed evidence
+Registration, segmentation/volume measurement types, and signed evidence
 packets will be explicit, idempotent derivative jobs in a separate store. Each will
 record source hashes, algorithm/tool version, parameters, outputs, limitations, and
 review status. Native DICOM files remain read-only, and no registration-derived

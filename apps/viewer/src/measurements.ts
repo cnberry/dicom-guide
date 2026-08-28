@@ -5,7 +5,7 @@ export type ImageSourceReference = {
   spacingTrusted: boolean;
 };
 
-export type MeasurementType = 'length' | 'bidirectional';
+export type MeasurementType = 'length' | 'bidirectional' | 'elliptical_roi';
 
 export type RawMeasurementAnnotation = {
   annotationId?: string;
@@ -60,12 +60,28 @@ export type BidirectionalMeasurementEvidence = MeasurementBase & {
   };
 };
 
+export type EllipticalRoiMeasurementEvidence = MeasurementBase & {
+  type: 'elliptical_roi';
+  result: {
+    major_axis?: number;
+    minor_axis?: number;
+    area?: number;
+    unit: 'mm' | 'unknown';
+    area_unit: 'mm2' | 'unknown';
+  };
+  method: {
+    name: 'manual_elliptical_roi';
+    implementation: 'Cornerstone3D EllipticalROITool';
+  };
+};
+
 export type MeasurementEvidence =
   | LengthMeasurementEvidence
-  | BidirectionalMeasurementEvidence;
+  | BidirectionalMeasurementEvidence
+  | EllipticalRoiMeasurementEvidence;
 
 export type MeasurementEvidencePacket = {
-  schema_version: '1.0.0' | '2.0.0';
+  schema_version: '1.0.0' | '2.0.0' | '3.0.0';
   created_at: string;
   review_status: 'unreviewed';
   measurements: MeasurementEvidence[];
@@ -148,6 +164,32 @@ export const buildMeasurementEvidencePacket = (
     const secondAxis = distance(points[2], points[3]);
     const longAxis = Math.max(firstAxis, secondAxis);
     const shortAxis = Math.min(firstAxis, secondAxis);
+    if (annotation.type === 'elliptical_roi') {
+      return [
+        {
+          tracking_id: trackingId(annotation, index),
+          type: 'elliptical_roi',
+          review_status: 'unreviewed',
+          source: sourceEvidence,
+          geometry,
+          result: {
+            major_axis: source.spacingTrusted ? longAxis : undefined,
+            minor_axis: source.spacingTrusted ? shortAxis : undefined,
+            area: source.spacingTrusted ? Math.PI * (longAxis / 2) * (shortAxis / 2) : undefined,
+            unit: source.spacingTrusted ? 'mm' : 'unknown',
+            area_unit: source.spacingTrusted ? 'mm2' : 'unknown',
+          },
+          method: {
+            name: 'manual_elliptical_roi',
+            implementation: 'Cornerstone3D EllipticalROITool',
+          },
+          limitations: [
+            ...limitations,
+            'A 2D ellipse is not a segmentation, volume estimate, or treatment-response conclusion.',
+          ],
+        },
+      ];
+    }
     return [
       {
         tracking_id: trackingId(annotation, index),
@@ -181,7 +223,7 @@ export const buildMeasurementEvidencePacket = (
     );
   }
   return {
-    schema_version: '2.0.0',
+    schema_version: '3.0.0',
     created_at: createdAt,
     review_status: 'unreviewed',
     measurements,
@@ -225,7 +267,7 @@ export const readMeasurementEvidencePacket = (
     errors.push('Measurement packet contains unsupported fields.');
   }
   const schemaVersion = value.schema_version;
-  if (!['1.0.0', '2.0.0'].includes(String(schemaVersion))) {
+  if (!['1.0.0', '2.0.0', '3.0.0'].includes(String(schemaVersion))) {
     errors.push('Unsupported measurement schema version.');
   }
   if (value.review_status !== 'unreviewed') errors.push('Measurement packet must be unreviewed.');
@@ -266,8 +308,9 @@ export const readMeasurementEvidencePacket = (
       }
       const measurementType = item.type;
       if (
-        !['length', 'bidirectional'].includes(String(measurementType)) ||
+        !['length', 'bidirectional', 'elliptical_roi'].includes(String(measurementType)) ||
         (schemaVersion === '1.0.0' && measurementType !== 'length') ||
+        (schemaVersion === '2.0.0' && measurementType === 'elliptical_roi') ||
         item.review_status !== 'unreviewed' ||
         typeof item.tracking_id !== 'string' ||
         !item.tracking_id
@@ -294,7 +337,7 @@ export const readMeasurementEvidencePacket = (
 
       const geometry = item.geometry;
       const points = isRecord(geometry) ? geometry.world_points : undefined;
-      const expectedPoints = measurementType === 'bidirectional' ? 4 : 2;
+      const expectedPoints = measurementType === 'length' ? 2 : 4;
       const validPoints =
         Array.isArray(points) &&
         points.length === expectedPoints &&
@@ -361,6 +404,42 @@ export const readMeasurementEvidencePacket = (
         ) {
           errors.push(`Measurement ${index + 1} result contains unsupported fields.`);
         }
+      } else if (measurementType === 'elliptical_roi') {
+        const physicalResult =
+          result.unit === 'mm' &&
+          result.area_unit === 'mm2' &&
+          isFiniteNonNegative(result.major_axis) &&
+          isFiniteNonNegative(result.minor_axis) &&
+          isFiniteNonNegative(result.area);
+        const unknownResult = result.unit === 'unknown' && result.area_unit === 'unknown';
+        if (!physicalResult && !unknownResult) {
+          errors.push(`Measurement ${index + 1} has invalid elliptical ROI values.`);
+        }
+        if (
+          unknownResult &&
+          [result.major_axis, result.minor_axis, result.area].some(
+            (measurement) => measurement !== undefined,
+          )
+        ) {
+          errors.push(`Measurement ${index + 1} reports values with unknown units.`);
+        }
+        if (physicalResult && validPoints) {
+          const typedPoints = points as number[][];
+          const axes = [
+            distance(typedPoints[0], typedPoints[1]),
+            distance(typedPoints[2], typedPoints[3]),
+          ].sort((left, right) => right - left);
+          if (
+            !approximatelyEqual(result.major_axis as number, axes[0]) ||
+            !approximatelyEqual(result.minor_axis as number, axes[1]) ||
+            !approximatelyEqual(result.area as number, Math.PI * (axes[0] / 2) * (axes[1] / 2))
+          ) {
+            errors.push(`Measurement ${index + 1} result disagrees with its geometry.`);
+          }
+        }
+        if (!hasOnlyKeys(result, ['major_axis', 'minor_axis', 'area', 'unit', 'area_unit'])) {
+          errors.push(`Measurement ${index + 1} result contains unsupported fields.`);
+        }
       } else {
         if (result.unit === 'mm' && !isFiniteNonNegative(result.value)) {
           errors.push(`Measurement ${index + 1} has an invalid length value.`);
@@ -385,7 +464,9 @@ export const readMeasurementEvidencePacket = (
       const expectedMethod =
         measurementType === 'bidirectional'
           ? ['manual_perpendicular_bidirectional', 'Cornerstone3D BidirectionalTool']
-          : ['manual_two_point_length', 'Cornerstone3D LengthTool'];
+          : measurementType === 'elliptical_roi'
+            ? ['manual_elliptical_roi', 'Cornerstone3D EllipticalROITool']
+            : ['manual_two_point_length', 'Cornerstone3D LengthTool'];
       if (
         !isRecord(method) ||
         method.name !== expectedMethod[0] ||
