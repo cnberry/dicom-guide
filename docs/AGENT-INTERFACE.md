@@ -222,6 +222,38 @@ cannot independently prove that a missing ancestor existed. The validator report
 only status, event count/type, modality, parent-link presence, and integrity booleans;
 it withholds reviewer identity, notes, lesion label, opaque IDs, and numeric values.
 
+## Exact local viewer navigation
+
+An agent can turn exact manifest references into a human-viewer handoff without using
+filenames, raw DICOM UIDs, or an external service:
+
+```bash
+scanview-agent viewer-link manifest.json \
+  --baseline-series 'series_…' --baseline-instance 'instance_…' \
+  --followup-series 'series_…' --followup-instance 'instance_…' \
+  --base-url 'http://127.0.0.1:8765/'
+```
+
+The JSON result conforms to
+`schemas/scanview-navigation-intent-v1.schema.json`. It is explicitly `local_only`,
+`sensitive`, and `pairing_status: not_assessed`. Generation requires each exact
+instance to belong to its named renderable MR/CT series, distinct baseline/follow-up
+series, complete paired follow-up fields, and—when supplied—a plain loopback HTTP
+origin with no credentials, query, or pre-existing fragment.
+
+The same four source options can be passed to `scanview-agent launch`. The fragment
+contract is `#scanview-v1?baseline_series=…&baseline_instance=…` with an optional
+complete follow-up pair. The browser accepts only those four singleton fields within
+320 characters, resolves all targets against the fetched loopback catalog, and
+applies all or none. It then removes the fragment from the visible URL without a
+request. Because fragments are not part of HTTP requests, they do not enter the
+server access log or create server-side navigation state.
+
+Navigation changes only the selected native series and stack indexes. It does not
+approve compatibility, prove chronology or same-lesion identity, accept registration,
+hydrate measurements, or generate a conclusion. Existing compatibility and evidence
+export gates run normally after navigation.
+
 ## Source-read-only HTTP surface
 
 Start the local service:

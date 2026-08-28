@@ -78,6 +78,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
       element,
       series,
       activeTool,
+      index,
     )
       .then(({ engine, viewport, tools }) => {
         ownedEngine = engine;
@@ -93,7 +94,6 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
         restoreMeasurementEvidencePacket(`viewport-${id}`, series.id, measurementPacket);
         viewport.render();
         setStatus('');
-        onIndexChange(Math.floor(series.instances.length / 2));
       })
       .catch((error: unknown) => {
         setStatus(error instanceof Error ? error.message : 'Unable to render this series.');

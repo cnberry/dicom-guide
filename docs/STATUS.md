@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 13:37 PDT
+Last updated: 2026-08-28 13:56 PDT
 
 ## Data transfer
 
@@ -75,6 +75,10 @@ Last updated: 2026-08-28 13:37 PDT
   measurement pair, keeps export disabled if either pane differs, and sends only two
   in-memory key-image archives plus normalized comparison JSON to the exact-origin
   loopback assembler. The server persists no source, intermediate, or output file.
+- Agents can now create versioned one-use viewer navigation intents from exact opaque
+  manifest series/instances. The CLI and launcher validate catalog membership; the
+  browser applies all targets or none, clears the fragment immediately, and visibly
+  states that pairing remains unreviewed. URL fragments never reach the local server.
 - Review and amendment commands always create a new owner-only archive. Event hashes
   bind the actor, checklist, note, source comparison, prior event, and parent archive;
   an amended comparison is rejoined to the visual evidence and reset to `unreviewed`.
@@ -92,10 +96,10 @@ Last updated: 2026-08-28 13:37 PDT
   panes with one button. Both key-image captures remain in browser memory, an
   authenticated exact-origin loopback POST invokes the same Python assembler, and
   the validated ZIP is returned with `no-store` without a server-side patient file.
-- Versioned measurement, key-image, numeric-comparison, visit-packet, and
-  comparison-review JSON Schemas plus local validation are implemented. Same-series
-  pairs, unknown units, mismatched measurement types, and mismatched visual/numeric
-  evidence are refused; no response label is emitted.
+- Versioned measurement, key-image, numeric-comparison, visit-packet,
+  comparison-review, and navigation-intent JSON Schemas plus local validation are
+  implemented. Same-series pairs, unknown units, mismatched measurement types, and
+  mismatched visual/numeric evidence are refused; no response label is emitted.
 - Unified `scanview-agent launch` path implemented: one loopback process serves the
   bundled UI, manifest, pairing candidates, and protected native DICOM instances.
 - The staged release builder embeds the viewer, workers, and local codecs into a
@@ -112,16 +116,18 @@ Last updated: 2026-08-28 13:37 PDT
 
 ## Verification
 
-- Python agent tests: 38 passing, including cross-patient and legacy-context
+- Python agent tests: 42 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
-  same-origin HTTP enforcement, and static presentation integrity.
-- Viewer tests: 42 passing, including patient-context and local-only enforcement,
+  same-origin HTTP enforcement, local navigation membership/base-origin refusal,
+  owner-only intent output, and static presentation integrity.
+- Viewer tests: 46 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, exact three-file comparison-review transport and source-slice
-  lookup, and complete/regular MPR geometry gating.
+  lookup, strict one-use navigation parsing and atomic source resolution, and
+  complete/regular MPR geometry gating.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
@@ -211,6 +217,15 @@ Last updated: 2026-08-28 13:37 PDT
   unreviewed/self-attested warnings. Server logs contained only bundled local assets,
   opaque instance routes, and that one POST; all synthetic artifacts were moved to
   recoverable Trash.
+- Agent-navigation production smoke test: the local `viewer-link` command and the
+  authenticated launcher targeted synthetic baseline slice 2/6 and follow-up slice
+  5/6 by exact opaque IDs. Both rendered at those positions after initialization, the
+  browser immediately reduced the address to `/`, and the UI kept pairing visibly
+  unreviewed. The same intent also applied without reload in an already-open tab; a
+  deliberately misowned same-tab intent was rejected without changing either pane.
+  Server logs contained only `/`, bundled assets, the manifest,
+  and opaque instance routes—never the fragment or navigation IDs. Temporary intent
+  and manifest files were moved to recoverable Trash.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -227,6 +242,9 @@ Last updated: 2026-08-28 13:37 PDT
   record sign-off remain. The current review chain is self-attested and explicitly
   unverified. Elliptical ROI is a 2D manual draft, not segmentation or volume
   measurement.
+- There is not yet an explicit opt-in read-only bridge for an agent to inspect the
+  viewer's current in-memory pane/tool state; exact startup and live navigation are
+  implemented.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

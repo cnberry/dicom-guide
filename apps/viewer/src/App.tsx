@@ -30,6 +30,11 @@ import {
   type MeasurementComparisonDraft,
 } from './measurementComparison';
 import { loadLocalServiceCatalog } from './localService';
+import {
+  parseNavigationFragment,
+  resolveNavigationIntent,
+  type NavigationParseResult,
+} from './navigationIntent';
 import { saveVisitPacket as saveLocalVisitPacket } from './visitPacketService';
 
 type ImportState = { processed: number; total: number } | undefined;
@@ -69,6 +74,7 @@ export default function App() {
   const baselineViewportRef = useRef<DicomViewportHandle>(null);
   const followupViewportRef = useRef<DicomViewportHandle>(null);
   const sourceGenerationRef = useRef(0);
+  const sourceSummaryRef = useRef('No scan folder loaded');
   const [series, setSeries] = useState<DicomSeries[]>([]);
   const [baselineId, setBaselineId] = useState<string>();
   const [followupId, setFollowupId] = useState<string>();
@@ -80,6 +86,8 @@ export default function App() {
   const [resetNonce, setResetNonce] = useState(0);
   const [importState, setImportState] = useState<ImportState>();
   const [importMessage, setImportMessage] = useState('No scan folder loaded');
+  const [sourceReady, setSourceReady] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<NavigationParseResult>();
   const [measurementMessage, setMeasurementMessage] = useState(
     'Measurement drafts stay local and require clinician review.',
   );
@@ -182,26 +190,78 @@ export default function App() {
       }),
     [],
   );
+
+  useEffect(() => {
+    const consumeFragment = () => {
+      const parsed = parseNavigationFragment(window.location.hash);
+      if (!parsed.present) return;
+      try {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          `${window.location.pathname}${window.location.search}`,
+        );
+      } catch {
+        // Navigation still remains local if an embedded browser withholds history access.
+      }
+      setPendingNavigation(parsed);
+    };
+    consumeFragment();
+    window.addEventListener('hashchange', consumeFragment);
+    return () => window.removeEventListener('hashchange', consumeFragment);
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     const generation = sourceGenerationRef.current;
     void loadLocalServiceCatalog(controller.signal).then((catalog) => {
-      if (!catalog || controller.signal.aborted || generation !== sourceGenerationRef.current) {
+      if (controller.signal.aborted || generation !== sourceGenerationRef.current) {
+        return;
+      }
+      if (!catalog) {
+        setSourceReady(true);
         return;
       }
       setSeries(catalog.series);
+      const catalogMessage = catalog.series.length
+        ? `${catalog.studyCount} studies · ${catalog.series.length} renderable series · ${catalog.instanceCount.toLocaleString()} indexed instances · local loopback service · no upload`
+        : `${catalog.studyCount} studies · no renderable MR/CT pixel series · local loopback service`;
+      sourceSummaryRef.current = catalogMessage;
+      setImportMessage(catalogMessage);
       setBaselineId(catalog.series[0]?.id);
       setFollowupId(undefined);
-      setBaselineIndex(0);
+      setBaselineIndex(Math.floor((catalog.series[0]?.instances.length ?? 1) / 2));
       setFollowupIndex(0);
-      setImportMessage(
-        catalog.series.length
-          ? `${catalog.studyCount} studies · ${catalog.series.length} renderable series · ${catalog.instanceCount.toLocaleString()} indexed instances · local loopback service · no upload`
-          : `${catalog.studyCount} studies · no renderable MR/CT pixel series · local loopback service`,
-      );
+      setSourceReady(true);
     });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!pendingNavigation || !sourceReady) return;
+    if (pendingNavigation.intent) {
+      const resolved = resolveNavigationIntent(pendingNavigation.intent, series);
+      if (resolved.navigation) {
+        setBaselineId(resolved.navigation.baseline.seriesId);
+        setBaselineIndex(resolved.navigation.baseline.instanceIndex);
+        setFollowupId(resolved.navigation.followup?.seriesId);
+        setFollowupIndex(resolved.navigation.followup?.instanceIndex ?? 0);
+        setImportMessage(
+          `${sourceSummaryRef.current} · exact local source navigation applied · pairing remains unreviewed`,
+        );
+      } else {
+        setImportMessage(
+          `${sourceSummaryRef.current} · ${resolved.error ?? 'Local navigation rejected.'}`,
+        );
+      }
+    } else {
+      setImportMessage(
+        `${sourceSummaryRef.current} · ${pendingNavigation.error ?? 'Local navigation rejected.'}`,
+      );
+    }
+    setPendingNavigation(undefined);
+  }, [pendingNavigation, series, sourceReady]);
+
   const openFolder = () => {
     if (!inputRef.current) return;
     inputRef.current.value = '';
@@ -213,6 +273,7 @@ export default function App() {
     sourceGenerationRef.current += 1;
     const files = Array.from(fileList).filter((file) => !file.name.startsWith('.'));
     setSeries([]);
+    setSourceReady(false);
     setBaselineId(undefined);
     setFollowupId(undefined);
     setMprSeriesId(undefined);
@@ -232,15 +293,16 @@ export default function App() {
     setSeries(imported);
     setImportState(undefined);
     const importedStudies = new Set(imported.map((item) => item.studyId)).size;
-    setImportMessage(
-      imported.length
-        ? `${importedStudies} studies · ${imported.length} series · follow-up not auto-selected · no upload`
-        : 'No readable DICOM image series found.',
-    );
+    const importedMessage = imported.length
+      ? `${importedStudies} studies · ${imported.length} series · follow-up not auto-selected · no upload`
+      : 'No readable DICOM image series found.';
+    sourceSummaryRef.current = importedMessage;
+    setImportMessage(importedMessage);
     setBaselineId(imported[0]?.id);
     setFollowupId(undefined);
-    setBaselineIndex(0);
+    setBaselineIndex(Math.floor((imported[0]?.instances.length ?? 1) / 2));
     setFollowupIndex(0);
+    setSourceReady(true);
   };
 
   const updateIndex = (side: 'baseline' | 'followup', next: number) => {
@@ -513,7 +575,9 @@ export default function App() {
               series={series}
               onChange={(id) => {
                 setBaselineId(id);
-                setBaselineIndex(0);
+                setBaselineIndex(
+                  Math.floor((series.find((item) => item.id === id)?.instances.length ?? 1) / 2),
+                );
                 setMeasurementComparisonDraft(undefined);
               }}
             />
@@ -537,7 +601,9 @@ export default function App() {
               series={series}
               onChange={(id) => {
                 setFollowupId(id);
-                setFollowupIndex(0);
+                setFollowupIndex(
+                  Math.floor((series.find((item) => item.id === id)?.instances.length ?? 1) / 2),
+                );
                 setMeasurementComparisonDraft(undefined);
               }}
             />

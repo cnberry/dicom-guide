@@ -49,6 +49,9 @@ result into a medical conclusion.
 - One-click comparison-review export from the current explicit pair and its two exact
   live source slices through a bounded same-origin request; nested assembly and
   validation remain local, in memory, and source-read-only.
+- Versioned agent-to-human navigation from exact opaque catalog series/instances via
+  a one-use local fragment, with atomic catalog resolution, immediate URL cleanup,
+  and no effect on pairing or review state.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
 ### Phase 2 — robust local archive and tools

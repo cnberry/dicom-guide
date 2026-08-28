@@ -164,14 +164,30 @@
 4. Added service, source-index, transport-integrity, same-origin, and HTTP round-trip
    tests plus production-browser QA of the complete local synthetic workflow.
 
+## Completed in the thirteenth milestone
+
+1. Added a versioned `viewer-link` agent command that validates exact opaque
+   series/instance membership and emits a bounded local-only navigation intent.
+2. Added optional exact baseline/follow-up targets to `launch`, including direct
+   authenticated startup at the requested native source slices.
+3. Added a strict one-use browser fragment parser with a four-field allowlist,
+   all-or-none local catalog resolution, immediate URL cleanup, and unchanged
+   compatibility/review gates.
+4. Moved stack-index ownership to the parent viewer so exact agent selections survive
+   renderer initialization while ordinary human series selection still opens at the
+   explicit midpoint.
+5. Added a v1 JSON Schema, Python/TypeScript safety tests, and production-browser QA
+   proving exact slice application, malformed-target refusal, clean URLs, and no
+   fragment or opaque navigation references in HTTP logs.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
 2. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Add agent/viewer deep links for opening an exact opaque series and source instance
-   within the self-contained local workspace.
+3. Design an explicit opt-in, read-only local viewer-state bridge so an agent can
+   inspect the current opaque series/instance/tool without pixels, PHI, or UI scraping.
 4. Produce signed/notarized macOS/Linux release artifacts around the self-contained
    Python wheel.
 5. Design optional authenticated signature integration for clinical organizations;

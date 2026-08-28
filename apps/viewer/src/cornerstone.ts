@@ -248,6 +248,7 @@ export const createStackViewport = async (
   element: HTMLDivElement,
   series: DicomSeries,
   primaryTool: ViewerTool,
+  initialIndex?: number,
 ): Promise<{
   engine: RenderingEngine;
   viewport: Types.IStackViewport;
@@ -282,7 +283,11 @@ export const createStackViewport = async (
   setPrimaryTool(primaryTool);
 
   const imageIds = imageIdsForSeries(series);
-  await viewport.setStack(imageIds, Math.floor(imageIds.length / 2));
+  const startIndex =
+    initialIndex === undefined
+      ? Math.floor(imageIds.length / 2)
+      : Math.max(0, Math.min(Math.trunc(initialIndex), imageIds.length - 1));
+  await viewport.setStack(imageIds, startIndex);
   viewport.render();
   return {
     engine,

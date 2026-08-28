@@ -27,6 +27,10 @@ quality-system, and regulatory review.
   recursive in-memory validation, and `no-store` responses apply. No server-side
   patient file is created.
 - Paths, patient names/IDs, DICOM headers, and response bodies are absent from logs.
+- Agent viewer links contain only opaque local catalog IDs in a bounded URL fragment.
+  Fragments are not transmitted in HTTP, are removed immediately on receipt, and
+  are applied only after exact local series/instance membership checks. They remain
+  sensitive and potentially linkable if copied, saved, or captured before use.
 - Patient identity tags are used only in local memory to derive an opaque patient-
   context digest. The raw values are never written to manifests, evidence packets,
   logs, or Git; the digest remains sensitive, potentially linkable, and is not
@@ -108,6 +112,11 @@ working label. The label is not proof of
 same-lesion identity. Deletion is session-only, pasted JSON uses the strict measurement
 validator and a 2 MB cap, and comparison validation rejects arithmetic tampering or
 any non-empty interpretation list while withholding labels, identifiers, and values.
+
+An exact navigation intent is not a pairing decision. It can select native sources
+for discussion, but it cannot approve compatibility, unlock registered display,
+load measurement evidence, or change any review state. A malformed or partially
+resolvable intent is rejected as a whole and the ordinary local default view is used.
 
 The comparison-review workflow keeps the arithmetic comparison immutable and
 `unreviewed`. A review decision is a separate self-attested event with explicit

@@ -56,12 +56,15 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - One-click local comparison-review export captures the two exact source slices for
   the current explicit measurement pair, assembles both nested evidence artifacts in
   memory, and downloads the validated seven-file ZIP without a server-side patient file.
+- Versioned agent-to-viewer navigation opens exact opaque baseline/follow-up source
+  instances through a one-use URL fragment. Targets are checked against the local
+  catalog, the fragment is removed immediately, and pairing remains unreviewed.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
-- Versioned measurement, key-image, comparison, visit-packet, and review-record JSON Schemas;
-  committed tests use synthetic data only.
+- Versioned measurement, key-image, comparison, visit-packet, review-record, and
+  navigation-intent JSON Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
 ## Launch the unified local workspace
@@ -140,6 +143,9 @@ python3 -m venv .venv
 .venv/bin/scanview-agent assemble-comparison-review scanview-visit-packet.zip comparison.json \
   --output review-initial.zip
 .venv/bin/scanview-agent validate-comparison-review review-initial.zip
+.venv/bin/scanview-agent viewer-link manifest.json \
+  --baseline-series 'series_…' --baseline-instance 'instance_…' \
+  --base-url 'http://127.0.0.1:8765/'
 ```
 
 The server exposes:
@@ -161,6 +167,31 @@ review archive entirely in memory. Each route returns a validated ZIP with `no-s
 and creates no server-side file. There is no source mutation or deletion endpoint.
 The server refuses non-loopback bind addresses. This loopback interface is part of
 the offline local application, not an external processing API.
+
+## Open exact sources for an agent-assisted conversation
+
+Create a bounded navigation intent from IDs already present in a local manifest:
+
+```bash
+.venv/bin/scanview-agent viewer-link manifest.json \
+  --baseline-series 'series_…' --baseline-instance 'instance_…' \
+  --followup-series 'series_…' --followup-instance 'instance_…' \
+  --base-url 'http://127.0.0.1:8765/' \
+  --output viewer-link.json
+```
+
+The command verifies both instances belong to their requested renderable MR/CT
+series and refuses non-loopback, credential-bearing, query-bearing, or malformed base
+URLs. Open the returned `url` only in an already authenticated local workspace. To
+start the workspace at those sources, pass the same four ID options directly to
+`scanview-agent launch`.
+
+The viewer consumes `#scanview-v1?...` at startup or on a same-tab fragment change,
+validates every field again against the fetched local catalog, applies all requested
+targets or none, and removes the fragment with `history.replaceState`. URL fragments
+are never sent to the HTTP server. Opaque IDs remain sensitive and potentially
+linkable; this navigation is not pair approval, registration, review, or a medical
+conclusion.
 
 ## Save and reopen a measurement draft
 

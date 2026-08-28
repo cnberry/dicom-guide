@@ -25,6 +25,9 @@ scanview-agent validate-comparison comparison.json
 scanview-agent assemble-comparison-review scanview-visit-packet.zip comparison.json \
   --output review-initial.zip
 scanview-agent validate-comparison-review review-initial.zip
+scanview-agent viewer-link manifest.json \
+  --baseline-series 'series_…' --baseline-instance 'instance_…' \
+  --base-url 'http://127.0.0.1:8765/'
 ```
 
 Use `scripts/build_release.py` from the repository root to produce a self-contained
@@ -60,3 +63,11 @@ Reviewer identity is not authenticated or digitally signed, and privacy-minimize
 validation never echoes names, roles, notes, labels, IDs, or values.
 The viewer invokes the same assembly path only when its current panes show the exact
 source instances named by the selected baseline/follow-up measurements.
+
+`viewer-link` creates a versioned, sensitive local navigation intent from exact
+opaque catalog IDs. It verifies series/instance membership, permits only a plain
+loopback base origin, and reports that pairing is `not_assessed`. The launcher accepts
+the same baseline/follow-up ID options for an initial view. The browser consumes the
+fragment atomically, clears it from the address bar, and leaves compatibility and
+clinical review gates unchanged. Fragments never reach the HTTP service, and no
+navigation state is stored server-side.

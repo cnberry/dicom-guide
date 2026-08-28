@@ -19,6 +19,7 @@ from .comparison_reviews import (
     comparison_review_from_transport,
     comparison_review_summary,
 )
+from .navigation import NAVIGATION_FRAGMENT_PREFIX
 from .visit_packets import (
     MAX_VISIT_PACKET_TRANSPORT_BYTES,
     visit_packet_from_transport,
@@ -299,7 +300,13 @@ def serve(
     token: str | None = None,
     ui_dist: Path | None = None,
     open_browser: bool = False,
+    navigation_fragment: str | None = None,
 ) -> None:
+    if navigation_fragment is not None and (
+        not navigation_fragment.startswith(NAVIGATION_FRAGMENT_PREFIX)
+        or len(navigation_fragment) > 320
+    ):
+        raise ValueError("viewer navigation fragment is invalid")
     server = create_server(
         catalog,
         registry,
@@ -308,11 +315,15 @@ def serve(
         token=token,
         ui_dist=ui_dist,
     )
-    base_url = f"http://{host}:{server.server_port}"
+    url_host = f"[{host}]" if ":" in host else host
+    base_url = f"http://{url_host}:{server.server_port}"
     print(f"ScanView local source-read-only API: {base_url}")
     print(f"Bearer token: {server.token}")
     if server.ui_dist:
-        session_url = f"{base_url}/?session={quote(server.token, safe='')}"
+        session_url = (
+            f"{base_url}/?session={quote(server.token, safe='')}"
+            f"{navigation_fragment or ''}"
+        )
         print(f"ScanView local workspace: {session_url}")
         if open_browser:
             webbrowser.open(session_url)

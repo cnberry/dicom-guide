@@ -20,6 +20,7 @@ from .measurements import (
     measurement_comparison_summary,
     measurement_packet_summary,
 )
+from .navigation import build_navigation_intent
 from .server import serve
 from .visit_packets import visit_packet_summary, write_visit_packet
 
@@ -80,6 +81,33 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--no-hashes", action="store_true")
     launch.add_argument("--no-open", action="store_true")
     launch.add_argument("--ui-dist", type=Path)
+    launch.add_argument("--baseline-series", help="Exact opaque baseline series ID")
+    launch.add_argument("--baseline-instance", help="Exact opaque baseline instance ID")
+    launch.add_argument("--followup-series", help="Optional exact opaque follow-up series ID")
+    launch.add_argument("--followup-instance", help="Optional exact opaque follow-up instance ID")
+
+    viewer_link = commands.add_parser(
+        "viewer-link",
+        help="Create a one-use local viewer fragment for exact opaque source instances",
+    )
+    viewer_link.add_argument("manifest", type=Path)
+    viewer_link.add_argument(
+        "--baseline-series", required=True, help="Exact opaque series ID"
+    )
+    viewer_link.add_argument(
+        "--baseline-instance", required=True, help="Exact opaque instance ID"
+    )
+    viewer_link.add_argument(
+        "--followup-series", help="Optional exact opaque follow-up series ID"
+    )
+    viewer_link.add_argument(
+        "--followup-instance", help="Optional exact opaque follow-up instance ID"
+    )
+    viewer_link.add_argument(
+        "--base-url",
+        help="Optional active loopback viewer origin, for example http://127.0.0.1:8765/",
+    )
+    viewer_link.add_argument("--output", "-o", type=Path)
 
     validate_measurements = commands.add_parser(
         "validate-measurements",
@@ -228,6 +256,30 @@ def main() -> None:
             progress=lambda count: count % 1000 == 0
             and print(f"Indexed {count} files…", file=sys.stderr, flush=True),
         )
+        navigation_fragment = None
+        requested_navigation = any(
+            (
+                args.baseline_series,
+                args.baseline_instance,
+                args.followup_series,
+                args.followup_instance,
+            )
+        )
+        if requested_navigation:
+            if not args.baseline_series or not args.baseline_instance:
+                argument_parser.error(
+                    "launch navigation requires --baseline-series and --baseline-instance"
+                )
+            try:
+                navigation_fragment = build_navigation_intent(
+                    catalog,
+                    baseline_series_id=args.baseline_series,
+                    baseline_instance_id=args.baseline_instance,
+                    followup_series_id=args.followup_series,
+                    followup_instance_id=args.followup_instance,
+                )["fragment"]
+            except ValueError as error:
+                argument_parser.error(str(error))
         serve(
             catalog,
             registry,
@@ -235,7 +287,22 @@ def main() -> None:
             token=args.token,
             ui_dist=ui_dist,
             open_browser=not args.no_open,
+            navigation_fragment=navigation_fragment,
         )
+    elif args.command == "viewer-link":
+        try:
+            catalog = json.loads(args.manifest.read_text())
+            intent = build_navigation_intent(
+                catalog,
+                baseline_series_id=args.baseline_series,
+                baseline_instance_id=args.baseline_instance,
+                followup_series_id=args.followup_series,
+                followup_instance_id=args.followup_instance,
+                base_url=args.base_url,
+            )
+        except (OSError, ValueError) as error:
+            argument_parser.error(str(error))
+        _write_json(intent, args.output)
     elif args.command == "validate-measurements":
         packet = json.loads(args.packet.read_text())
         summary = measurement_packet_summary(packet)

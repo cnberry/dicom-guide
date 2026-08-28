@@ -16,6 +16,9 @@ Immutable copied DICOM
         +--> scanview-agent launch (loopback only)
                          |
                          +--> manifest v1 ------------------> agents / automation
+                         |                                      |
+                         |                                      +--> exact opaque fragment
+                         |                                            (one-use local navigation)
                          |
                          +--> protected native instances --> Cornerstone3D human view
                          |                                      |
@@ -60,6 +63,10 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    (plus in-memory `blob:`/`data:` assets where required).
    Loading a different folder clears annotations, decoded-image cache, and file
    registry before the new imaging session begins.
+   A versioned agent navigation fragment is never sent to the server. The viewer
+   consumes it once, clears it immediately, validates an exact allowlist and local
+   catalog membership, then applies both requested panes atomically. Navigation does
+   not alter compatibility, registration, or review state.
    Single-series MPR additionally requires complete, regular patient-space geometry;
    its interpolated orthographic planes remain navigation-only derivatives and do
    not enter native key-image evidence. A Cornerstone crosshair controller moves one
