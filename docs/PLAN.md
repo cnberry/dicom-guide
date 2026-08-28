@@ -66,7 +66,8 @@ result into a medical conclusion.
 
 ### Phase 3 — reviewed derivatives
 
-- Slicer/BRAINSFit rigid registration jobs.
+- Version-gated local Slicer/BRAINSFit rigid-registration execution and source-hashed,
+  generated-pending-QA bundles (implemented; real-engine case execution pending).
 - Registration QA: opacity, checkerboard, edges, landmarks, accept/reject audit.
 - Accepted overlay/swipe and mask propagation gates.
 - DICOM SEG/SR import/export and separate derivative store.
@@ -110,3 +111,6 @@ result into a medical conclusion.
 12. **Session-state consent:** live viewer inspection is off by default, visible to
    the person, contains no pixels/direct identifiers/measurement values, is never
    persisted, and becomes unavailable on opt-out or heartbeat expiry.
+13. **Exact navigation privacy:** agent navigation proves exact slice application,
+    malformed-target refusal, clean URLs, and no fragment or opaque navigation
+    references in HTTP logs.

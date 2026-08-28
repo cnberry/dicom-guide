@@ -48,6 +48,24 @@ quality-system, and regulatory review.
 - Manifests and derivatives stay outside Git and are treated as sensitive.
 - Source delete and overwrite operations do not exist.
 - Generated content is `derived` and `unreviewed` until explicitly accepted.
+- Rigid registration invokes a version-gated local Slicer/BRAINSFit process. It
+  requires attested, identity-unverified matching opaque patient context; same
+  modality and strict chronology; original-primary brain/head images; explicit
+  sequence/contrast matching; and consistent per-instance volume geometry. It
+  rehashes every source before and after private staging and records exact engine,
+  runner, parameters, and output hashes. The caller-supplied expected launcher hash
+  must match before DICOM staging and after execution; this is substitution
+  protection, not distributor/signature authentication. A no-data preflight verifies
+  self-reported version/revision and BRAINSFit availability before source staging.
+  The generated bundle is always pending QA, with overlay, swipe, subtraction, and
+  mask propagation locked. User settings, `.slicerrc.py`, and user-site Python
+  packages are disabled, and Slicer temporary/cache paths are redirected into the
+  private job directory. Proxy, credential, extension-server, and Python-path
+  variables are not inherited. ScanView requests no external API but, without an OS
+  network sandbox, does not claim to observe every action of a third-party binary.
+  Engine diagnostics exist only inside the deleted private job directory because
+  third-party errors could contain patient context; a timeout terminates the process
+  group before cleanup.
 - A key-image ZIP remains sensitive medical data. Its PNG can contain burned-in
   identifiers or recognizable anatomy inherited from the displayed pixels, so it
   requires the same sharing safeguards as the original DICOM even though its JSON

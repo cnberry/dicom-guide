@@ -194,17 +194,38 @@
 5. Added a versioned response schema plus server, validation, privacy, transport,
    expiry, and browser-publisher tests.
 
+## Completed in the fifteenth milestone
+
+1. Added a version-gated local 3D Slicer 5.12.3 revision 34627/BRAINSFit rigid-
+   registration executor for explicitly attested same-opaque-context (identity
+   unverified), same-modality chronological pairs.
+2. Added pre/post-staging source SHA-256 checks, generic private DICOM staging,
+   bounded headless execution, non-persisted diagnostics, and immutable source and
+   non-overwriting output boundaries.
+3. Added an owner-only six-file derivative bundle with exact source/output hashes,
+   parsed NRRD/fixed-space geometry, a finite proper-rigid text ITK transform,
+   transform direction, binary/runner provenance, exact parameters, limitations,
+   empty computation/interpretation arrays, and no external API requested by ScanView.
+4. Added a strict pending-QA state that keeps overlay, swipe, subtraction, and mask
+   propagation locked; this milestone deliberately provides no acceptance command.
+5. Added doctor/run/validate CLI commands, a v1 JSON Schema, and synthetic failure,
+   process-group timeout, permission, transform/volume parsing, tamper, privacy,
+   hard-pairing-gate, and output-integrity tests.
+
 ## Immediate
 
-1. Import a future same-modality MRI follow-up and have a person confirm the intended
-   baseline/follow-up sequences.
-2. Repeat production packaging and real-codec smoke tests on Linux without exposing
+1. Import a future same-modality MRI follow-up, have a person confirm the intended
+   earlier/later sequences and clinical roles, and run the required engine on that pair.
+2. Install or explicitly locate the required Slicer build, independently record its
+   trusted launcher hash, then verify one real local headless job without retaining
+   logs that may contain patient context.
+3. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Produce signed/notarized macOS/Linux release artifacts around the self-contained
+4. Produce signed/notarized macOS/Linux release artifacts around the self-contained
    Python wheel.
-4. Design optional authenticated signature integration for clinical organizations;
+5. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
-5. Design an append-only, privacy-minimized local audit for bearer access to live
+6. Design an append-only, privacy-minimized local audit for bearer access to live
    viewer state without recording patient content or putting tokens in logs.
 
 ## Next milestone
@@ -218,10 +239,11 @@
 
 ## Registration milestone
 
-1. Wrap Slicer/BRAINSFit rigid same-subject brain registration.
-2. Persist transform provenance and source hashes in a derivative manifest.
-3. Build per-case QA with overlay, checkerboard, edge view, and accept/reject state.
-4. Unlock derived display only after explicit acceptance; never overwrite originals.
+1. Build per-case QA with opacity overlay, checkerboard, edge view, landmarks, and an
+   append-only accept/reject record around the implemented pending-QA bundle.
+2. Verify the version-gated runner against real Slicer on macOS and Linux, including
+   distributor signature/checksum verification for the complete engine bundle.
+3. Unlock derived display only after explicit acceptance; never overwrite originals.
 
 ## Decisions needed with clinicians
 

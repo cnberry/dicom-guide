@@ -50,8 +50,12 @@ two validated dated key images -- CLI or in-memory local POST --> Python gates
 Alternate local input: browser folder picker --> Cornerstone3D
 
 Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
-                                --> Slicer registration/segmentation jobs
+                                --> additional Slicer segmentation jobs
                                 --> DICOM SEG/SR + provenance sidecars
+
+explicit same-modality pair --> local Slicer/BRAINSFit rigid job
+                                      |
+                                      +--> hashed derivative bundle (pending QA only)
 ```
 
 ## Trust boundaries
@@ -97,13 +101,16 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    latest publication under a lock, marks it `unreviewed`, and serves it only to an
    authenticated local GET with `no-store`. Publisher revocation closes opt-out races;
    the in-memory TTL is a fallback, not a consent substitute.
-5. **Derivatives:** future transforms, resampled images, masks, additional
-   measurements, and reports go to a separate store with source references and
-   review status. Manual length/bidirectional/elliptical ROI drafts use versioned
+5. **Derivatives:** rigid transforms and resampled volumes now go to a separate,
+   owner-only, atomic no-replace directory with exact source hashes, version-gated
+   local Slicer/BRAINSFit provenance, and every display use locked pending QA. Future masks,
+   additional measurements, and reports follow the same boundary. Manual
+   length/bidirectional/elliptical ROI drafts use versioned
    local JSON; key-image ZIPs bind a watermarked display PNG to its exact source and
    visible measurements with local SHA-256 digests. Key-image v2 adds opaque
    patient/study context. Visit-packet ZIPs preserve both evidence bundles, add a
-   static human review page, and cross-hash every payload after same-patient and
+   static human review page, and cross-hash every payload after matching opaque
+   patient-context and
    strict longitudinal gates. The viewer and CLI share that Python assembler; the
    viewer transport does not persist an intermediate server-side file. None modifies
    native instances. Agent comparisons accept only explicit, distinct-series
@@ -117,7 +124,14 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    self-attested review/amendment events in a separate hash chain. The viewer exposes
    this assembler only while the live panes display the exact source instances named
    by the explicit pair. Each event-derived archive is a new owner-only file anchored
-   to its parent; no command overwrites an ancestor or changes DICOM.
+   to its parent; no command overwrites an ancestor or changes DICOM. The registration
+   runner stages rehashed source instances under generic private filenames, passes
+   paths through a private environment request rather than command arguments, captures
+   diagnostics only in the deleted private job directory, terminates the process group
+   on timeout, and accepts only the required version/revision report, expected launcher
+   hash, parsed scalar-volume geometry, and finite proper-rigid transform. The hash
+   match does not authenticate the software distributor. A generated transform is not
+   display-approved.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

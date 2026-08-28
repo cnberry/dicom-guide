@@ -31,6 +31,41 @@ interoperability foundation.
 - Vitest: 4.1.11
 - pydicom: 3.0.x
 
+## Registration engine verification
+
+The local execution foundation requires [3D Slicer 5.12.3 revision
+34627](https://github.com/Slicer/Slicer/wiki/Release-Details), the current stable
+release documented for macOS and Linux on the research date. Slicer's official
+[headless scripting guidance](https://slicer.readthedocs.io/en/latest/developer_guide/script_repository/gui.html)
+supports `--no-splash --no-main-window --python-script`; ScanView additionally uses
+`--disable-settings`, `--ignore-slicerrc`, and `PYTHONNOUSERSITE=1`, and never
+downloads or contacts a processing service. This prevents Slicer settings, its
+documented automatic user startup script, or user-site packages from changing the
+required version-gated job.
+
+The launcher must match a caller-supplied expected SHA-256 before DICOM staging and
+again after execution. This protects against accidental substitution relative to an
+independently recorded digest, but it does not authenticate the distributor, macOS
+code signature, Linux package, SlicerApp-real process, BRAINSFit binary, or dependent
+libraries. End-to-end official-release signature/checksum verification remains a
+required packaging milestone. ScanView's restricted child environment requests no
+external API; without an operating-system network sandbox it does not claim to have
+observed every action of a third-party executable.
+
+The runner uses Slicer's official temporary local [DICOM database/import
+helpers](https://slicer.readthedocs.io/en/latest/developer_guide/script_repository/dicom.html)
+and invokes the bundled [BRAINSFit](https://slicer.readthedocs.io/en/latest/user_guide/modules/brainsfit.html)
+module. The initial contract is six-degree-of-freedom rigid registration, center-of-
+head initialization, automatic ROI masking with 3 mm dilation, 2% sampling, and
+linear interpolation. Histogram matching is disabled: BRAINSFit's own guidance warns
+that changing tumors or lesions can make histogram matching problematic. Generated
+results still require patient-specific visual and quantitative QA.
+
+No required Slicer executable is installed on the current host, so the wrapper and
+bundle have been tested with a synthetic engine double but not yet with a real Slicer
+process. This limitation is explicit in status and does not trigger a download or
+cloud fallback.
+
 ## Longitudinal comparison findings
 
 - Native side-by-side review is the safest first view.

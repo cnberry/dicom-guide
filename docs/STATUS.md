@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 14:19 PDT
+Last updated: 2026-08-28 15:13 PDT
 
 ## Data transfer
 
@@ -85,6 +85,20 @@ Last updated: 2026-08-28 14:19 PDT
   expiry, visible opt-out, publisher revocation, `no-store`, and default-off behavior
   are enforced. It contains no pixels, descriptions, dates, measurement content,
   paths, or direct identifiers.
+- A version-gated local Slicer 5.12.3 revision 34627/BRAINSFit rigid-registration
+  executor now accepts only explicitly attested, identity-unverified matching opaque
+  patient context; same-modality distinct-study chronology; original-primary
+  brain/head images; conservative sequence and explicit contrast matching; regular
+  per-instance volume geometry; score ≥80; and SHA-256 provenance. Source bytes are
+  rehashed before and after generic private staging; Slicer temp/cache paths stay
+  inside that deleted private job space; DICOM is never mutated and ScanView requests
+  no external processing API.
+- Successful registration creates an atomic no-replace, owner-only six-file
+  derivative directory containing fixed/moving/registered scalar NRRDs, one finite
+  proper-rigid text ITK transform in DICOM patient LPS, an engine report, and a strict
+  v1 manifest. Every output remains `generated_pending_qa`/`unreviewed`; overlay,
+  swipe, subtraction, and mask
+  propagation are locked and there is no acceptance command yet.
 - Review and amendment commands always create a new owner-only archive. Event hashes
   bind the actor, checklist, note, source comparison, prior event, and parent archive;
   an amended comparison is rejoined to the visual evidence and reset to `unreviewed`.
@@ -103,10 +117,10 @@ Last updated: 2026-08-28 14:19 PDT
   authenticated exact-origin loopback POST invokes the same Python assembler, and
   the validated ZIP is returned with `no-store` without a server-side patient file.
 - Versioned measurement, key-image, numeric-comparison, visit-packet,
-  comparison-review, navigation-intent, and viewer-state JSON Schemas plus local
-  validation are implemented. Same-series pairs, unknown units, mismatched
-  measurement types, and mismatched visual/numeric evidence are refused; no response
-  label is emitted.
+  comparison-review, navigation-intent, viewer-state, and rigid-registration JSON
+  Schemas plus local validation are implemented. Same-series pairs, unknown units,
+  mismatched measurement types, and mismatched visual/numeric evidence are refused;
+  no response label is emitted.
 - Unified `scanview-agent launch` path implemented: one loopback process serves the
   bundled UI, manifest, pairing candidates, and protected native DICOM instances.
 - The staged release builder embeds the viewer, workers, and local codecs into a
@@ -123,13 +137,16 @@ Last updated: 2026-08-28 14:19 PDT
 
 ## Verification
 
-- Python agent tests: 45 passing, including cross-patient and legacy-context
+- Python agent tests: 49 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
   same-origin HTTP enforcement, local navigation membership/base-origin refusal,
   owner-only intent output, exact viewer-state catalog validation, same-origin/auth
-  enforcement, expiry/revocation, and static presentation integrity.
+  enforcement, expiry/revocation, static presentation integrity, registration hard
+  gates, source immutability, pending-QA locks, child-process-group timeout, engine
+  failure privacy, private permissions, parsed NRRD/transform integrity, fixed-space
+  geometry, and derivative tamper detection.
 - Viewer tests: 50 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
@@ -137,14 +154,25 @@ Last updated: 2026-08-28 14:19 PDT
   lookup, strict one-use navigation parsing and atomic source resolution, and
   complete/regular MPR geometry gating, privacy-minimized viewer-state construction,
   source refusal, link-state labeling, and same-origin publication/clear transport.
-- All 11 JSON Schemas pass Draft 2020-12 validation.
+- All 12 JSON Schemas pass Draft 2020-12 validation.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
 - Self-contained staged Python wheel build: passing; the 2.8 MB wheel contains the
-  viewer-state server module plus the viewer entry point and all 11 built
-  UI/worker/codec files (9.7 MB uncompressed). A prior isolated installation resolved
-  its embedded UI without the source checkout.
+  registration host/runner, viewer-state server module, viewer entry point, and all
+  11 built UI/worker/codec files (9.7 MB uncompressed). A prior isolated installation
+  resolved its embedded UI without the source checkout.
+- Registration execution test: synthetic version-gated-engine success and failure
+  paths pass, including required expected-launcher hash, strict engine report, parsed
+  scalar NRRDs/fixed-space geometry, finite proper-rigid transform, owner-only modes,
+  atomic no-replace publication, no partial output, private deleted diagnostics,
+  process-group timeout, no-data engine preflight, restricted environment,
+  source-change refusal, and v1 Schema plus semantic validation.
+  `registration-doctor` confirms local-only/no-external-API
+  dependency but reports that the real required Slicer executable is not installed on
+  this host, so a real-engine registration has not been claimed. Binary-distributor
+  authentication and OS-enforced network denial remain unimplemented and are not
+  claimed.
 - Synthetic browser smoke test: two canvases render; all five viewer controls activate.
 - Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
   1162×1200 canvases; the full folder produces 57 pixel series; local server logs show
@@ -265,5 +293,9 @@ Last updated: 2026-08-28 14:19 PDT
   Any future audit must exclude tokens, payloads, and patient content.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
-- No registration, segmentation, response criteria, or automated medical conclusion.
+- Registration generation exists, but there is no installed required engine, trusted
+  full-engine signature/checksum verification, real
+  same-modality patient run, visual QA/acceptance workflow, or registered viewer
+  display. There is still no segmentation, response criteria, or automated medical
+  conclusion.
 - Linux packaging/smoke testing remains pending.

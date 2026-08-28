@@ -299,6 +299,51 @@ observation, pairing approval, registration result, measurement validation, clin
 review, diagnosis, or response conclusion. Agents needing evidentiary output must use
 the source-linked measurement/key-image/review contracts.
 
+## Local rigid-registration jobs
+
+Agents can request one bounded local registration derivative after a person chooses
+and attests the exact fixed-earlier and moving-later series. These are registration
+roles, not an assertion about the clinical treatment baseline or nadir:
+
+```bash
+scanview-agent registration-doctor
+scanview-agent run-rigid-registration '/safe/local/DICOM/root' \
+  --fixed-series 'series_…' --moving-series 'series_…' \
+  --expected-slicer-sha256 '<trusted 64-hex digest>' \
+  --output '/safe/local/registration-job' --attest-series-selection
+scanview-agent validate-registration '/safe/local/registration-job'
+```
+
+The executor requires one matching opaque patient context (identity unverified),
+distinct studies and series, identical MR or CT modality, strict chronology,
+original-primary brain/head images, a conservatively matched sequence family, one
+explicit contrast category, consistent per-instance classic-image geometry, at least
+five slices/10 mm coverage, source SHA-256 values, and a compatibility score of 80 or
+higher. It rehashes the source before and after staging, never mutates DICOM, and uses
+an atomic no-replace publication. The required local 3D Slicer 5.12.3 revision 34627
+launcher must match a caller-supplied SHA-256 before data staging and after execution.
+Before staging, a no-data process checks the self-reported version/revision and
+BRAINSFit availability. Those checks are provenance—not distributor or code-signature
+authentication. Neither ScanView command calls an external API. Slicer
+settings, `.slicerrc.py`, user-site Python packages, proxy/credential variables, and
+extension-server configuration are excluded from the private job environment.
+
+The v1 bundle contains exactly six owner-only files: fixed, moving, and
+registered-moving NRRDs; a moving-to-fixed text ITK transform in DICOM patient LPS;
+an engine report; and
+`registration.json`. The manifest binds every source instance and output by hash,
+the executable and runner hashes, exact rigid parameters, transform direction,
+privacy state, limitations, and QA checklist. Validation summaries omit source IDs,
+dates, paths, and engine diagnostics. The Python validator—not JSON Schema alone—also
+enforces cross-field semantics, parses the NRRD payloads and transform, requires fixed
+and registered geometry to match, and rejects non-owner-only or linked files.
+
+Generation is not acceptance. The only valid current state is
+`generated_pending_qa`/`unreviewed`; overlay, swipe, subtraction, and mask propagation
+must all remain locked. `computed_results` and `candidate_interpretations` must be
+empty. Agents must not load the registered volume into a human display or infer
+alignment quality until a future visual QA workflow records an explicit decision.
+
 ## Source-read-only HTTP surface
 
 Start the local service:
@@ -362,8 +407,9 @@ it in `missing_context`; do not synthesize a diagnosis or response category.
 
 ## Future write boundary
 
-Registration, segmentation/volume measurement types, and signed evidence
-packets will be explicit, idempotent derivative jobs in a separate store. Each will
-record source hashes, algorithm/tool version, parameters, outputs, limitations, and
-review status. Native DICOM files remain read-only, and no registration-derived
-display will unlock until its required QA state is accepted.
+Registration QA/acceptance, segmentation and volume-measurement types, and signed
+evidence packets remain future explicit derivative workflows. Each must preserve the
+implemented registration foundation's source hashes, algorithm/tool version,
+parameters, outputs, limitations, and review status. Native DICOM files remain
+read-only, and no registration-derived display will unlock until its required QA
+state is accepted.

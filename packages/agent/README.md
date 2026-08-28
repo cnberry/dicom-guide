@@ -28,6 +28,12 @@ scanview-agent validate-comparison-review review-initial.zip
 scanview-agent viewer-link manifest.json \
   --baseline-series 'series_…' --baseline-instance 'instance_…' \
   --base-url 'http://127.0.0.1:8765/'
+scanview-agent registration-doctor
+scanview-agent run-rigid-registration '/path/to/copied/DICOM' \
+  --fixed-series 'series_…' --moving-series 'series_…' \
+  --expected-slicer-sha256 '<trusted 64-hex digest>' \
+  --output '/safe/local/registration-job' --attest-series-selection
+scanview-agent validate-registration '/safe/local/registration-job'
 ```
 
 Use `scripts/build_release.py` from the repository root to produce a self-contained
@@ -81,3 +87,23 @@ paths, or direct identifiers. The server independently checks catalog membership
 serves it with `no-store`, and expires it after 30 seconds without a heartbeat.
 Opt-out revokes that ephemeral publisher so an in-flight older update cannot restore
 sharing. This is transient navigation context, not observation or clinical review.
+
+Rigid registration also stays local. `registration-doctor` looks for the required 3D
+Slicer 5.12.3 revision 34627 executable but never downloads it and reports its
+observed launcher hash without authenticating the distributor.
+`run-rigid-registration` requires an explicit human series-selection attestation,
+one matching but identity-unverified opaque patient context, original-primary
+brain/head MR↔MR or CT↔CT, distinct chronological studies, one conservative sequence
+and explicit contrast category, regular per-instance geometry, hashes, and a score
+of at least 80. The expected launcher SHA-256 must match before staging and after the
+job; a no-data preflight checks the self-reported version/revision and BRAINSFit
+availability before source staging. Source bytes are rehashed before private staging;
+Slicer/BRAINSFit receives only
+local generic paths, and user settings/startup scripts and user-site Python packages
+are disabled. A successful non-overwriting, owner-only directory contains the fixed,
+moving, and registered-moving NRRDs, moving-to-fixed text ITK transform, engine report,
+and v1 manifest. `validate-registration` rechecks all hashes, required versions,
+parameters, parsed output geometry/rigidity, private permissions, source provenance,
+and the invariant that every display unlock remains false. There is no acceptance or
+display command yet: output is sensitive,
+`generated_pending_qa`, and `unreviewed`.

@@ -64,12 +64,16 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   evidence counts. It is off by default, memory-only, pixel/PHI-free, and expires
   within 30 seconds without a browser heartbeat.
 - Transparent metadata compatibility score and warnings.
-- Registration-gated derived comparisons; CT/MR subtraction is prohibited.
+- Version-gated local 3D Slicer/BRAINSFit rigid-registration jobs for explicitly
+  attested, matching opaque patient-context, same-modality chronological series.
+  Patient identity remains unverified. Outputs are immutable,
+  source-hashed, and locked pending human QA; CT/MR registration and subtraction
+  are prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
 - Versioned measurement, key-image, comparison, visit-packet, review-record,
-  navigation-intent, and viewer-state JSON Schemas; committed tests use synthetic
-  data only.
+  navigation-intent, viewer-state, and rigid-registration JSON Schemas; committed
+  tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
 ## Launch the unified local workspace
@@ -151,6 +155,12 @@ python3 -m venv .venv
 .venv/bin/scanview-agent viewer-link manifest.json \
   --baseline-series 'series_…' --baseline-instance 'instance_…' \
   --base-url 'http://127.0.0.1:8765/'
+.venv/bin/scanview-agent registration-doctor
+.venv/bin/scanview-agent run-rigid-registration '/path/to/copied/DICOM' \
+  --fixed-series 'series_…' --moving-series 'series_…' \
+  --expected-slicer-sha256 '<trusted 64-hex digest>' \
+  --output '/safe/local/registration-job' --attest-series-selection
+.venv/bin/scanview-agent validate-registration '/safe/local/registration-job'
 ```
 
 The server exposes:
@@ -176,6 +186,60 @@ route returns `no-store` and creates no server-side file. There is no source mut
 or deletion endpoint.
 The server refuses non-loopback bind addresses. This loopback interface is part of
 the offline local application, not an external processing API.
+
+## Generate a rigid registration pending QA
+
+ScanView can run one rigid moving-later-to-fixed-earlier job through a locally
+installed 3D Slicer 5.12.3 revision 34627 and its bundled BRAINSFit module. Earlier
+and later are registration roles; neither establishes a clinical treatment baseline
+or nadir. ScanView never downloads an engine, sends DICOM to an API, or falls back to
+a cloud service. Check the host first:
+
+```bash
+.venv/bin/scanview-agent registration-doctor
+```
+
+Then choose the two exact catalog series IDs and explicitly attest that selection:
+
+```bash
+.venv/bin/scanview-agent run-rigid-registration \
+  '/Users/chris/Desktop/Mila Scan CD' \
+  --fixed-series 'series_…' --moving-series 'series_…' \
+  --slicer '/Applications/Slicer.app' \
+  --expected-slicer-sha256 '<trusted 64-hex digest>' \
+  --output '/safe/local/mila-registration-001' \
+  --attest-series-selection
+```
+
+The command rehashes every source instance, stages private generic filenames, and
+accepts only original-primary brain/head MR↔MR or CT↔CT series from one matching
+opaque patient context, distinct strictly ordered studies, one conservative sequence
+family, one explicit contrast category, regular per-instance volume geometry, and a
+compatibility score of at least 80. Matching context does not verify patient identity.
+It writes an owner-only six-file directory: three NRRD volumes, one text ITK rigid
+transform in DICOM patient LPS coordinates, the engine report, and
+`registration.json`. Existing outputs and source files are never overwritten.
+Slicer settings, the user startup script, and user-site Python packages are disabled
+for the job so local customizations cannot silently change the version-gated workflow.
+
+The expected SHA-256 must match before any DICOM is staged and is checked again after
+execution. A no-data preflight first verifies the self-reported Slicer version,
+revision, and BRAINSFit availability. `registration-doctor` can show the observed
+launcher hash, but ScanView does not authenticate the distributor or code signature;
+obtain and record the expected
+digest through a trusted software-installation process. ScanView strips proxy,
+credential, extension-server, and Python-path variables and requests no external API,
+but it cannot prove that an arbitrary third-party executable made no network access.
+
+Every generated bundle is `generated_pending_qa` and `unreviewed`. Overlay, swipe,
+subtraction, and mask propagation remain false; this milestone does not provide an
+acceptance command or registered display. Validate integrity locally with
+`validate-registration`. Validation parses the scalar NRRDs, requires registered
+geometry to match the fixed volume, verifies a finite proper rigid transform, checks
+all hashes and owner-only permissions, and still does not establish registration
+quality. The currently copied CD contains one MRI exam and one CT
+exam, so it cannot produce a valid registration pair. A future same-modality
+follow-up and the required local Slicer installation are required for a real run.
 
 ## Open exact sources for an agent-assisted conversation
 
@@ -346,7 +410,7 @@ implemented.
 
 ## Assemble a clinician visit packet
 
-In the unified local workspace, choose a dated same-patient MR↔MR or CT↔CT pair,
+In the unified local workspace, choose a dated matching-opaque-context MR↔MR or CT↔CT pair,
 place the desired source slice in each pane, then choose **Save visit packet**. The
 viewer captures both displayed panes in memory and sends only those two derived
 key-image bundles to the same-origin loopback assembler. The returned ZIP downloads

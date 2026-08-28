@@ -96,6 +96,13 @@ def test_catalog_is_read_only_and_excludes_direct_identifiers(tmp_path: Path) ->
     assert all(path == source for path in registry.values())
     patient_context_id = catalog["studies"][0]["series"][0]["patient_context_id"]
     assert patient_context_id.startswith("patient_")
+    instance = catalog["studies"][0]["series"][0]["instances"][0]
+    assert instance["sop_class_uid"] == str(MRImageStorage)
+    assert instance["rows"] == 2
+    assert instance["columns"] == 2
+    assert instance["pixel_spacing"] == [1.0, 1.0]
+    assert instance["image_orientation_patient"] == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+    assert instance["number_of_frames"] == 1
 
 
 def test_pair_suggestions_never_cross_patient_contexts(tmp_path: Path) -> None:

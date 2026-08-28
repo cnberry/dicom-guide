@@ -21,6 +21,11 @@ from .measurements import (
     measurement_packet_summary,
 )
 from .navigation import build_navigation_intent
+from .registration import (
+    registration_bundle_summary,
+    registration_doctor,
+    run_rigid_registration,
+)
 from .server import serve
 from .visit_packets import visit_packet_summary, write_visit_packet
 
@@ -225,6 +230,47 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Acknowledge that the amendment and identity are self-asserted",
     )
+
+    registration_check = commands.add_parser(
+        "registration-doctor",
+        help="Inspect the required local Slicer/BRAINSFit engine and launcher hash",
+    )
+    registration_check.add_argument("--slicer", type=Path)
+
+    run_registration = commands.add_parser(
+        "run-rigid-registration",
+        help="Create one immutable local moving-to-fixed registration pending QA",
+    )
+    run_registration.add_argument("root", type=Path)
+    run_registration.add_argument("--fixed-series", required=True)
+    run_registration.add_argument("--moving-series", required=True)
+    run_registration.add_argument("--output", "-o", type=Path, required=True)
+    run_registration.add_argument("--slicer", type=Path)
+    run_registration.add_argument(
+        "--expected-slicer-sha256",
+        required=True,
+        help=(
+            "Expected SHA-256 for the selected local Slicer launcher; this does not "
+            "authenticate its distributor"
+        ),
+    )
+    run_registration.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=7200,
+        help="Bounded local execution timeout (60-86400 seconds)",
+    )
+    run_registration.add_argument(
+        "--attest-series-selection",
+        action="store_true",
+        help="Acknowledge that a person selected these exact series; this is not clinical approval",
+    )
+
+    validate_registration = commands.add_parser(
+        "validate-registration",
+        help="Validate a local rigid-registration directory and its QA locks",
+    )
+    validate_registration.add_argument("directory", type=Path)
     return root
 
 
@@ -407,6 +453,39 @@ def main() -> None:
         except ValueError as error:
             argument_parser.error(str(error))
         summary = comparison_review_summary(args.output)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "registration-doctor":
+        _write_json(registration_doctor(args.slicer), None)
+    elif args.command == "run-rigid-registration":
+        catalog, registry = build_catalog(
+            args.root,
+            include_hashes=True,
+            progress=lambda count: count % 1000 == 0
+            and print(f"Indexed {count} files…", file=sys.stderr, flush=True),
+        )
+        try:
+            run_rigid_registration(
+                catalog,
+                registry,
+                source_root=args.root,
+                fixed_series_id=args.fixed_series,
+                moving_series_id=args.moving_series,
+                output=args.output,
+                slicer_executable=args.slicer,
+                expected_slicer_sha256=args.expected_slicer_sha256,
+                attest_series_selection=args.attest_series_selection,
+                timeout_seconds=args.timeout_seconds,
+            )
+        except ValueError as error:
+            argument_parser.error(str(error))
+        summary = registration_bundle_summary(args.output)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-registration":
+        summary = registration_bundle_summary(args.directory)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)
