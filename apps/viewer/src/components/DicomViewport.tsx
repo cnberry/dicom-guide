@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { RenderingEngine, Types } from '@cornerstonejs/core';
 import {
   createStackViewport,
+  restoreMeasurementEvidencePacket,
   type ViewerTool,
   type ViewportToolController,
 } from '../cornerstone';
 import type { DicomSeries } from '../dicom';
+import type { MeasurementEvidencePacket } from '../measurements';
 
 type Props = {
   id: 'baseline' | 'followup';
@@ -15,6 +17,7 @@ type Props = {
   onIndexChange: (index: number) => void;
   activeTool: ViewerTool;
   resetNonce: number;
+  measurementPacket?: MeasurementEvidencePacket;
 };
 
 export function DicomViewport({
@@ -25,6 +28,7 @@ export function DicomViewport({
   onIndexChange,
   activeTool,
   resetNonce,
+  measurementPacket,
 }: Props) {
   const elementRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<RenderingEngine | undefined>(undefined);
@@ -34,7 +38,11 @@ export function DicomViewport({
 
   useEffect(() => {
     const element = elementRef.current;
-    if (!element || !series) return;
+    if (!element) return;
+    if (!series) {
+      setStatus('Choose a series');
+      return;
+    }
 
     let cancelled = false;
     let ownedEngine: RenderingEngine | undefined;
@@ -60,6 +68,8 @@ export function DicomViewport({
         engineRef.current = engine;
         viewportRef.current = viewport;
         toolsRef.current = tools;
+        restoreMeasurementEvidencePacket(`viewport-${id}`, series.id, measurementPacket);
+        viewport.render();
         setStatus('');
         onIndexChange(Math.floor(series.instances.length / 2));
       })
@@ -102,6 +112,14 @@ export function DicomViewport({
       viewport.setImageIdIndex(boundedIndex).then(() => viewport.render());
     }
   }, [index, series]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !series || !measurementPacket) return;
+    if (restoreMeasurementEvidencePacket(`viewport-${id}`, series.id, measurementPacket)) {
+      viewport.render();
+    }
+  }, [id, measurementPacket, series]);
 
   const maxIndex = Math.max(0, (series?.instances.length ?? 1) - 1);
 

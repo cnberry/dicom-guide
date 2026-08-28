@@ -1,4 +1,4 @@
-import { Enums, RenderingEngine, init as initCore, type Types } from '@cornerstonejs/core';
+import { Enums, RenderingEngine, cache, init as initCore, type Types } from '@cornerstonejs/core';
 import {
   init as initDicomImageLoader,
   wadouri,
@@ -11,11 +11,20 @@ import {
   WindowLevelTool,
   ZoomTool,
   addTool,
+  annotation,
   init as initTools,
 } from '@cornerstonejs/tools';
 import type { DicomSeries } from './dicom';
+import {
+  buildMeasurementEvidencePacket,
+  type ImageSourceReference,
+  type MeasurementEvidencePacket,
+  type RawLengthAnnotation,
+} from './measurements';
 
 let initialization: Promise<void> | undefined;
+const imageReferences = new Map<string, ImageSourceReference>();
+const instanceImageIds = new Map<string, string>();
 
 export type ViewerTool = 'window' | 'pan' | 'zoom' | 'length';
 
@@ -43,6 +52,53 @@ export const initializeCornerstone = (): Promise<void> => {
     })();
   }
   return initialization;
+};
+
+export const createMeasurementEvidencePacket = (): MeasurementEvidencePacket => {
+  const lengths: RawLengthAnnotation[] = annotation.state.getAllAnnotations()
+    .filter((item) => item.metadata?.toolName === LengthTool.toolName)
+    .map((item) => ({
+      annotationId: item.annotationUID,
+      referencedImageId: item.metadata?.referencedImageId,
+      worldPoints: item.data.handles?.points?.map((point) => Array.from(point)),
+    }));
+  return buildMeasurementEvidencePacket(lengths, imageReferences);
+};
+
+export const resetLocalImagingSession = (): void => {
+  annotation.state.removeAllAnnotations();
+  imageReferences.clear();
+  instanceImageIds.clear();
+  cache.purgeCache();
+  wadouri.fileManager.purge();
+};
+
+export const restoreMeasurementEvidencePacket = (
+  viewportId: string,
+  seriesId: string,
+  packet?: MeasurementEvidencePacket,
+): number => {
+  if (!packet) return 0;
+  const existing = new Set(
+    annotation.state.getAllAnnotations().map((item) => item.annotationUID).filter(Boolean),
+  );
+  let restored = 0;
+  packet.measurements.forEach((measurement) => {
+    if (measurement.source.series_id !== seriesId || existing.has(measurement.tracking_id)) return;
+    const referencedImageId = instanceImageIds.get(measurement.source.instance_id);
+    if (!referencedImageId) return;
+    LengthTool.hydrate(
+      viewportId,
+      measurement.geometry.world_points as [Types.Point3, Types.Point3],
+      {
+        annotationUID: measurement.tracking_id,
+        referencedImageId,
+      },
+    );
+    existing.add(measurement.tracking_id);
+    restored += 1;
+  });
+  return restored;
 };
 
 export const createStackViewport = async (
@@ -85,6 +141,19 @@ export const createStackViewport = async (
   setPrimaryTool(primaryTool);
 
   const imageIds = series.instances.map((instance) => wadouri.fileManager.add(instance.file));
+  imageIds.forEach((imageId, index) => {
+    const instance = series.instances[index];
+    imageReferences.set(imageId, {
+      seriesId: series.id,
+      instanceId: instance.instanceId,
+      frameOfReferenceId: series.frameOfReferenceId,
+      spacingTrusted: Boolean(
+        series.geometry.pixelSpacing?.length === 2 &&
+          series.geometry.pixelSpacing.every((value) => Number.isFinite(value) && value > 0),
+      ),
+    });
+    instanceImageIds.set(instance.instanceId, imageId);
+  });
   await viewport.setStack(imageIds, Math.floor(imageIds.length / 2));
   viewport.render();
   return {

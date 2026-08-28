@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-measurements-v1.schema.json",
+  "title": "ScanView measurement evidence packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "created_at", "review_status", "measurements", "limitations"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "review_status": { "const": "unreviewed" },
+    "measurements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/measurement" }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "opaqueId": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "point3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number" }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tracking_id",
+        "type",
+        "review_status",
+        "source",
+        "geometry",
+        "result",
+        "method",
+        "limitations"
+      ],
+      "properties": {
+        "tracking_id": { "type": "string", "minLength": 1 },
+        "type": { "const": "length" },
+        "review_status": { "const": "unreviewed" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["series_id", "instance_id"],
+          "properties": {
+            "series_id": { "$ref": "#/$defs/opaqueId" },
+            "instance_id": { "$ref": "#/$defs/opaqueId" },
+            "frame_of_reference_id": { "$ref": "#/$defs/opaqueId" }
+          }
+        },
+        "geometry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["coordinate_system", "world_points"],
+          "properties": {
+            "coordinate_system": { "const": "DICOM patient LPS" },
+            "world_points": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": { "$ref": "#/$defs/point3" }
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["unit"],
+          "properties": {
+            "value": { "type": "number", "minimum": 0 },
+            "unit": { "enum": ["mm", "unknown"] }
+          }
+        },
+        "method": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "implementation"],
+          "properties": {
+            "name": { "const": "manual_two_point_length" },
+            "implementation": { "const": "Cornerstone3D LengthTool" }
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

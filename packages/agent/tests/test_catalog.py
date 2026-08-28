@@ -8,6 +8,7 @@ from pydicom.uid import ExplicitVRLittleEndian, MRImageStorage, generate_uid
 
 from scanview_agent.catalog import build_catalog
 from scanview_agent.comparison import suggest_pairs
+from scanview_agent.measurements import measurement_packet_summary
 from scanview_agent.server import serve
 
 
@@ -172,3 +173,47 @@ def test_presentation_states_are_excluded_from_pair_candidates() -> None:
         "unsupported_non_pixel_modality" in item["reasons"]
         for item in suggestions["excluded_series"]
     )
+
+
+def test_measurement_packet_validation_preserves_unreviewed_source_provenance() -> None:
+    packet = {
+        "schema_version": "1.0.0",
+        "created_at": "2026-08-28T00:00:00Z",
+        "review_status": "unreviewed",
+        "measurements": [
+            {
+                "tracking_id": "length:test",
+                "type": "length",
+                "review_status": "unreviewed",
+                "source": {
+                    "series_id": "0123456789abcdef",
+                    "instance_id": "fedcba9876543210",
+                    "frame_of_reference_id": "0011223344556677",
+                },
+                "geometry": {
+                    "coordinate_system": "DICOM patient LPS",
+                    "world_points": [[0, 0, 0], [3, 4, 0]],
+                },
+                "result": {"value": 5, "unit": "mm"},
+                "method": {
+                    "name": "manual_two_point_length",
+                    "implementation": "Cornerstone3D LengthTool",
+                },
+                "limitations": ["Manual and unreviewed."],
+            }
+        ],
+        "limitations": ["Not a diagnosis."],
+    }
+
+    assert measurement_packet_summary(packet) == {
+        "valid": True,
+        "schema_version": "1.0.0",
+        "review_status": "unreviewed",
+        "measurement_count": 1,
+        "errors": [],
+    }
+
+    packet["unexpected_patient_field"] = "must not be accepted"
+    summary = measurement_packet_summary(packet)
+    assert summary["valid"] is False
+    assert "unsupported fields" in " ".join(summary["errors"])

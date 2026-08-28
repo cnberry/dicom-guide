@@ -167,6 +167,7 @@ main { min-height: 100vh; }
   cursor: pointer;
 }
 .sync-button.active { border-color: rgba(110, 231, 194, 0.38); color: var(--accent); background: var(--accent-dark); }
+.sync-button:disabled { cursor: not-allowed; opacity: 0.58; }
 
 .viewer-toolbar {
   display: flex;

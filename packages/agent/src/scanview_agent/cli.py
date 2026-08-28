@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .catalog import build_catalog
 from .comparison import suggest_pairs
+from .measurements import measurement_packet_summary
 from .server import serve
 
 
@@ -45,6 +46,12 @@ def parser() -> argparse.ArgumentParser:
     api.add_argument("--port", type=int, default=8765)
     api.add_argument("--token")
     api.add_argument("--no-hashes", action="store_true")
+
+    validate_measurements = commands.add_parser(
+        "validate-measurements",
+        help="Validate and summarize a local ScanView measurement evidence packet",
+    )
+    validate_measurements.add_argument("packet", type=Path)
     return root
 
 
@@ -64,6 +71,12 @@ def main() -> None:
     elif args.command == "serve":
         catalog, registry = build_catalog(args.root, include_hashes=not args.no_hashes)
         serve(catalog, registry, port=args.port, token=args.token)
+    elif args.command == "validate-measurements":
+        packet = json.loads(args.packet.read_text())
+        summary = measurement_packet_summary(packet)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

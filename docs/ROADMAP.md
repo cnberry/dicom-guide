@@ -12,17 +12,28 @@
 5. Confirmed the current media contains one MRI exam and one CT exam, and therefore
    no valid same-modality longitudinal comparison candidate.
 
+## Completed in the second milestone
+
+1. Loaded the complete copied folder and rendered real JPEG 2000 MRI and CT pixels
+   using only bundled browser workers/codecs.
+2. Removed arbitrary follow-up selection and reject same-exam series as a
+   longitudinal response pair.
+3. Added patient-position slice linking when DICOM frames/orientations permit it;
+   all other linked navigation is visibly approximate.
+4. Added versioned, source-traceable manual length export, local validation, and
+   save/reopen overlay restoration.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
-2. Smoke-test copied JPEG 2000 MRI and CT pixels in the production viewer on this
-   computer, then repeat on Linux without exposing metadata or screenshots.
-3. Persist source-referenced length/ROI measurements with tracking IDs; add
-   orientation labels and annotation export.
-4. Replace normalized stack index linking with patient-position synchronization.
-5. Serve instance bytes and static UI from one loopback process for a consistent
+2. Repeat production packaging and real-codec smoke tests on Linux without exposing
+   metadata or screenshots.
+3. Add bidirectional/ROI measurements, a measurement table, orientation labels,
+   and key-image export using the existing evidence packet contract.
+4. Serve instance bytes and static UI from one loopback process for a consistent
    macOS/Linux launcher and agent/viewer deep links.
+5. Define the clinician-reviewed evidence packet and sign-off workflow.
 
 ## Next milestone
 

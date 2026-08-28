@@ -9,6 +9,7 @@ export type Geometry = {
 };
 
 export type DicomInstance = {
+  instanceId: string;
   file: File;
   instanceNumber: number;
   imagePosition?: number[];
@@ -57,6 +58,17 @@ const safeId = async (namespace: string, value: string): Promise<string> => {
     .join('');
 };
 
+const dot = (left: number[], right: number[]): number =>
+  left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
+
+const normalFromOrientation = (orientation?: number[]): number[] | undefined => {
+  if (!orientation || orientation.length < 6) return undefined;
+  const [rx, ry, rz, cx, cy, cz] = orientation;
+  const normal = [ry * cz - rz * cy, rz * cx - rx * cz, rx * cy - ry * cx];
+  const magnitude = Math.sqrt(dot(normal, normal));
+  return magnitude > 0 ? normal.map((value) => value / magnitude) : undefined;
+};
+
 const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
   // DICOM headers precede Pixel Data. Capping the read prevents importing a study
   // from holding all pixel arrays in memory at once.
@@ -73,7 +85,8 @@ const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
   const studyUid = textTag(dataset, 'x0020000d');
   const seriesUid = textTag(dataset, 'x0020000e');
   const sopClassUid = textTag(dataset, 'x00080016');
-  if (!studyUid || !seriesUid || !sopClassUid) return undefined;
+  const sopInstanceUid = textTag(dataset, 'x00080018');
+  if (!studyUid || !seriesUid || !sopClassUid || !sopInstanceUid) return undefined;
 
   const modality = textTag(dataset, 'x00080060') ?? 'Unknown';
   // PR/SR and other DICOM objects remain available to the agent catalog, but
@@ -87,6 +100,7 @@ const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
 
   return {
     file,
+    instanceId: await safeId('instance', sopInstanceUid),
     id: await safeId('series', seriesUid),
     studyId: await safeId('study', studyUid),
     frameOfReferenceId: frameOfReferenceUid
@@ -116,8 +130,13 @@ const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
   };
 };
 
-const sortInstances = (instances: DicomInstance[]): DicomInstance[] =>
-  [...instances].sort((a, b) => {
+const sortInstances = (instances: DicomInstance[], orientation?: number[]): DicomInstance[] => {
+  const normal = normalFromOrientation(orientation);
+  return [...instances].sort((a, b) => {
+    if (normal && a.imagePosition?.length === 3 && b.imagePosition?.length === 3) {
+      const positionDifference = dot(a.imagePosition, normal) - dot(b.imagePosition, normal);
+      if (positionDifference !== 0) return positionDifference;
+    }
     if (a.imagePosition && b.imagePosition && a.imagePosition.length === b.imagePosition.length) {
       const positionDifference = a.imagePosition[2] - b.imagePosition[2];
       if (positionDifference !== 0) return positionDifference;
@@ -125,6 +144,66 @@ const sortInstances = (instances: DicomInstance[]): DicomInstance[] =>
     if (a.instanceNumber !== b.instanceNumber) return a.instanceNumber - b.instanceNumber;
     return a.file.name.localeCompare(b.file.name);
   });
+};
+
+export type LinkStrategy = 'patient-position' | 'normalized';
+
+export const getLinkStrategy = (
+  source?: DicomSeries,
+  target?: DicomSeries,
+): LinkStrategy => {
+  if (
+    !source ||
+    !target ||
+    !source.frameOfReferenceId ||
+    source.frameOfReferenceId !== target.frameOfReferenceId
+  ) {
+    return 'normalized';
+  }
+  const sourceNormal = normalFromOrientation(source.geometry.orientation);
+  const targetNormal = normalFromOrientation(target.geometry.orientation);
+  if (!sourceNormal || !targetNormal || Math.abs(dot(sourceNormal, targetNormal)) < 0.999) {
+    return 'normalized';
+  }
+  const sourceHasPosition =
+    source.instances.length > 0 &&
+    source.instances.every((instance) => instance.imagePosition?.length === 3);
+  const targetHasPosition =
+    target.instances.length > 0 &&
+    target.instances.every((instance) => instance.imagePosition?.length === 3);
+  return sourceHasPosition && targetHasPosition ? 'patient-position' : 'normalized';
+};
+
+export const mapLinkedIndex = (
+  sourceIndex: number,
+  source: DicomSeries,
+  target: DicomSeries,
+): { index: number; strategy: LinkStrategy } => {
+  const strategy = getLinkStrategy(source, target);
+  if (strategy === 'patient-position') {
+    const boundedSource = Math.max(0, Math.min(sourceIndex, source.instances.length - 1));
+    const position = source.instances[boundedSource]?.imagePosition;
+    const normal = normalFromOrientation(source.geometry.orientation);
+    if (position?.length === 3 && normal) {
+      const sourceCoordinate = dot(position, normal);
+      let closestIndex = 0;
+      let closestDistance = Number.POSITIVE_INFINITY;
+      target.instances.forEach((instance, index) => {
+        if (instance.imagePosition?.length !== 3) return;
+        const distance = Math.abs(dot(instance.imagePosition, normal) - sourceCoordinate);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+      if (Number.isFinite(closestDistance)) return { index: closestIndex, strategy };
+    }
+  }
+  return {
+    index: mapNormalizedIndex(sourceIndex, source.instances.length, target.instances.length),
+    strategy: 'normalized',
+  };
+};
 
 export const parseDicomFiles = async (
   files: File[],
@@ -137,9 +216,9 @@ export const parseDicomFiles = async (
       const index = cursor++;
       const parsed = await parseHeader(files[index]);
       if (parsed) {
-        const { file, instanceNumber, imagePosition, ...seriesHeader } = parsed;
+        const { file, instanceId, instanceNumber, imagePosition, ...seriesHeader } = parsed;
         const existing = bySeries.get(parsed.id);
-        const instance = { file, instanceNumber, imagePosition };
+        const instance = { file, instanceId, instanceNumber, imagePosition };
         if (existing) {
           existing.instances.push(instance);
         } else {
@@ -152,7 +231,10 @@ export const parseDicomFiles = async (
   await Promise.all(workers);
 
   return [...bySeries.values()]
-    .map((series) => ({ ...series, instances: sortInstances(series.instances) }))
+    .map((series) => ({
+      ...series,
+      instances: sortInstances(series.instances, series.geometry.orientation),
+    }))
     .sort((a, b) => {
       const dateOrder = (a.acquisitionDate ?? '').localeCompare(b.acquisitionDate ?? '');
       return dateOrder || a.description.localeCompare(b.description);
@@ -172,6 +254,23 @@ export const assessCompatibility = (left?: DicomSeries, right?: DicomSeries): Co
 
   let score = 100;
   const reasons: string[] = [];
+  const identicalSeries = left.id === right.id;
+  const sameStudy = left.studyId === right.studyId;
+  const sameDate = Boolean(
+    left.acquisitionDate && right.acquisitionDate && left.acquisitionDate === right.acquisitionDate,
+  );
+  if (identicalSeries) {
+    score = 0;
+    reasons.push('The same series is selected twice; this cannot show change over time.');
+  } else if (sameStudy) {
+    score -= 80;
+    reasons.push('Both series belong to the same exam; this is not a longitudinal response pair.');
+  } else if (sameDate) {
+    score -= 50;
+    reasons.push(
+      'Both exams have the same acquisition date; treatment-response timing is not established.',
+    );
+  }
   const modalityMismatch = left.modality !== right.modality;
   if (modalityMismatch) {
     score -= 60;
@@ -206,7 +305,7 @@ export const assessCompatibility = (left?: DicomSeries, right?: DicomSeries): Co
   const boundedScore = Math.max(0, score);
   return {
     score: boundedScore,
-    level: modalityMismatch
+    level: identicalSeries || sameStudy || modalityMismatch
       ? 'incompatible'
       : boundedScore >= 80
         ? 'compatible'

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 09:30 PDT
+Last updated: 2026-08-28 10:01 PDT
 
 ## Data transfer
 
@@ -21,9 +21,10 @@ Last updated: 2026-08-28 09:30 PDT
 - Series distribution: 49 MR, 8 CT, 7 PR, and 1 SR.
 - The media contains one MRI exam and one CT exam. There is no same-modality
   longitudinal pair, so the matcher correctly returns zero comparison candidates.
-- Sample MR and CT objects report JPEG 2000 Lossless transfer syntax. The browser
-  bundle includes a local OpenJPEG WebAssembly decoder; production-viewer testing
-  of these copied pixels remains an explicit manual check.
+- Sample MR and CT objects report JPEG 2000 Lossless transfer syntax. The production
+  viewer decoded and rendered both through its bundled OpenJPEG WebAssembly worker.
+- The complete copied folder loaded in the production viewer in about five seconds:
+  2 studies and all 57 renderable MR/CT series, matching the catalog's 49 MR + 8 CT.
 - Catalog and candidate files are owner-only, outside Git, and marked sensitive and
   `deidentified: false` despite direct patient name/ID and paths being omitted.
 
@@ -32,7 +33,14 @@ Last updated: 2026-08-28 09:30 PDT
 - Initial local-first React/TypeScript/Cornerstone3D viewer implemented.
 - Baseline/follow-up pairing, linked stack position, compatibility explanations, and
   registration safety gate implemented.
-- Window/level, pan, zoom, reset, and in-memory length tools implemented.
+- Window/level, pan, zoom, reset, and manual length tools implemented.
+- Follow-up auto-selection removed; same-exam pairings are explicitly incompatible
+  for longitudinal response.
+- Physical patient-position slice mapping implemented for shared compatible Frames
+  of Reference; normalized fallback is labeled approximate.
+- Manual length drafts now save/reopen with tracking ID, opaque series/instance/frame
+  provenance, DICOM patient-space endpoints, units gate, limitations, and review state.
+- Versioned measurement JSON Schema and local agent validation command implemented.
 - Python DICOM catalog, provenance hashing, pairing candidates, local agent API, and
   JSON Schema implemented.
 - Copy/repair/SHA-256 verification utility implemented.
@@ -41,22 +49,29 @@ Last updated: 2026-08-28 09:30 PDT
 
 ## Verification
 
-- Python agent tests: 4 passing.
-- Viewer tests: 5 passing, including local-only endpoint enforcement.
+- Python agent tests: 5 passing.
+- Viewer tests: 13 passing, including local-only endpoint enforcement, pairing safety,
+  physical-position mapping, and measurement provenance/import validation.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- Synthetic browser smoke test: two canvases render; all five viewer controls activate;
-  no console error or external document URL.
+- Synthetic browser smoke test: two canvases render; all five viewer controls activate.
+- Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
+  1162×1200 canvases; the full folder produces 57 pixel series; local server logs show
+  only bundled UI/worker/OpenJPEG assets.
+- Measurement round-trip smoke test: a temporary real-image manual length exported,
+  passed the agent validator, and restored after viewer/source reopen. Temporary test
+  DICOM copies and the test measurement packet were then removed.
 - Real patient metadata inventory: complete without logging identifying metadata.
 - Full source/destination SHA-256 verification: passing for all 10,321 source files.
 
 ## Known gaps
 
-- Current linked navigation uses normalized stack position, not patient coordinates.
-- Length measurements are in-memory only; persistence, tracking IDs, bidirectional/ROI
-  tools, MPR, and orientation overlays are next.
+- Different-frame longitudinal exams still use approximate normalized linking until
+  a reviewed registration exists; patient-position linking is only enabled for a
+  shared compatible frame.
+- Measurement persistence currently covers manual length only; bidirectional/ROI
+  tools, measurement table editing, MPR, and orientation overlays remain.
 - Viewer folder import and agent API are separate entry paths in this increment.
 - No registration, segmentation, response criteria, or automated medical conclusion.
-- Manual production-viewer smoke tests with the copied JPEG 2000 images and Linux
-  packaging remain pending.
+- Linux packaging/smoke testing remains pending.

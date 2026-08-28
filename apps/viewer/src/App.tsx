@@ -1,13 +1,22 @@
 import { useMemo, useRef, useState } from 'react';
 import { DicomViewport } from './components/DicomViewport';
-import type { ViewerTool } from './cornerstone';
+import {
+  createMeasurementEvidencePacket,
+  resetLocalImagingSession,
+  type ViewerTool,
+} from './cornerstone';
 import {
   assessCompatibility,
   formatDicomDate,
-  mapNormalizedIndex,
+  getLinkStrategy,
+  mapLinkedIndex,
   parseDicomFiles,
   type DicomSeries,
 } from './dicom';
+import {
+  readMeasurementEvidencePacket,
+  type MeasurementEvidencePacket,
+} from './measurements';
 
 type ImportState = { processed: number; total: number } | undefined;
 
@@ -40,6 +49,7 @@ const SeriesSelect = ({
 
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const measurementInputRef = useRef<HTMLInputElement>(null);
   const [series, setSeries] = useState<DicomSeries[]>([]);
   const [baselineId, setBaselineId] = useState<string>();
   const [followupId, setFollowupId] = useState<string>();
@@ -50,6 +60,10 @@ export default function App() {
   const [resetNonce, setResetNonce] = useState(0);
   const [importState, setImportState] = useState<ImportState>();
   const [importMessage, setImportMessage] = useState('No scan folder loaded');
+  const [measurementMessage, setMeasurementMessage] = useState(
+    'Measurement drafts stay local and require clinician review.',
+  );
+  const [measurementPacket, setMeasurementPacket] = useState<MeasurementEvidencePacket>();
 
   const baseline = series.find((item) => item.id === baselineId);
   const followup = series.find((item) => item.id === followupId);
@@ -57,11 +71,23 @@ export default function App() {
     () => assessCompatibility(baseline, followup),
     [baseline, followup],
   );
-  const studies = new Set(series.map((item) => item.studyId)).size;
+  const linkStrategy = useMemo(() => getLinkStrategy(baseline, followup), [baseline, followup]);
+  const openFolder = () => {
+    if (!inputRef.current) return;
+    inputRef.current.value = '';
+    inputRef.current.click();
+  };
 
   const chooseFiles = async (fileList: FileList | null) => {
     if (!fileList?.length) return;
     const files = Array.from(fileList).filter((file) => !file.name.startsWith('.'));
+    setSeries([]);
+    setBaselineId(undefined);
+    setFollowupId(undefined);
+    setMeasurementPacket(undefined);
+    setMeasurementMessage('Measurement drafts stay local and require clinician review.');
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    resetLocalImagingSession();
     setImportState({ processed: 0, total: files.length });
     setImportMessage('Reading DICOM headers in this browser only…');
     const imported = await parseDicomFiles(files, (processed, total) =>
@@ -69,26 +95,76 @@ export default function App() {
     );
     setSeries(imported);
     setImportState(undefined);
+    const importedStudies = new Set(imported.map((item) => item.studyId)).size;
     setImportMessage(
       imported.length
-        ? `${studies || new Set(imported.map((item) => item.studyId)).size} studies · ${imported.length} series · no upload`
+        ? `${importedStudies} studies · ${imported.length} series · follow-up not auto-selected · no upload`
         : 'No readable DICOM image series found.',
     );
-    if (imported[0]) setBaselineId(imported[0].id);
-    if (imported[1]) setFollowupId(imported[1].id);
+    setBaselineId(imported[0]?.id);
+    setFollowupId(undefined);
+    setBaselineIndex(0);
+    setFollowupIndex(0);
   };
 
   const updateIndex = (side: 'baseline' | 'followup', next: number) => {
     if (side === 'baseline') {
       setBaselineIndex(next);
       if (synchronized && baseline && followup) {
-        setFollowupIndex(mapNormalizedIndex(next, baseline.instances.length, followup.instances.length));
+        setFollowupIndex(mapLinkedIndex(next, baseline, followup).index);
       }
     } else {
       setFollowupIndex(next);
       if (synchronized && baseline && followup) {
-        setBaselineIndex(mapNormalizedIndex(next, followup.instances.length, baseline.instances.length));
+        setBaselineIndex(mapLinkedIndex(next, followup, baseline).index);
       }
+    }
+  };
+
+  const exportMeasurementDraft = () => {
+    const packet = createMeasurementEvidencePacket();
+    if (packet.measurements.length === 0) {
+      setMeasurementMessage(
+        'No length measurements to export. Draw one with the Length tool first.',
+      );
+      return;
+    }
+    const url = URL.createObjectURL(
+      new Blob([`${JSON.stringify(packet, null, 2)}\n`], { type: 'application/json' }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `scanview-measurements-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setMeasurementMessage(
+      `Exported ${packet.measurements.length} unreviewed source-linked measurement${packet.measurements.length === 1 ? '' : 's'}.`,
+    );
+  };
+
+  const openMeasurementDraft = () => {
+    if (!measurementInputRef.current) return;
+    measurementInputRef.current.value = '';
+    measurementInputRef.current.click();
+  };
+
+  const loadMeasurementDraft = async (fileList: FileList | null) => {
+    const file = fileList?.[0];
+    if (!file) return;
+    try {
+      const parsed = readMeasurementEvidencePacket(JSON.parse(await file.text()));
+      if (!parsed.packet) {
+        setMeasurementPacket(undefined);
+        setMeasurementMessage(`Measurement draft rejected: ${parsed.errors.join(' ')}`);
+        return;
+      }
+      setMeasurementPacket(parsed.packet);
+      setMeasurementMessage(
+        `Loaded ${parsed.packet.measurements.length} unreviewed source-linked measurement${parsed.packet.measurements.length === 1 ? '' : 's'}; matching selected series are restored.`,
+      );
+    } catch {
+      setMeasurementPacket(undefined);
+      setMeasurementMessage('Measurement draft rejected: file is not valid JSON.');
     }
   };
 
@@ -108,7 +184,7 @@ export default function App() {
           <strong>Research &amp; communication tool</strong>
           <span>Not validated for diagnosis. Clinician review is required.</span>
         </div>
-        <button className="import-button" onClick={() => inputRef.current?.click()}>
+        <button className="import-button" onClick={openFolder}>
           Open DICOM folder
         </button>
         <input
@@ -119,6 +195,13 @@ export default function App() {
           // Supported by current Chromium and Safari; React's type omits the attribute.
           {...({ webkitdirectory: '' } as Record<string, string>)}
           onChange={(event) => void chooseFiles(event.target.files)}
+        />
+        <input
+          ref={measurementInputRef}
+          className="hidden-input"
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => void loadMeasurementDraft(event.target.files)}
         />
       </header>
 
@@ -140,10 +223,10 @@ export default function App() {
           <span className="eyebrow">Start with source fidelity</span>
           <h2>Open a copied DICOM folder</h2>
           <p>
-            ScanView reads headers and pixels locally. It does not upload studies, modify source files,
-            or claim a clinical interpretation.
+            ScanView reads headers and pixels locally. It does not upload studies, modify source
+            files, or claim a clinical interpretation.
           </p>
-          <button className="primary-action" onClick={() => inputRef.current?.click()}>
+          <button className="primary-action" onClick={openFolder}>
             Choose folder
           </button>
           <div className="empty-steps">
@@ -165,11 +248,18 @@ export default function App() {
               }}
             />
             <button
-              className={`sync-button ${synchronized ? 'active' : ''}`}
+              className={`sync-button ${synchronized && baseline && followup ? 'active' : ''}`}
               onClick={() => setSynchronized((value) => !value)}
-              aria-pressed={synchronized}
+              aria-pressed={Boolean(synchronized && baseline && followup)}
+              disabled={!baseline || !followup}
             >
-              {synchronized ? 'Linked slices' : 'Independent slices'}
+              {!baseline || !followup
+                ? 'Link after pairing'
+                : synchronized
+                  ? linkStrategy === 'patient-position'
+                    ? 'Patient-position linked'
+                    : 'Approximate index link'
+                  : 'Independent slices'}
             </button>
             <SeriesSelect
               label="Follow-up series"
@@ -200,10 +290,17 @@ export default function App() {
                 </button>
               ))}
               <button onClick={() => setResetNonce((value) => value + 1)}>Reset views</button>
+              <button onClick={exportMeasurementDraft}>Export measurement draft</button>
+              <button onClick={openMeasurementDraft}>Open measurement draft</button>
             </div>
             <p>
               Primary drag: {activeTool === 'length' ? 'unreviewed measurement' : activeTool} · wheel:
-              slices · measurements require valid pixel spacing
+              slices · {!baseline || !followup
+                ? 'choose a follow-up to link'
+                : linkStrategy === 'patient-position'
+                  ? 'shared-frame physical linking'
+                  : 'index linking is approximate'}<br />
+              {measurementMessage}
             </p>
           </section>
 
@@ -216,6 +313,7 @@ export default function App() {
               onIndexChange={(index) => updateIndex('baseline', index)}
               activeTool={activeTool}
               resetNonce={resetNonce}
+              measurementPacket={measurementPacket}
             />
             <DicomViewport
               id="followup"
@@ -225,6 +323,7 @@ export default function App() {
               onIndexChange={(index) => updateIndex('followup', index)}
               activeTool={activeTool}
               resetNonce={resetNonce}
+              measurementPacket={measurementPacket}
             />
           </section>
 
@@ -233,7 +332,11 @@ export default function App() {
               <div className="card-heading">
                 <div>
                   <span className="eyebrow">Pairing suggestion · never auto-approved</span>
-                  <h2>{compatibility.level === 'compatible' ? 'Plausibly comparable' : 'Review compatibility'}</h2>
+                  <h2>
+                    {compatibility.level === 'compatible'
+                      ? 'Plausibly comparable'
+                      : 'Review compatibility'}
+                  </h2>
                 </div>
                 <div className="score">{compatibility.score}<small>/100</small></div>
               </div>

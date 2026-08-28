@@ -31,7 +31,8 @@ result into a medical conclusion.
 - Orthanc/DICOMweb import with localhost-only configuration.
 - OHIF longitudinal mode or ScanView mode extension.
 - Physical-coordinate linked crosshair, orientation overlays, and MPR.
-- Manual linear, bidirectional, and ROI measurements with tracking IDs.
+- Bidirectional and ROI measurements using the implemented source-linked length
+  tracking/evidence contract.
 - Evidence-packet export for clinician conversations.
 
 ### Phase 3 — reviewed derivatives

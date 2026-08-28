@@ -2,9 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   assessCompatibility,
   formatDicomDate,
+  getLinkStrategy,
+  mapLinkedIndex,
   mapNormalizedIndex,
+  type DicomInstance,
   type DicomSeries,
 } from './dicom';
+
+const instance = (position: number, instanceNumber = position): DicomInstance => ({
+  instanceId: `instance-${instanceNumber}`,
+  file: { name: `image-${instanceNumber}.dcm` } as File,
+  instanceNumber,
+  imagePosition: [0, 0, position],
+});
 
 const series = (overrides: Partial<DicomSeries> = {}): DicomSeries => ({
   id: 'series-a',
@@ -30,6 +40,12 @@ describe('comparison safety', () => {
     const result = assessCompatibility(series(), series({ id: 'series-b', frameOfReferenceId: 'frame-b' }));
     expect(result.reasons.join(' ')).toContain('registration');
   });
+
+  it('rejects two series from the same exam as a longitudinal pair', () => {
+    const result = assessCompatibility(series(), series({ id: 'series-b' }));
+    expect(result.level).toBe('incompatible');
+    expect(result.reasons.join(' ')).toContain('same exam');
+  });
 });
 
 describe('display formatting', () => {
@@ -42,5 +58,54 @@ describe('display formatting', () => {
     expect(mapNormalizedIndex(0, 5, 11)).toBe(0);
     expect(mapNormalizedIndex(2, 5, 11)).toBe(5);
     expect(mapNormalizedIndex(4, 5, 11)).toBe(10);
+  });
+
+  it('maps by nearest patient position when frame and orientation are shared', () => {
+    const baseline = series({
+      geometry: { orientation: [1, 0, 0, 0, 1, 0] },
+      instances: [instance(0), instance(7), instance(14)],
+    });
+    const followup = series({
+      id: 'series-b',
+      studyId: 'study-b',
+      acquisitionDate: '20260201',
+      geometry: { orientation: [1, 0, 0, 0, 1, 0] },
+      instances: [instance(0), instance(4), instance(8), instance(12)],
+    });
+
+    expect(getLinkStrategy(baseline, followup)).toBe('patient-position');
+    expect(mapLinkedIndex(1, baseline, followup)).toEqual({
+      index: 2,
+      strategy: 'patient-position',
+    });
+  });
+
+  it('labels different-frame slice linking as normalized and approximate', () => {
+    const baseline = series({ instances: [instance(0), instance(10)] });
+    const followup = series({
+      id: 'series-b',
+      studyId: 'study-b',
+      acquisitionDate: '20260201',
+      frameOfReferenceId: 'frame-b',
+      instances: [instance(0), instance(5), instance(10)],
+    });
+
+    expect(mapLinkedIndex(1, baseline, followup)).toEqual({
+      index: 2,
+      strategy: 'normalized',
+    });
+  });
+
+  it('falls back to normalized linking when any slice position is missing', () => {
+    const withoutPosition = { ...instance(10), imagePosition: undefined };
+    const baseline = series({ instances: [instance(0), withoutPosition] });
+    const followup = series({
+      id: 'series-b',
+      studyId: 'study-b',
+      acquisitionDate: '20260201',
+      instances: [instance(0), instance(5), instance(10)],
+    });
+
+    expect(getLinkStrategy(baseline, followup)).toBe('normalized');
   });
 });

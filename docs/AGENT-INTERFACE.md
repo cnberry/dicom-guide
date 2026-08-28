@@ -30,6 +30,30 @@ written with owner-only permissions and must remain outside Git.
 
 Zero candidates is valid and safer than cross-modality or object-type guessing.
 
+## Measurement evidence packets
+
+The viewer exports manual length drafts conforming to
+`schemas/scanview-measurements-v1.schema.json`. Each accepted record contains:
+
+- a stable tracking ID and `unreviewed` state;
+- opaque source series, instance, and optional frame-of-reference IDs;
+- two DICOM patient LPS world points;
+- a millimeter result only when pixel spacing is trustworthy;
+- the exact manual tool implementation and explicit limitations.
+
+Annotations without valid geometry or source mapping are excluded rather than
+exported as evidence. Agents can validate and summarize a packet without printing
+its identifiers, coordinates, or values:
+
+```bash
+scanview-agent validate-measurements '/safe/local/scanview-measurements.json'
+```
+
+The viewer can reopen a validated packet after the source folder is loaded. It
+restores overlays only on a selected series/instance whose opaque IDs match. Loading
+a new DICOM folder clears the annotation state, pixel cache, and file registry so
+measurements cannot silently carry across imaging sessions.
+
 ## Read-only HTTP surface
 
 Start the local service:
@@ -75,8 +99,8 @@ category.
 
 ## Future write boundary
 
-Registration, segmentation, measurements, and evidence packets will be explicit,
-idempotent derivative jobs in a separate store. Each will record source hashes,
-algorithm/tool version, parameters, outputs, limitations, and review status. Native
-DICOM files will remain read-only, and no derived display will unlock until its
-required QA state is accepted.
+Registration, segmentation, additional measurement types, and signed evidence
+packets will be explicit, idempotent derivative jobs in a separate store. Each will
+record source hashes, algorithm/tool version, parameters, outputs, limitations, and
+review status. Native DICOM files remain read-only, and no registration-derived
+display will unlock until its required QA state is accepted.

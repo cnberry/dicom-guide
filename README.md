@@ -26,13 +26,17 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - No external processing API: decoding, metadata, and comparisons stay on-device.
 - Extension-independent DICOM Part 10 parsing.
 - MRI/CT stack rendering through Cornerstone3D's maintained codecs.
-- Window/level, pan, zoom, reset, and in-memory length measurement tools.
-- Baseline/follow-up selection and linked normalized slice navigation.
+- Window/level, pan, zoom, reset, and manual length measurement tools.
+- Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
+- Patient-position slice linking for shared compatible DICOM frames, with an explicitly
+  approximate normalized fallback everywhere else.
+- Versioned measurement draft export/reopen with opaque series/instance references,
+  patient-space endpoints, tracking IDs, limitations, and `unreviewed` state.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, read-only agent API.
-- Versioned JSON manifest schema and synthetic-only tests.
+- Versioned catalog and measurement JSON Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
 ## Run the viewer
@@ -68,6 +72,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e 'packages/agent[test]'
 .venv/bin/scanview-agent manifest '/path/to/copied/DICOM' --output /safe/local/manifest.json
 .venv/bin/scanview-agent serve '/path/to/copied/DICOM'
+.venv/bin/scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 ```
 
 The server exposes:
@@ -79,6 +84,15 @@ The server exposes:
 
 All endpoints except health require the bearer token printed at startup. There is
 no mutation or deletion endpoint. The server refuses non-loopback bind addresses.
+
+## Save and reopen a measurement draft
+
+Choose **Length**, draw a manual measurement, then choose **Export measurement
+draft**. The local JSON file is sensitive derived medical data. It contains opaque
+source references and world-space geometry, but no direct patient name/ID or source
+path. To reopen it, load the source DICOM folder, select the matching series, and
+choose **Open measurement draft**. Matching overlays are restored locally and remain
+`unreviewed`.
 
 ## Preserve and verify removable media
 
