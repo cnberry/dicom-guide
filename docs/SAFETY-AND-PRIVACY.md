@@ -42,6 +42,10 @@ quality-system, and regulatory review.
   only, not registered, and contains empty numeric
   result and interpretation arrays. Successful integrity validation is not clinical
   review or sign-off.
+- A comparison-review ZIP inherits the sensitivity of its visit packet plus any
+  person-entered reviewer identity and note. It never calls an external API. Exact
+  visible-measurement joins prevent an unrelated comparison from being presented
+  beside the key images, and every derivative is owner-only and non-overwriting.
 
 ## De-identification warning
 
@@ -100,3 +104,17 @@ working label. The label is not proof of
 same-lesion identity. Deletion is session-only, pasted JSON uses the strict measurement
 validator and a 2 MB cap, and comparison validation rejects arithmetic tampering or
 any non-empty interpretation list while withholding labels, identifiers, and values.
+
+The comparison-review workflow keeps the arithmetic comparison immutable and
+`unreviewed`. A review decision is a separate self-attested event with explicit
+same-lesion, acquisition-suitability, measurement-placement, and response-criteria
+checklist values. `accepted_for_discussion` is deliberately not named “signed,”
+“verified,” or “clinically validated.” ScanView does not authenticate the entered
+identity or credentials.
+
+Event hashes cover the note, checklist, actor fields, source-comparison digest, prior
+event digest, and parent-archive digest. This catches accidental or partial edits; it
+is not a digital signature and does not stop someone from rebuilding every hash.
+Amendments create a new archive and reset review to `unreviewed`; ancestor archives
+must be retained to verify the recorded parent hashes. Privacy-minimized summaries
+do not print reviewer identity, notes, lesion labels, identifiers, or measurements.

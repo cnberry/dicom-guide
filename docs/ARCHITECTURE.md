@@ -87,7 +87,12 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    through a bounded strict JSON paste, session-only deletion, and a transient working
    lesion label; the label lives only in the exported comparison draft and never
    rewrites measurement geometry. Visit packets emit neither numeric results nor
-   candidate interpretations.
+   candidate interpretations. Comparison-review ZIPs then bind one validated visit
+   packet to one exact comparison through visible measurement IDs, sources, units,
+   and values. They duplicate the two PNGs for a static human page and keep
+   self-attested review/amendment events in a separate hash chain. Each event-derived
+   archive is a new owner-only file anchored to its parent; no command overwrites an
+   ancestor or changes DICOM.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network
@@ -114,6 +119,19 @@ series suggested --> person confirms pairing --> native side-by-side
                                                                 |
                                                                 +--> overlay/swipe
 ```
+
+The separate communication/review path is:
+
+```text
+two validated key images --> visit packet ----+
+                                              +--> exact source/value join --> review ZIP
+explicit measurement pair --> comparison ----+                              |
+                                                                             +--> self-attested review (new ZIP)
+                                                                             +--> amended comparison (new ZIP, unreviewed)
+```
+
+The hashes make partial edits evident but do not authenticate a clinician. Signed
+medical-record integration remains outside the current trust boundary.
 
 Raw slice-index synchronization is marked as approximate. Physical-coordinate
 synchronization requires compatible geometry or an accepted transform. Subtraction

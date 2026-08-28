@@ -134,26 +134,44 @@
    hydration, 20→16 mm selection, −4 mm/−20% preview, schema/agent validation,
    deletion, and loopback-only resource access.
 
+## Completed in the eleventh milestone
+
+1. Added a local seven-file comparison-review ZIP that recursively validates and
+   embeds the visit packet, normalized numeric comparison, both key images, a static
+   printable review page, and a v1 review record.
+2. Added exact visible-evidence joins: baseline/follow-up tracking ID, series,
+   instance, measurement type, unit, and every metric value must agree before a
+   review artifact can be assembled.
+3. Added explicit self-attested human review choices for same-lesion identity,
+   acquisition suitability, measurement placement, and response-criteria context;
+   identity and credentials remain visibly unverified.
+4. Added non-overwriting amendment and review commands. Event hashes bind actor,
+   checklist, note, source comparison, prior event, and parent archive; an amended
+   comparison always resets review state to `unreviewed`.
+5. Added privacy-minimized validation, a v1 JSON Schema, 6 end-to-end tests, and
+   browser QA of the script-free human page using synthetic evidence and only local
+   image requests.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
 2. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Define explicit clinician identity, attestation, amendment, and sign-off states
-   around the implemented unreviewed visit packet.
+3. Add a one-click viewer handoff that assembles the implemented local comparison
+   review packet from the two live panes and current explicit measurement pair.
 4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
    links around the self-contained Python wheel.
-5. Carry explicitly selected comparison drafts into a future clinician review and
-   amendment workflow without treating labels as same-lesion confirmation.
+5. Design optional authenticated signature integration for clinical organizations;
+   never relabel the current self-attested hash chain as identity verification.
 
 ## Next milestone
 
 1. Add Orthanc as an optional DICOMweb archive and pin/test its local configuration.
 2. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-3. Add explicit compatibility/QA badges to the local clinician visit packet,
-   followed by a reviewed sign-off workflow.
-4. Add append-only audit records for access, comparison drafts, and review decisions.
+3. Add explicit compatibility/QA badges to the local clinician visit packet and
+   comparison-review page.
+4. Extend append-only audit records from review decisions to local evidence access.
 5. Package and smoke-test on macOS Apple Silicon and Linux x86_64.
 
 ## Registration milestone

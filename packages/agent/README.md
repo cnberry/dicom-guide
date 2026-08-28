@@ -22,6 +22,9 @@ scanview-agent compare-measurements baseline.json followup.json \
   --lesion-label 'Target lesion A' \
   --output comparison.json
 scanview-agent validate-comparison comparison.json
+scanview-agent assemble-comparison-review scanview-visit-packet.zip comparison.json \
+  --output review-initial.zip
+scanview-agent validate-comparison-review review-initial.zip
 ```
 
 Use `scripts/build_release.py` from the repository root to produce a self-contained
@@ -45,3 +48,12 @@ archives with one matching opaque patient context, distinct dated studies/series
 explicit ordering, and one modality. It creates a static review page plus an
 integrity-linked agent manifest and does not perform lesion matching, registration,
 response scoring, or interpretation.
+Comparison-review assembly recursively validates both artifacts and requires the
+selected measurements, source instances, units, and numeric values to match the
+visible key-image evidence exactly. It creates an owner-only ZIP with both images, a
+script-free printable page, and a hash-chained event record. `record-comparison-review`
+adds a self-attested decision to a new output archive;
+`amend-comparison-review` binds an amended comparison, records the parent archive
+digest, and resets review state. Neither command overwrites an existing archive.
+Reviewer identity is not authenticated or digitally signed, and privacy-minimized
+validation never echoes names, roles, notes, labels, IDs, or values.

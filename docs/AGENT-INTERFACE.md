@@ -171,6 +171,49 @@ Deletion affects only a hydrated annotation in the current memory session. The l
 validator reports validity, schema/review state, measurement type, metric count, and
 whether a label exists; it never echoes the label, IDs, coordinates, or values.
 
+## Local comparison review and amendment
+
+Agents can bind the visual and numeric derivatives into one human-readable artifact:
+
+```bash
+scanview-agent assemble-comparison-review visit-packet.zip comparison.json \
+  --output review-initial.zip
+scanview-agent validate-comparison-review review-initial.zip
+```
+
+Assembly recursively validates both inputs, then joins each comparison observation
+to exactly one visible measurement in the corresponding baseline/follow-up key image.
+Source series, instance, tracking ID, type, units, and metric values must all agree.
+The output contains exactly seven files: a v1 review record, the normalized comparison,
+the complete visit packet, both copied key-image PNGs, `review.html`, and `README.txt`.
+
+Human decisions are appended to a new archive, never written into the comparison:
+
+```bash
+scanview-agent record-comparison-review review-initial.zip \
+  --output review-reviewed.zip \
+  --reviewer-name 'Reviewer name' --reviewer-role 'Clinical role' \
+  --decision accepted_for_discussion \
+  --same-lesion confirmed --acquisition-suitability suitable \
+  --measurement-placement accepted --response-criteria uncertain \
+  --note 'Person-entered review note.' --attest
+```
+
+`accepted_for_discussion` requires confirmed same-lesion identity, suitable acquisition,
+and accepted measurement placement. Other supported decisions are
+`amendment_requested` and `rejected`. All identity fields are explicitly
+`self_asserted_unverified`; `--attest` acknowledges that ScanView has not authenticated
+the person or their credentials. This is not a digital signature or medical-record
+sign-off.
+
+`amend-comparison-review` accepts a newly validated comparison, rechecks the full join,
+creates another non-overwriting archive, appends a `comparison_amended` event, anchors
+the prior archive digest inside the event hash, and resets the review state to
+`unreviewed`. Keep ancestor archives: the current archive records their hashes but
+cannot independently prove that a missing ancestor existed. The validator reports
+only status, event count/type, modality, parent-link presence, and integrity booleans;
+it withholds reviewer identity, notes, lesion label, opaque IDs, and numeric values.
+
 ## Source-read-only HTTP surface
 
 Start the local service:

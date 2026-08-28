@@ -8,6 +8,12 @@ from pathlib import Path
 
 from .catalog import build_catalog
 from .comparison import suggest_pairs
+from .comparison_reviews import (
+    amend_comparison_review,
+    append_comparison_review,
+    comparison_review_summary,
+    write_comparison_review,
+)
 from .key_images import key_image_archive_summary
 from .measurements import (
     build_measurement_comparison,
@@ -119,6 +125,78 @@ def parser() -> argparse.ArgumentParser:
         help="Validate and privacy-minimize a local unreviewed comparison draft",
     )
     validate_comparison.add_argument("comparison", type=Path)
+
+    assemble_comparison_review = commands.add_parser(
+        "assemble-comparison-review",
+        help="Bind a visit packet and exact numeric comparison into a local review archive",
+    )
+    assemble_comparison_review.add_argument("visit_packet", type=Path)
+    assemble_comparison_review.add_argument("comparison", type=Path)
+    assemble_comparison_review.add_argument("--output", "-o", type=Path, required=True)
+
+    validate_comparison_review = commands.add_parser(
+        "validate-comparison-review",
+        help="Validate and privacy-minimize a local comparison review archive",
+    )
+    validate_comparison_review.add_argument("archive", type=Path)
+
+    record_comparison_review = commands.add_parser(
+        "record-comparison-review",
+        help="Create a new hash-linked archive containing a self-attested human review",
+    )
+    record_comparison_review.add_argument("archive", type=Path)
+    record_comparison_review.add_argument("--output", "-o", type=Path, required=True)
+    record_comparison_review.add_argument("--reviewer-name", required=True)
+    record_comparison_review.add_argument("--reviewer-role", required=True)
+    record_comparison_review.add_argument("--organization")
+    record_comparison_review.add_argument(
+        "--decision",
+        required=True,
+        choices=["accepted_for_discussion", "amendment_requested", "rejected"],
+    )
+    record_comparison_review.add_argument(
+        "--same-lesion",
+        required=True,
+        choices=["confirmed", "uncertain", "not_confirmed"],
+    )
+    record_comparison_review.add_argument(
+        "--acquisition-suitability",
+        required=True,
+        choices=["suitable", "uncertain", "not_suitable"],
+    )
+    record_comparison_review.add_argument(
+        "--measurement-placement",
+        required=True,
+        choices=["accepted", "uncertain", "revision_needed"],
+    )
+    record_comparison_review.add_argument(
+        "--response-criteria",
+        required=True,
+        choices=["selected", "uncertain", "not_applicable"],
+    )
+    record_comparison_review.add_argument("--note", required=True)
+    record_comparison_review.add_argument(
+        "--attest",
+        action="store_true",
+        help="Acknowledge that the review and identity are self-asserted",
+    )
+
+    amend_review = commands.add_parser(
+        "amend-comparison-review",
+        help="Create a new hash-linked archive with an amended comparison",
+    )
+    amend_review.add_argument("archive", type=Path)
+    amend_review.add_argument("comparison", type=Path)
+    amend_review.add_argument("--output", "-o", type=Path, required=True)
+    amend_review.add_argument("--actor-name", required=True)
+    amend_review.add_argument("--actor-role", required=True)
+    amend_review.add_argument("--organization")
+    amend_review.add_argument("--reason", required=True)
+    amend_review.add_argument(
+        "--attest",
+        action="store_true",
+        help="Acknowledge that the amendment and identity are self-asserted",
+    )
     return root
 
 
@@ -204,6 +282,64 @@ def main() -> None:
     elif args.command == "validate-comparison":
         comparison = json.loads(args.comparison.read_text())
         summary = measurement_comparison_summary(comparison)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "assemble-comparison-review":
+        try:
+            write_comparison_review(
+                args.visit_packet,
+                args.comparison,
+                args.output,
+            )
+        except ValueError as error:
+            argument_parser.error(str(error))
+        summary = comparison_review_summary(args.output)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-comparison-review":
+        summary = comparison_review_summary(args.archive)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "record-comparison-review":
+        try:
+            append_comparison_review(
+                args.archive,
+                args.output,
+                reviewer_name=args.reviewer_name,
+                reviewer_role=args.reviewer_role,
+                organization=args.organization,
+                decision=args.decision,
+                same_lesion_identity=args.same_lesion,
+                acquisition_suitability=args.acquisition_suitability,
+                measurement_placement=args.measurement_placement,
+                response_criteria=args.response_criteria,
+                note=args.note,
+                attest=args.attest,
+            )
+        except ValueError as error:
+            argument_parser.error(str(error))
+        summary = comparison_review_summary(args.output)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "amend-comparison-review":
+        try:
+            amend_comparison_review(
+                args.archive,
+                args.comparison,
+                args.output,
+                actor_name=args.actor_name,
+                actor_role=args.actor_role,
+                organization=args.organization,
+                reason=args.reason,
+                attest=args.attest,
+            )
+        except ValueError as error:
+            argument_parser.error(str(error))
+        summary = comparison_review_summary(args.output)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

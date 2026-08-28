@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 12:59 PDT
+Last updated: 2026-08-28 13:20 PDT
 
 ## Data transfer
 
@@ -66,6 +66,13 @@ Last updated: 2026-08-28 12:59 PDT
   validator independently checks source separation, type/unit agreement, complete
   metric sets, arithmetic, review state, and an empty interpretation list while its
   summary withholds labels, IDs, coordinates, and values.
+- Local comparison-review archives now bind a recursively validated visit packet to
+  its exact numeric comparison and visible baseline/follow-up measurements. They
+  include both images, a script-free printable page, self-attested checklist events,
+  explicit identity-verification limits, and privacy-minimized validation.
+- Review and amendment commands always create a new owner-only archive. Event hashes
+  bind the actor, checklist, note, source comparison, prior event, and parent archive;
+  an amended comparison is rejoined to the visual evidence and reset to `unreviewed`.
 - Each native viewport can export one local key-image v2 ZIP with a watermarked PNG,
   exact opaque patient/study/series/instance and presentation provenance, and only
   the v3 measurements visible on that source instance. A privacy-minimized agent
@@ -80,9 +87,10 @@ Last updated: 2026-08-28 12:59 PDT
   panes with one button. Both key-image captures remain in browser memory, an
   authenticated exact-origin loopback POST invokes the same Python assembler, and
   the validated ZIP is returned with `no-store` without a server-side patient file.
-- Versioned measurement, key-image, numeric-comparison, and visit-packet JSON Schemas
-  plus local validation are implemented. Same-series pairs, unknown units, and
-  mismatched measurement types are refused; no response label is emitted.
+- Versioned measurement, key-image, numeric-comparison, visit-packet, and
+  comparison-review JSON Schemas plus local validation are implemented. Same-series
+  pairs, unknown units, mismatched measurement types, and mismatched visual/numeric
+  evidence are refused; no response label is emitted.
 - Unified `scanview-agent launch` path implemented: one loopback process serves the
   bundled UI, manifest, pairing candidates, and protected native DICOM instances.
 - The staged release builder embeds the viewer, workers, and local codecs into a
@@ -99,9 +107,10 @@ Last updated: 2026-08-28 12:59 PDT
 
 ## Verification
 
-- Python agent tests: 30 passing, including cross-patient and legacy-context
+- Python agent tests: 36 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
-  Schema conformance, and ROI comparison checks.
+  Schema conformance, ROI comparison checks, exact review joins, review event chains,
+  non-overwriting amendments, privacy summaries, and static presentation integrity.
 - Viewer tests: 38 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
@@ -180,6 +189,12 @@ Last updated: 2026-08-28 12:59 PDT
   loopback instance routes were requested. The final rebuilt bundle repeated the
   preview and then blocked a deliberately reversed baseline/follow-up selection with
   no stale preview. All synthetic inputs and output were moved to recoverable Trash.
+- Comparison-review browser smoke test: a synthetic accepted-for-discussion archive
+  recursively validated its visit/comparison sources, displayed both local key
+  images, all three bidirectional arithmetic rows, the unreviewed safety statement,
+  and two complete review-history events in one semantic script-free page. The only
+  successful requests were `review.html` and its two local PNGs; the synthetic
+  archives and extracted page were moved to recoverable Trash.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -192,9 +207,10 @@ Last updated: 2026-08-28 12:59 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- Clinician identity/sign-off, comparison amendment history, and reviewed lesion-pair
-  acceptance remain. Elliptical ROI is a 2D manual draft, not segmentation or volume
-  measurement.
+- Clinical-organization identity authentication, digital signatures, medical-record
+  sign-off, and a one-click viewer-to-review handoff remain. The current review chain
+  is self-attested and explicitly unverified. Elliptical ROI is a 2D manual draft,
+  not segmentation or volume measurement.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

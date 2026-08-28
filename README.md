@@ -50,11 +50,14 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Local agent comparison of explicitly selected, distinct-series measurements;
   a bounded working lesion label and numeric changes remain source-linked and never
   become a response verdict. The same workflow is available in the human viewer.
+- Local comparison-review ZIPs bind an exact visit packet to its exact numeric
+  comparison and two key images. Script-free printable review history, self-attested
+  decisions, amendment requests, and amended comparisons remain separate from DICOM.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
-- Versioned measurement, key-image, comparison, and visit-packet JSON Schemas;
+- Versioned measurement, key-image, comparison, visit-packet, and review-record JSON Schemas;
   committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
@@ -131,6 +134,9 @@ python3 -m venv .venv
   --lesion-label 'Target lesion A' \
   --output comparison.json
 .venv/bin/scanview-agent validate-comparison comparison.json
+.venv/bin/scanview-agent assemble-comparison-review scanview-visit-packet.zip comparison.json \
+  --output review-initial.zip
+.venv/bin/scanview-agent validate-comparison-review review-initial.zip
 ```
 
 The server exposes:
@@ -178,6 +184,46 @@ clinical context, and questions—not a treatment-response category. An ellipse 
 `validate-comparison` rechecks source linkage, metric completeness, units, arithmetic,
 label bounds, review state, and the empty-interpretation invariant without printing
 the label, source IDs, coordinates, or numeric values.
+
+## Create a local comparison-review packet
+
+Bind the exact visual visit packet to the exact numeric comparison before asking a
+person to review it:
+
+```bash
+.venv/bin/scanview-agent assemble-comparison-review \
+  scanview-visit-packet.zip comparison.json --output review-initial.zip
+
+.venv/bin/scanview-agent record-comparison-review review-initial.zip \
+  --output review-requested-amendment.zip \
+  --reviewer-name 'Reviewer name' --reviewer-role 'Clinical role' \
+  --decision amendment_requested \
+  --same-lesion uncertain --acquisition-suitability suitable \
+  --measurement-placement revision_needed --response-criteria uncertain \
+  --note 'Clarify the intended tumor component.' --attest
+
+.venv/bin/scanview-agent amend-comparison-review \
+  review-requested-amendment.zip amended-comparison.json \
+  --output review-amended.zip \
+  --actor-name 'Coordinator name' --actor-role 'Care coordinator' \
+  --reason 'Applied the requested working-label clarification.' --attest
+
+.venv/bin/scanview-agent validate-comparison-review review-amended.zip
+```
+
+Every output is a new owner-only ZIP; an existing output is never overwritten. Keep
+ancestor archives so `parent_archive_sha256` can be checked. The archive recursively
+validates the visit packet and comparison, requires each selected tracking ID/value
+to join the visible key-image measurement exactly, embeds both images, and provides a
+script-free printable `review.html`. Events are hash chained and amendments reset the
+state to `unreviewed`.
+
+Names, roles, organizations, checklist choices, and notes are person-entered and
+self-attested. ScanView does not authenticate credentials or create a digital
+signature. Even `accepted_for_discussion` is not a diagnosis, treatment recommendation,
+medical-record sign-off, or automated response category; the embedded arithmetic
+comparison remains `unreviewed`. Privacy-minimized validation does not echo reviewer
+identity, notes, lesion labels, identifiers, or numeric values.
 
 ## Save and validate a key image
 

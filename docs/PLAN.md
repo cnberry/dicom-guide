@@ -43,6 +43,9 @@ result into a medical conclusion.
 - Human/agent measurement workspace with strict pasted-JSON import, session-only
   deletion, explicit labeled lesion pairing, local numeric preview/export, and a
   privacy-minimized comparison validator.
+- Local comparison-review archives with exact visual/numeric evidence joins,
+  script-free human presentation, self-attested checklist decisions, non-overwriting
+  amendment history, and privacy-minimized integrity validation.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
 ### Phase 2 — robust local archive and tools
@@ -91,3 +94,7 @@ result into a medical conclusion.
 10. **Communication:** exported evidence shows dates, sequence/contrast,
    native/derived state, registration QA, measurement method, sources, limitations,
    and an unreviewed watermark until sign-off.
+11. **Review trust:** local review records separate person-entered decisions from
+   immutable observations/computations, identify self-asserted credentials as
+   unverified, bind every event and parent derivative by hash, and never represent
+   that chain as a digital signature or medical-record authentication.

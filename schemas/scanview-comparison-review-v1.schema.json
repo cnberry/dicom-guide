@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-comparison-review-v1.schema.json",
+  "title": "ScanView local comparison review record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_at",
+    "review_status",
+    "artifact_type",
+    "parent_archive_sha256",
+    "source_artifacts",
+    "linkage",
+    "events",
+    "limitations",
+    "implementation",
+    "files"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "review_status": {
+      "enum": [
+        "unreviewed",
+        "accepted_for_discussion",
+        "amendment_requested",
+        "rejected"
+      ]
+    },
+    "artifact_type": { "const": "comparison_review_record" },
+    "parent_archive_sha256": {
+      "oneOf": [
+        { "$ref": "#/$defs/sha256" },
+        { "type": "null" }
+      ]
+    },
+    "source_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparison", "visit_packet"],
+      "properties": {
+        "comparison": {
+          "allOf": [
+            { "$ref": "#/$defs/sourceArtifact" },
+            { "properties": { "path": { "const": "comparison.json" } } }
+          ]
+        },
+        "visit_packet": {
+          "allOf": [
+            { "$ref": "#/$defs/sourceArtifact" },
+            { "properties": { "path": { "const": "visit-packet.zip" } } }
+          ]
+        }
+      }
+    },
+    "linkage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "patient_context_match",
+        "modality",
+        "baseline",
+        "followup"
+      ],
+      "properties": {
+        "method": { "const": "exact_visible_measurement_join" },
+        "patient_context_match": { "const": true },
+        "modality": { "enum": ["MR", "CT"] },
+        "baseline": { "$ref": "#/$defs/link" },
+        "followup": { "$ref": "#/$defs/link" }
+      }
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/event" }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "ScanView local comparison-review assembler" },
+        "version": { "const": "0.1.0" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "comparison.json",
+        "visit-packet.zip",
+        "baseline/key-image.png",
+        "followup/key-image.png",
+        "review.html",
+        "README.txt"
+      ],
+      "properties": {
+        "comparison.json": { "$ref": "#/$defs/jsonFile" },
+        "visit-packet.zip": { "$ref": "#/$defs/zipFile" },
+        "baseline/key-image.png": { "$ref": "#/$defs/pngFile" },
+        "followup/key-image.png": { "$ref": "#/$defs/pngFile" },
+        "review.html": { "$ref": "#/$defs/htmlFile" },
+        "README.txt": { "$ref": "#/$defs/textFile" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "seriesId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|series_[0-9a-f]{20})$"
+    },
+    "instanceId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|instance_[0-9a-f]{20})$"
+    },
+    "sourceArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_count", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "byte_count": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "series_id",
+        "instance_id",
+        "measurement_id",
+        "measurement_type"
+      ],
+      "properties": {
+        "series_id": { "$ref": "#/$defs/seriesId" },
+        "instance_id": { "$ref": "#/$defs/instanceId" },
+        "measurement_id": { "type": "string", "minLength": 1 },
+        "measurement_type": {
+          "enum": ["length", "bidirectional", "elliptical_roi"]
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "display_name",
+        "role",
+        "organization",
+        "identity_verification"
+      ],
+      "properties": {
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^(?!.*[\\u0000-\\u001F\\u007F]).*$"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^(?!.*[\\u0000-\\u001F\\u007F]).*$"
+        },
+        "organization": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160,
+              "pattern": "^(?!.*[\\u0000-\\u001F\\u007F]).*$"
+            },
+            { "type": "null" }
+          ]
+        },
+        "identity_verification": {
+          "enum": ["software_generated", "self_asserted_unverified"]
+        }
+      }
+    },
+    "checklist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "same_lesion_identity",
+        "acquisition_suitability",
+        "measurement_placement",
+        "response_criteria"
+      ],
+      "properties": {
+        "same_lesion_identity": {
+          "enum": ["unreviewed", "confirmed", "uncertain", "not_confirmed"]
+        },
+        "acquisition_suitability": {
+          "enum": ["unreviewed", "suitable", "uncertain", "not_suitable"]
+        },
+        "measurement_placement": {
+          "enum": ["unreviewed", "accepted", "uncertain", "revision_needed"]
+        },
+        "response_criteria": {
+          "enum": ["unreviewed", "selected", "uncertain", "not_applicable"]
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "event_type",
+        "created_at",
+        "actor",
+        "decision",
+        "checklist",
+        "note",
+        "attestation",
+        "prior_event_sha256",
+        "parent_archive_sha256",
+        "source_comparison_sha256",
+        "event_sha256"
+      ],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "event_type": {
+          "enum": [
+            "submitted_for_review",
+            "clinician_review",
+            "comparison_amended"
+          ]
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "actor": { "$ref": "#/$defs/actor" },
+        "decision": {
+          "enum": [
+            "unreviewed",
+            "accepted_for_discussion",
+            "amendment_requested",
+            "rejected"
+          ]
+        },
+        "checklist": { "$ref": "#/$defs/checklist" },
+        "note": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "attestation": { "type": "string", "minLength": 1 },
+        "prior_event_sha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "parent_archive_sha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "source_comparison_sha256": { "$ref": "#/$defs/sha256" },
+        "event_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_type", "byte_count", "sha256"],
+      "properties": {
+        "media_type": { "type": "string", "minLength": 1 },
+        "byte_count": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "jsonFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        { "properties": { "media_type": { "const": "application/json" } } }
+      ]
+    },
+    "zipFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        { "properties": { "media_type": { "const": "application/zip" } } }
+      ]
+    },
+    "pngFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        { "properties": { "media_type": { "const": "image/png" } } }
+      ]
+    },
+    "htmlFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        { "properties": { "media_type": { "const": "text/html" } } }
+      ]
+    },
+    "textFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        { "properties": { "media_type": { "const": "text/plain" } } }
+      ]
+    }
+  }
+}
