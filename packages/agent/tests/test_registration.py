@@ -125,6 +125,7 @@ raise SystemExit(7)
         source = """#!/usr/bin/env python3
 import json
 import os
+import struct
 import sys
 from pathlib import Path
 
@@ -167,6 +168,11 @@ if request.get('mode') == 'preflight':
     Path(request['report_path']).write_text(json.dumps(report) + '\\n')
     raise SystemExit(0)
 work = Path(request['work_dir'])
+values = {
+    'fixed.nrrd': (0, 100, 200, 300, 400, 500, 600, 700),
+    'moving.nrrd': (700, 600, 500, 400, 300, 200, 100, 0),
+    'registered-moving.nrrd': (0, 110, 190, 310, 390, 510, 590, 700),
+}
 for name in ('fixed.nrrd', 'moving.nrrd', 'registered-moving.nrrd'):
     header = (
         b'NRRD0005\\n'
@@ -179,7 +185,7 @@ for name in ('fixed.nrrd', 'moving.nrrd', 'registered-moving.nrrd'):
         b'endian: little\\n'
         b'encoding: raw\\n\\n'
     )
-    (work / name).write_bytes(header + (b'\\x00' * 16))
+    (work / name).write_bytes(header + struct.pack('<8h', *values[name]))
 (work / 'moving-to-fixed.tfm').write_text(
     '#Insight Transform File V1.0\\n'
     '#Transform 0\\n'

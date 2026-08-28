@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import mimetypes
+import os
 import secrets
+import stat
 import threading
 import time
 import webbrowser
@@ -22,6 +25,11 @@ from .comparison_reviews import (
     comparison_review_summary,
 )
 from .navigation import NAVIGATION_FRAGMENT_PREFIX
+from .registration_reviews import (
+    MAX_REQUEST_BYTES as MAX_REGISTRATION_REVIEW_REQUEST_BYTES,
+    registration_qa_context,
+    registration_review_bytes,
+)
 from .visit_packets import (
     MAX_VISIT_PACKET_TRANSPORT_BYTES,
     visit_packet_from_transport,
@@ -39,16 +47,63 @@ from .viewer_state import (
 )
 
 
+def _distinct_token(excluded: set[str]) -> str:
+    while True:
+        candidate = secrets.token_urlsafe(24)
+        if candidate not in excluded:
+            return candidate
+
+
+def _registration_agent_summary(
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if context is None:
+        return {
+            "schema_version": "1.0.0",
+            "available": False,
+            "artifact_type": "registration_qa_summary",
+            "qa_status": "unavailable",
+            "display_unlocked": False,
+            "human_preview_required": True,
+            "external_api_required": False,
+        }
+    return {
+        "schema_version": context["schema_version"],
+        "available": True,
+        "artifact_type": "registration_qa_summary",
+        "job_id": context["job_id"],
+        "modality": context["source"]["modality"],
+        "qa_status": "pending_human_review",
+        "display_unlocked": False,
+        "human_preview_required": True,
+        "external_api_required": False,
+        "source_manifest_sha256": context["source"]["manifest_sha256"],
+        "next_action": (
+            "Open the separate browser-capability QA preview; bearer API access "
+            "cannot approve registration."
+        ),
+    }
+
+
 class ScanViewServer(ThreadingHTTPServer):
     catalog: dict[str, Any]
     registry: dict[str, Path]
     token: str
+    browser_bootstrap_token: str
+    browser_session_token: str
     ui_dist: Path | None
     viewer_state_lock: threading.Lock
     viewer_state: dict[str, Any] | None
     viewer_state_received_at: str | None
     viewer_state_received_monotonic: float | None
     viewer_state_revoked_publishers: set[str]
+    registration_bundle: Path | None
+    registration_context: dict[str, Any] | None
+    registration_agent_summary: dict[str, Any]
+    registration_review_lock: threading.Lock
+    registration_review_request_sha256: str | None
+    registration_review_payload: bytes | None
+    registration_review_filename: str | None
 
     def publish_viewer_state(self, state: dict[str, Any]) -> bool:
         with self.viewer_state_lock:
@@ -113,7 +168,26 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return False
         session = cookie.get("scanview_session")
-        return bool(session and secrets.compare_digest(session.value, self.server.token))
+        return bool(
+            session
+            and secrets.compare_digest(
+                session.value, self.server.browser_session_token
+            )
+        )
+
+    def _browser_authorized(self) -> bool:
+        cookie = SimpleCookie()
+        try:
+            cookie.load(self.headers.get("Cookie", ""))
+        except ValueError:
+            return False
+        session = cookie.get("scanview_session")
+        return bool(
+            session
+            and secrets.compare_digest(
+                session.value, self.server.browser_session_token
+            )
+        )
 
     def _security_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -183,13 +257,13 @@ class Handler(BaseHTTPRequestHandler):
             return False
         supplied_values = parse_qs(query, keep_blank_values=True).get("session", [])
         if len(supplied_values) != 1 or not secrets.compare_digest(
-            supplied_values[0], self.server.token
+            supplied_values[0], self.server.browser_bootstrap_token
         ):
             return False
         self.send_response(HTTPStatus.SEE_OTHER)
         self.send_header("Location", "/")
         cookie = SimpleCookie()
-        cookie["scanview_session"] = self.server.token
+        cookie["scanview_session"] = self.server.browser_session_token
         cookie["scanview_session"]["httponly"] = True
         cookie["scanview_session"]["samesite"] = "Strict"
         cookie["scanview_session"]["path"] = "/"
@@ -226,6 +300,24 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/v1/comparison-candidates":
             self._send_json(suggest_pairs(self.server.catalog))
             return
+        if path == "/v1/registration-qa":
+            self._send_json(self.server.registration_agent_summary)
+            return
+        if path == "/v1/registration-qa/preview":
+            if not self._browser_authorized():
+                self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
+                return
+            if self.server.registration_context is None:
+                self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+                return
+            self._send_json(self.server.registration_context)
+            return
+        registration_file_prefix = "/v1/registration-qa/files/"
+        if path.startswith(registration_file_prefix):
+            self._send_registration_qa_file(
+                path.removeprefix(registration_file_prefix)
+            )
+            return
         prefix = "/v1/instances/"
         if path.startswith(prefix):
             instance_id = path[len(prefix) :]
@@ -252,6 +344,9 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/v1/viewer-state":
             self._handle_viewer_state_post()
+            return
+        if path == "/v1/registration-reviews":
+            self._handle_registration_review_post()
             return
         supported = {
             "/v1/visit-packets": (
@@ -333,6 +428,154 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _send_registration_qa_file(self, filename: str) -> None:
+        allowed = {"fixed.nrrd", "moving.nrrd", "registered-moving.nrrd"}
+        if (
+            filename not in allowed
+            or self.server.registration_bundle is None
+            or self.server.registration_context is None
+        ):
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        if not self._browser_authorized():
+            self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
+            return
+        descriptor = -1
+        headers_sent = False
+        try:
+            volume = next(
+                item
+                for item in self.server.registration_context["volumes"].values()
+                if item["filename"] == filename
+            )
+            source = self.server.registration_bundle / filename
+            descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
+            metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+                or metadata.st_uid != os.getuid()
+                or metadata.st_nlink != 1
+                or metadata.st_size != volume["bytes"]
+            ):
+                raise ValueError("registration volume changed")
+            digest = hashlib.sha256()
+            while chunk := os.read(descriptor, 1024 * 1024):
+                digest.update(chunk)
+            if digest.hexdigest() != volume["sha256"]:
+                raise ValueError("registration volume changed")
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/vnd.nrrd")
+            self.send_header("Content-Length", str(volume["bytes"]))
+            self.send_header("X-Content-SHA256", volume["sha256"])
+            self._security_headers()
+            self.end_headers()
+            headers_sent = True
+            while chunk := os.read(descriptor, 1024 * 1024):
+                self.wfile.write(chunk)
+        except (StopIteration, ValueError):
+            if not headers_sent:
+                self._send_json(
+                    {"error": "registration_bundle_invalid"},
+                    HTTPStatus.CONFLICT,
+                )
+        except (BrokenPipeError, OSError):
+            if not headers_sent:
+                self._send_json(
+                    {"error": "registration_bundle_invalid"},
+                    HTTPStatus.CONFLICT,
+                )
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+
+    def _handle_registration_review_post(self) -> None:
+        if not self._browser_authorized():
+            self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
+            return
+        if not self._same_origin():
+            self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
+            return
+        if self.server.registration_bundle is None:
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != "application/vnd.scanview.registration-review-input+json":
+            self._send_json(
+                {"error": "unsupported_media_type"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+            )
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send_json({"error": "content_length_required"}, HTTPStatus.LENGTH_REQUIRED)
+            return
+        if content_length <= 0 or content_length > MAX_REGISTRATION_REVIEW_REQUEST_BYTES:
+            self._send_json({"error": "request_too_large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+            return
+        body = self.rfile.read(content_length)
+        if len(body) != content_length:
+            self._send_json({"error": "incomplete_request"}, HTTPStatus.BAD_REQUEST)
+            return
+        request_sha256 = hashlib.sha256(body).hexdigest()
+        with self.server.registration_review_lock:
+            if self.server.registration_review_request_sha256 is not None:
+                if not secrets.compare_digest(
+                    request_sha256, self.server.registration_review_request_sha256
+                ):
+                    self._send_json(
+                        {"error": "registration_review_already_created"},
+                        HTTPStatus.CONFLICT,
+                    )
+                    return
+                payload = self.server.registration_review_payload
+                filename = self.server.registration_review_filename
+                if payload is None or filename is None:
+                    self._send_json(
+                        {"error": "registration_review_unavailable"},
+                        HTTPStatus.CONFLICT,
+                    )
+                    return
+            else:
+                created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                try:
+                    payload = registration_review_bytes(
+                        self.server.registration_bundle,
+                        body,
+                        created_at=created_at,
+                    )
+                except OSError:
+                    self._send_json(
+                        {
+                            "error": "invalid_registration_review",
+                            "detail": "registration bundle is unavailable",
+                        },
+                        HTTPStatus.UNPROCESSABLE_ENTITY,
+                    )
+                    return
+                except ValueError as error:
+                    self._send_json(
+                        {"error": "invalid_registration_review", "detail": str(error)},
+                        HTTPStatus.UNPROCESSABLE_ENTITY,
+                    )
+                    return
+                timestamp = created_at.replace("-", "").replace(":", "").split(".", 1)[0] + "Z"
+                filename = f"scanview-registration-review-{timestamp}.json"
+                self.server.registration_review_request_sha256 = request_sha256
+                self.server.registration_review_payload = payload
+                self.server.registration_review_filename = filename
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/vnd.scanview.registration-review+json")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(payload)))
+        self._security_headers()
+        self.end_headers()
+        try:
+            self.wfile.write(payload)
+        except OSError:
+            return
+
     def _handle_viewer_state_post(self) -> None:
         if not self._authorized():
             self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
@@ -403,22 +646,41 @@ def create_server(
     port: int = 8765,
     token: str | None = None,
     ui_dist: Path | None = None,
+    registration_bundle: Path | None = None,
 ) -> ScanViewServer:
     if host not in {"127.0.0.1", "::1", "localhost"}:
         raise ValueError("ScanView only supports loopback binding in this release")
     resolved_ui = ui_dist.expanduser().resolve(strict=True) if ui_dist else None
     if resolved_ui is not None and not (resolved_ui / "index.html").is_file():
         raise ValueError(f"ScanView UI bundle is missing index.html: {resolved_ui}")
+    resolved_registration = None
+    cached_registration_context = None
+    if registration_bundle is not None:
+        resolved_registration = registration_bundle.expanduser().resolve(strict=True)
+        cached_registration_context = registration_qa_context(resolved_registration)
     server = ScanViewServer((host, port), Handler)
     server.catalog = catalog
     server.registry = registry
     server.token = token or secrets.token_urlsafe(24)
+    server.browser_bootstrap_token = _distinct_token({server.token})
+    server.browser_session_token = _distinct_token(
+        {server.token, server.browser_bootstrap_token}
+    )
     server.ui_dist = resolved_ui
     server.viewer_state_lock = threading.Lock()
     server.viewer_state = None
     server.viewer_state_received_at = None
     server.viewer_state_received_monotonic = None
     server.viewer_state_revoked_publishers = set()
+    server.registration_bundle = resolved_registration
+    server.registration_context = cached_registration_context
+    server.registration_agent_summary = _registration_agent_summary(
+        cached_registration_context
+    )
+    server.registration_review_lock = threading.Lock()
+    server.registration_review_request_sha256 = None
+    server.registration_review_payload = None
+    server.registration_review_filename = None
     return server
 
 
@@ -432,6 +694,7 @@ def serve(
     ui_dist: Path | None = None,
     open_browser: bool = False,
     navigation_fragment: str | None = None,
+    registration_bundle: Path | None = None,
 ) -> None:
     if navigation_fragment is not None and (
         not navigation_fragment.startswith(NAVIGATION_FRAGMENT_PREFIX)
@@ -445,6 +708,7 @@ def serve(
         port=port,
         token=token,
         ui_dist=ui_dist,
+        registration_bundle=registration_bundle,
     )
     url_host = f"[{host}]" if ":" in host else host
     base_url = f"http://{url_host}:{server.server_port}"
@@ -452,7 +716,7 @@ def serve(
     print(f"Bearer token: {server.token}")
     if server.ui_dist:
         session_url = (
-            f"{base_url}/?session={quote(server.token, safe='')}"
+            f"{base_url}/?session={quote(server.browser_bootstrap_token, safe='')}"
             f"{navigation_fragment or ''}"
         )
         print(f"ScanView local workspace: {session_url}")
@@ -460,7 +724,8 @@ def serve(
             webbrowser.open(session_url)
     print(
         "Source mutation and deletion are disabled; visit/review derivatives and opt-in "
-        "viewer state remain memory-only. Press Ctrl-C to stop."
+        "viewer state remain memory-only. Registration QA preview is human-session-only. "
+        "Press Ctrl-C to stop."
     )
     try:
         server.serve_forever()

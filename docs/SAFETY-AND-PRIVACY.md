@@ -15,7 +15,8 @@ quality-system, and regulatory review.
 
 ## Data handling
 
-- Originals are immutable and hashed.
+- ScanView has no source write/delete operation; copied originals are hashed. This is
+  an application boundary, not an operating-system immutable-file flag.
 - The app makes no external runtime network request; unified-workspace traffic stays
   on the loopback origin.
 - DICOM processing never depends on an external API; the CSP blocks external origins.
@@ -66,6 +67,22 @@ quality-system, and regulatory review.
   Engine diagnostics exist only inside the deleted private job directory because
   third-party errors could contain patient context; a timeout terminates the process
   group before cleanup.
+- Registration QA is an explicit exception for inspecting an otherwise display-locked
+  derivative. It runs only in a visibly watermarked, separately cookie-authenticated
+  human workflow on loopback. The bearer agent interface receives no NRRD URLs or
+  pixels and cannot submit a decision. Possession of the browser capability is not
+  proof a person is present. The browser verifies each allowlisted volume's byte count
+  and SHA-256 before parsing it locally; the review request contains observations and
+  physical landmark points, never volume bytes or filesystem paths.
+- A registration-QA decision is a separate sensitive JSON derivative. It never changes
+  the pending bundle, anchors all six live files, and must be revalidated against that
+  bundle before its display flags are trusted. Reviewer name, role, organization, and
+  training are self asserted. Its event hash is tamper evidence, not identity proof or
+  a digital signature. Qualified self-attested acceptance is limited to exploratory
+  shared-coverage overlay/swipe;
+  subtraction, mask propagation, segmentation, resampled-image measurements, and
+  response conclusions remain locked. The ordinary viewer does not consume acceptance
+  yet.
 - A key-image ZIP remains sensitive medical data. Its PNG can contain burned-in
   identifiers or recognizable anatomy inherited from the displayed pixels, so it
   requires the same sharing safeguards as the original DICOM even though its JSON
@@ -150,6 +167,11 @@ Live viewer state is not an observation, even when its opaque references are exa
 It says what the interface is showing and which tool is selected; it does not prove
 that a lesion exists, that two series are comparable, that measurements are correct,
 or that a person reviewed the images.
+
+Registration QA is a human authority boundary. Agents may inspect its minimized
+availability/review-status contract and validate a saved record, but they may not load
+QA pixels, satisfy the visual checklist, choose acceptance, or treat self-attested
+review as an authenticated clinical sign-off.
 
 The comparison-review workflow keeps the arithmetic comparison immutable and
 `unreviewed`. A review decision is a separate self-attested event with explicit

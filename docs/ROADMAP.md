@@ -200,8 +200,8 @@
    registration executor for explicitly attested same-opaque-context (identity
    unverified), same-modality chronological pairs.
 2. Added pre/post-staging source SHA-256 checks, generic private DICOM staging,
-   bounded headless execution, non-persisted diagnostics, and immutable source and
-   non-overwriting output boundaries.
+   bounded headless execution, non-persisted diagnostics, a source-read-only
+   application boundary, and non-overwriting output publication.
 3. Added an owner-only six-file derivative bundle with exact source/output hashes,
    parsed NRRD/fixed-space geometry, a finite proper-rigid text ITK transform,
    transform direction, binary/runner provenance, exact parameters, limitations,
@@ -212,10 +212,34 @@
    process-group timeout, permission, transform/volume parsing, tamper, privacy,
    hard-pairing-gate, and output-integrity tests.
 
+## Completed in the sixteenth milestone
+
+1. Added an isolated, browser-capability registration-QA workspace that never exposes
+   NRRDs to bearer-authorized agents and never loads the ordinary measurement or
+   evidence-export viewer. The capability boundary does not prove human presence.
+2. Added native fixed/moving and registered-moving views with axial, coronal, and
+   sagittal traversal, orientation labels, independent windows, opacity, swipe,
+   checkerboard, edge comparison, qualitative landmark review, and physical-point
+   residual tools—all computed locally.
+3. Added strict accept/reject semantics: acceptance requires a self-attested trained
+   clinician or medical physicist, every checklist item, full three-plane/four-mode
+   coverage, at least three aligned qualitative landmarks, no material defect, and at
+   least three spatially distributed 3-D landmark pairs within the fixed
+   geometry-derived tolerance.
+4. Added a non-overwriting, self-attested JSON review record that anchors all six live
+   registration files and their geometry. Only exploratory shared-coverage overlay/swipe
+   can be authorized; subtraction, masks, segmentation, resampled measurements, and
+   response conclusions remain locked.
+5. Added CLI/server/schema validation, cookie-versus-bearer authorization tests,
+   tamper/refusal tests, 3-D local NRRD parsing, and a production-build browser smoke
+   across all three planes and four QA modes. Real Slicer and real-patient QA remain
+   pending and are not claimed.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up, have a person confirm the intended
-   earlier/later sequences and clinical roles, and run the required engine on that pair.
+   earlier/later sequences and clinical roles, run the required engine on that pair,
+   and complete qualified visual/quantitative QA.
 2. Install or explicitly locate the required Slicer build, independently record its
    trusted launcher hash, then verify one real local headless job without retaining
    logs that may contain patient context.
@@ -227,6 +251,8 @@
    never relabel the current self-attested hash chain as identity verification.
 6. Design an append-only, privacy-minimized local audit for bearer access to live
    viewer state without recording patient content or putting tokens in logs.
+7. Add ordinary-viewer consumption of an accepted record only after revalidating its
+   exact live six-file bundle anchor; unlock exploratory overlay/swipe and nothing else.
 
 ## Next milestone
 
@@ -239,11 +265,12 @@
 
 ## Registration milestone
 
-1. Build per-case QA with opacity overlay, checkerboard, edge view, landmarks, and an
-   append-only accept/reject record around the implemented pending-QA bundle.
-2. Verify the version-gated runner against real Slicer on macOS and Linux, including
+1. Verify the version-gated runner against real Slicer on macOS and Linux, including
    distributor signature/checksum verification for the complete engine bundle.
-3. Unlock derived display only after explicit acceptance; never overwrite originals.
+2. Perform the implemented QA workflow on a valid real same-modality pair with a
+   qualified reviewer and a predeclared clinically appropriate landmark tolerance.
+3. Consume an explicit accepted record in the ordinary viewer only after live bundle
+   revalidation; never overwrite originals and never unlock subtraction or masks.
 
 ## Decisions needed with clinicians
 

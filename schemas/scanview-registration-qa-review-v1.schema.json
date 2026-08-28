@@ -1,0 +1,580 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-registration-qa-review-v1.schema.json",
+  "title": "ScanView registration QA review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "review_id",
+    "created_at",
+    "sensitive",
+    "deidentified",
+    "review_status",
+    "intended_use",
+    "scope",
+    "region_of_importance",
+    "source_registration",
+    "reviewer",
+    "attestation",
+    "qualitative_checks",
+    "inspection_evidence",
+    "landmark_observations",
+    "quantitative_assessment",
+    "regional_defects",
+    "note",
+    "display_unlocks",
+    "display_label",
+    "integrity",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "artifact_type": { "const": "registration_qa_review" },
+    "review_id": {
+      "type": "string",
+      "pattern": "^registration_review_[0-9a-f]{20}$"
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "sensitive": { "const": true },
+    "deidentified": { "const": false },
+    "review_status": {
+      "enum": ["accepted_for_shared_coverage_overlay_swipe", "rejected"]
+    },
+    "intended_use": { "const": "shared_coverage_exploratory_overlay_swipe" },
+    "scope": { "enum": ["shared_coverage", "none"] },
+    "region_of_importance": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "source_registration": { "$ref": "#/$defs/sourceRegistration" },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "role",
+        "organization",
+        "training_status",
+        "identity_status"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": {
+          "enum": [
+            "clinician",
+            "medical_physicist",
+            "patient_or_family",
+            "researcher_or_engineer",
+            "other"
+          ]
+        },
+        "organization": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1, "maxLength": 160 }
+          ]
+        },
+        "training_status": {
+          "enum": ["self_attested_trained", "self_attested_not_trained"]
+        },
+        "identity_status": { "const": "self_attested_unverified" }
+      }
+    },
+    "attestation": {
+      "const": "I attest that this registration QA record is my self-asserted observation for exploratory display only and is not a diagnosis, treatment-response conclusion, or authenticated clinical approval."
+    },
+    "qualitative_checks": { "$ref": "#/$defs/qualitativeChecks" },
+    "inspection_evidence": { "$ref": "#/$defs/inspectionEvidence" },
+    "landmark_observations": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/landmarkObservation" }
+    },
+    "quantitative_assessment": { "$ref": "#/$defs/quantitativeAssessment" },
+    "regional_defects": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "note": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "display_unlocks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overlay",
+        "swipe",
+        "subtraction",
+        "mask_propagation",
+        "segmentation",
+        "resampled_image_measurements",
+        "response_conclusions"
+      ],
+      "properties": {
+        "overlay": { "type": "boolean" },
+        "swipe": { "type": "boolean" },
+        "subtraction": { "const": false },
+        "mask_propagation": { "const": false },
+        "segmentation": { "const": false },
+        "resampled_image_measurements": { "const": false },
+        "response_conclusions": { "const": false }
+      }
+    },
+    "display_label": {
+      "enum": [
+        "EXPLORATORY — SELF-ATTESTED REGISTRATION QA",
+        "EXPLORATORY — SELF-ATTESTED REGISTRATION QA — SPATIAL ERROR NOT QUANTIFIED"
+      ]
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unverified_previous_review_sha256", "event_sha256"],
+      "properties": {
+        "unverified_previous_review_sha256": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          ]
+        },
+        "event_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 220 }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "review_status": { "const": "accepted_for_shared_coverage_overlay_swipe" }
+        },
+        "required": ["review_status"]
+      },
+      "then": {
+        "properties": {
+          "scope": { "const": "shared_coverage" },
+          "reviewer": {
+            "properties": {
+              "role": { "enum": ["clinician", "medical_physicist"] },
+              "training_status": { "const": "self_attested_trained" }
+            }
+          },
+          "qualitative_checks": { "$ref": "#/$defs/acceptedQualitativeChecks" },
+          "inspection_evidence": { "$ref": "#/$defs/acceptedInspectionEvidence" },
+          "landmark_observations": {
+            "minItems": 3,
+            "items": {
+              "allOf": [
+                { "$ref": "#/$defs/landmarkObservation" },
+                { "properties": { "status": { "const": "aligned" } } }
+              ]
+            }
+          },
+          "quantitative_assessment": {
+            "allOf": [
+              { "$ref": "#/$defs/quantitativeAssessment" },
+              {
+                "properties": {
+                  "status": { "const": "recorded" },
+                  "pairs": { "minItems": 3 },
+                  "pair_count": { "minimum": 3 },
+                  "unavailable_reason": { "type": "null" }
+                }
+              }
+            ]
+          },
+          "display_unlocks": {
+            "properties": {
+              "overlay": { "const": true },
+              "swipe": { "const": true }
+            }
+          },
+          "display_label": {
+            "const": "EXPLORATORY — SELF-ATTESTED REGISTRATION QA"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "scope": { "const": "none" },
+          "display_unlocks": {
+            "properties": {
+              "overlay": { "const": false },
+              "swipe": { "const": false }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "point": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sizes",
+        "voxel_spacing_mm",
+        "coordinate_system",
+        "space_directions",
+        "space_origin"
+      ],
+      "properties": {
+        "sizes": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "voxel_spacing_mm": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "coordinate_system": {
+          "enum": ["left-posterior-superior", "right-anterior-superior"]
+        },
+        "space_directions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/point" }
+        },
+        "space_origin": { "$ref": "#/$defs/point" }
+      }
+    },
+    "bundleFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "bytes", "sha256"],
+      "properties": {
+        "name": {
+          "enum": [
+            "engine-report.json",
+            "fixed.nrrd",
+            "moving-to-fixed.tfm",
+            "moving.nrrd",
+            "registered-moving.nrrd",
+            "registration.json"
+          ]
+        },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["study_id", "series_id", "acquisition_date"],
+      "properties": {
+        "study_id": { "type": "string", "pattern": "^study_[0-9a-f]{20}$" },
+        "series_id": { "type": "string", "pattern": "^series_[0-9a-f]{20}$" },
+        "acquisition_date": { "type": "string", "pattern": "^[0-9]{8}$" }
+      }
+    },
+    "sourceRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "manifest_sha256",
+        "transform_sha256",
+        "fixed_volume_sha256",
+        "moving_volume_sha256",
+        "registered_moving_volume_sha256",
+        "bundle_files",
+        "bundle_sha256",
+        "transform_direction",
+        "modality",
+        "fixed",
+        "moving",
+        "fixed_geometry",
+        "registered_geometry"
+      ],
+      "properties": {
+        "job_id": { "type": "string", "pattern": "^registration_[0-9a-f]{20}$" },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "transform_sha256": { "$ref": "#/$defs/sha256" },
+        "fixed_volume_sha256": { "$ref": "#/$defs/sha256" },
+        "moving_volume_sha256": { "$ref": "#/$defs/sha256" },
+        "registered_moving_volume_sha256": { "$ref": "#/$defs/sha256" },
+        "bundle_files": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": { "$ref": "#/$defs/bundleFile" }
+        },
+        "bundle_sha256": { "$ref": "#/$defs/sha256" },
+        "transform_direction": { "const": "moving_later_to_fixed_earlier" },
+        "modality": { "enum": ["MR", "CT"] },
+        "fixed": { "$ref": "#/$defs/sourceRef" },
+        "moving": { "$ref": "#/$defs/sourceRef" },
+        "fixed_geometry": { "$ref": "#/$defs/geometry" },
+        "registered_geometry": { "$ref": "#/$defs/geometry" }
+      }
+    },
+    "qualitativeChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correct_series_roles_and_intended_use_confirmed",
+        "full_shared_volume_axial_reviewed",
+        "full_shared_volume_coronal_reviewed",
+        "full_shared_volume_sagittal_reviewed",
+        "native_and_registered_side_by_side_reviewed",
+        "opacity_overlay_reviewed",
+        "swipe_or_flicker_reviewed",
+        "checkerboard_reviewed",
+        "edge_alignment_reviewed",
+        "region_of_importance_reviewed",
+        "distant_anatomy_reviewed",
+        "artifacts_coverage_and_anatomical_change_reviewed",
+        "laterality_and_orientation_reviewed",
+        "no_reject_condition_identified"
+      ],
+      "properties": {
+        "correct_series_roles_and_intended_use_confirmed": { "type": "boolean" },
+        "full_shared_volume_axial_reviewed": { "type": "boolean" },
+        "full_shared_volume_coronal_reviewed": { "type": "boolean" },
+        "full_shared_volume_sagittal_reviewed": { "type": "boolean" },
+        "native_and_registered_side_by_side_reviewed": { "type": "boolean" },
+        "opacity_overlay_reviewed": { "type": "boolean" },
+        "swipe_or_flicker_reviewed": { "type": "boolean" },
+        "checkerboard_reviewed": { "type": "boolean" },
+        "edge_alignment_reviewed": { "type": "boolean" },
+        "region_of_importance_reviewed": { "type": "boolean" },
+        "distant_anatomy_reviewed": { "type": "boolean" },
+        "artifacts_coverage_and_anatomical_change_reviewed": { "type": "boolean" },
+        "laterality_and_orientation_reviewed": { "type": "boolean" },
+        "no_reject_condition_identified": { "type": "boolean" }
+      }
+    },
+    "acceptedQualitativeChecks": {
+      "allOf": [
+        { "$ref": "#/$defs/qualitativeChecks" },
+        {
+          "properties": {
+            "correct_series_roles_and_intended_use_confirmed": { "const": true },
+            "full_shared_volume_axial_reviewed": { "const": true },
+            "full_shared_volume_coronal_reviewed": { "const": true },
+            "full_shared_volume_sagittal_reviewed": { "const": true },
+            "native_and_registered_side_by_side_reviewed": { "const": true },
+            "opacity_overlay_reviewed": { "const": true },
+            "swipe_or_flicker_reviewed": { "const": true },
+            "checkerboard_reviewed": { "const": true },
+            "edge_alignment_reviewed": { "const": true },
+            "region_of_importance_reviewed": { "const": true },
+            "distant_anatomy_reviewed": { "const": true },
+            "artifacts_coverage_and_anatomical_change_reviewed": { "const": true },
+            "laterality_and_orientation_reviewed": { "const": true },
+            "no_reject_condition_identified": { "const": true }
+          }
+        }
+      ]
+    },
+    "planeCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalized_min", "normalized_max"],
+      "properties": {
+        "normalized_min": { "type": "number", "minimum": 0, "maximum": 1 },
+        "normalized_max": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "acceptedPlaneCoverage": {
+      "allOf": [
+        { "$ref": "#/$defs/planeCoverage" },
+        {
+          "properties": {
+            "normalized_min": { "maximum": 0.05 },
+            "normalized_max": { "minimum": 0.95 }
+          }
+        }
+      ]
+    },
+    "inspectionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planes", "modes"],
+      "properties": {
+        "planes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "axial": { "$ref": "#/$defs/planeCoverage" },
+            "coronal": { "$ref": "#/$defs/planeCoverage" },
+            "sagittal": { "$ref": "#/$defs/planeCoverage" }
+          }
+        },
+        "modes": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "enum": ["checkerboard", "edges", "opacity", "swipe"] }
+        }
+      }
+    },
+    "acceptedInspectionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planes", "modes"],
+      "properties": {
+        "planes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["axial", "coronal", "sagittal"],
+          "properties": {
+            "axial": { "$ref": "#/$defs/acceptedPlaneCoverage" },
+            "coronal": { "$ref": "#/$defs/acceptedPlaneCoverage" },
+            "sagittal": { "$ref": "#/$defs/acceptedPlaneCoverage" }
+          }
+        },
+        "modes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "enum": ["checkerboard", "edges", "opacity", "swipe"] }
+        }
+      }
+    },
+    "landmarkObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["landmark", "status", "note"],
+      "properties": {
+        "landmark": {
+          "enum": [
+            "orbits",
+            "optic_nerves",
+            "brainstem",
+            "ventricles",
+            "sella_turcica",
+            "nose",
+            "external_auditory_canals",
+            "clivus",
+            "sagittal_suture",
+            "outer_brain_or_skull_boundary",
+            "region_of_importance",
+            "other_stable_landmark"
+          ]
+        },
+        "status": { "enum": ["aligned", "uncertain", "misaligned", "not_visible"] },
+        "note": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "landmarkPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "fixed_physical_mm",
+        "registered_moving_physical_mm",
+        "residual_mm"
+      ],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "fixed_physical_mm": { "$ref": "#/$defs/point" },
+        "registered_moving_physical_mm": { "$ref": "#/$defs/point" },
+        "residual_mm": { "type": "number", "minimum": 0 }
+      }
+    },
+    "quantitativeAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "tolerance_mm",
+        "tolerance_basis",
+        "pairs",
+        "pair_count",
+        "mean_residual_mm",
+        "maximum_residual_mm",
+        "unavailable_reason"
+      ],
+      "properties": {
+        "status": { "enum": ["recorded", "unavailable"] },
+        "tolerance_mm": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "number", "exclusiveMinimum": 0 }
+          ]
+        },
+        "tolerance_basis": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1, "maxLength": 500 }
+          ]
+        },
+        "pairs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/landmarkPair" }
+        },
+        "pair_count": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "mean_residual_mm": {
+          "anyOf": [{ "type": "null" }, { "type": "number", "minimum": 0 }]
+        },
+        "maximum_residual_mm": {
+          "anyOf": [{ "type": "null" }, { "type": "number", "minimum": 0 }]
+        },
+        "unavailable_reason": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1, "maxLength": 1000 }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "recorded" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "tolerance_mm": { "type": "number", "exclusiveMinimum": 0 },
+              "tolerance_basis": {
+                "const": "Maximum fixed-volume voxel spacing from validated registration bundle geometry."
+              },
+              "pairs": { "minItems": 3 },
+              "pair_count": { "minimum": 3 },
+              "mean_residual_mm": { "type": "number", "minimum": 0 },
+              "maximum_residual_mm": { "type": "number", "minimum": 0 },
+              "unavailable_reason": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "tolerance_mm": { "type": "null" },
+              "tolerance_basis": { "type": "null" },
+              "pairs": { "maxItems": 0 },
+              "pair_count": { "const": 0 },
+              "mean_residual_mm": { "type": "null" },
+              "maximum_residual_mm": { "type": "null" },
+              "unavailable_reason": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

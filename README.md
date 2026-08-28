@@ -66,14 +66,21 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Transparent metadata compatibility score and warnings.
 - Version-gated local 3D Slicer/BRAINSFit rigid-registration jobs for explicitly
   attested, matching opaque patient-context, same-modality chronological series.
-  Patient identity remains unverified. Outputs are immutable,
-  source-hashed, and locked pending human QA; CT/MR registration and subtraction
-  are prohibited.
+  Patient identity remains unverified. Outputs are source-hashed, published without
+  replacement, and locked pending human QA; CT/MR registration and subtraction are
+  prohibited.
+- Isolated browser-capability human registration QA with native and registered
+  side-by-side views,
+  axial/coronal/sagittal traversal, opacity, swipe, checkerboard, edge comparison,
+  qualitative landmarks, physical-point residual tools, and a separate hash-linked
+  self-attested accept/reject JSON record. Acceptance requires quantitative 3-D
+  residual evidence. The bearer agent interface cannot fetch QA pixels or approve it;
+  this is a capability boundary, not proof a person is present.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
 - Versioned measurement, key-image, comparison, visit-packet, review-record,
-  navigation-intent, viewer-state, and rigid-registration JSON Schemas; committed
-  tests use synthetic data only.
+  navigation-intent, viewer-state, rigid-registration, and registration-QA JSON
+  Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
 ## Launch the unified local workspace
@@ -161,6 +168,11 @@ python3 -m venv .venv
   --expected-slicer-sha256 '<trusted 64-hex digest>' \
   --output '/safe/local/registration-job' --attest-series-selection
 .venv/bin/scanview-agent validate-registration '/safe/local/registration-job'
+.venv/bin/scanview-agent review-registration '/safe/local/registration-job'
+.venv/bin/scanview-agent record-registration-review '/safe/local/registration-job' \
+  review-request.json --output registration-review.json
+.venv/bin/scanview-agent validate-registration-review registration-review.json \
+  --registration-bundle '/safe/local/registration-job'
 ```
 
 The server exposes:
@@ -169,16 +181,22 @@ The server exposes:
 - `GET /v1/manifest`
 - `GET /v1/viewer-state` (opt-in, expiring browser session state)
 - `GET /v1/comparison-candidates`
+- `GET /v1/registration-qa` (privacy-minimized agent status)
+- `GET /v1/registration-qa/preview` (separate browser session capability only)
+- `GET /v1/registration-qa/files/{allowlisted_nrrd}` (separate browser session capability only)
 - `GET /v1/instances/{opaque_id}`
 - `POST /v1/viewer-state` (same-origin browser publication/clear; memory only)
 - `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
 - `POST /v1/comparison-reviews` (same-origin browser session; in-memory derivative only)
+- `POST /v1/registration-reviews` (same-origin human browser; one in-memory JSON response)
 
-All endpoints except health require the bearer token printed at startup. The unified
-browser uses a same-origin HttpOnly session cookie instead of exposing that token to
-application JavaScript. All POSTs additionally require the exact local origin and
-bounded route-specific content. The viewer-state route accepts at most 16 KiB of
-strict JSON and keeps only the latest 30-second publication in memory. Visit-packet
+All endpoints except health require authentication. The unified browser uses a
+same-origin HttpOnly session cookie instead of exposing the printed bearer token to
+application JavaScript. QA preview pixels and review submission specifically require
+that browser session; a bearer-authorized agent can read only the minimized QA status.
+All POSTs additionally require the exact local origin and bounded route-specific
+content. The viewer-state route accepts at most 16 KiB of strict JSON and keeps only
+the latest 30-second publication in memory. Visit-packet
 input contains only the two derived key-image archives. Comparison-review input
 contains those same two archives plus the current normalized comparison JSON; the
 server builds the nested visit packet and review archive entirely in memory. Every
@@ -231,13 +249,32 @@ digest through a trusted software-installation process. ScanView strips proxy,
 credential, extension-server, and Python-path variables and requests no external API,
 but it cannot prove that an arbitrary third-party executable made no network access.
 
-Every generated bundle is `generated_pending_qa` and `unreviewed`. Overlay, swipe,
-subtraction, and mask propagation remain false; this milestone does not provide an
-acceptance command or registered display. Validate integrity locally with
+Every generated bundle is `generated_pending_qa` and `unreviewed`; the registration
+directory itself is never mutated by review. Validate integrity locally with
 `validate-registration`. Validation parses the scalar NRRDs, requires registered
 geometry to match the fixed volume, verifies a finite proper rigid transform, checks
 all hashes and owner-only permissions, and still does not establish registration
-quality. The currently copied CD contains one MRI exam and one CT
+quality.
+
+For one valid pending bundle, open the isolated local human QA workspace:
+
+```bash
+.venv/bin/scanview-agent review-registration '/safe/local/registration-job'
+```
+
+It visibly watermarks the resampled preview, keeps both native volumes available,
+requires full traversal in all three patient-space planes and four comparison modes,
+and can download one separate self-attested JSON decision. A qualified self-attested
+acceptance can authorize only exploratory shared-coverage overlay and swipe; it
+requires quantitative 3-D landmark error within the fixed geometry-derived tolerance.
+Subtraction, mask propagation, segmentation, measurements on the resampled image, and
+response conclusions remain locked. Reviewer identity and training are not
+authenticated, event hashes are not digital signatures, and the ordinary
+viewer does not yet consume an accepted record. Use `validate-registration-review`
+with the live bundle to recheck the full six-file source anchor before trusting its
+display flags.
+
+The currently copied CD contains one MRI exam and one CT
 exam, so it cannot produce a valid registration pair. A future same-modality
 follow-up and the required local Slicer installation are required for a real run.
 

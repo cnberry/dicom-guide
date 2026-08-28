@@ -34,6 +34,11 @@ scanview-agent run-rigid-registration '/path/to/copied/DICOM' \
   --expected-slicer-sha256 '<trusted 64-hex digest>' \
   --output '/safe/local/registration-job' --attest-series-selection
 scanview-agent validate-registration '/safe/local/registration-job'
+scanview-agent review-registration '/safe/local/registration-job'
+scanview-agent record-registration-review '/safe/local/registration-job' \
+  review-request.json --output registration-review.json
+scanview-agent validate-registration-review registration-review.json \
+  --registration-bundle '/safe/local/registration-job'
 ```
 
 Use `scripts/build_release.py` from the repository root to produce a self-contained
@@ -104,6 +109,21 @@ are disabled. A successful non-overwriting, owner-only directory contains the fi
 moving, and registered-moving NRRDs, moving-to-fixed text ITK transform, engine report,
 and v1 manifest. `validate-registration` rechecks all hashes, required versions,
 parameters, parsed output geometry/rigidity, private permissions, source provenance,
-and the invariant that every display unlock remains false. There is no acceptance or
-display command yet: output is sensitive,
-`generated_pending_qa`, and `unreviewed`.
+and the invariant that the generated bundle stays `generated_pending_qa` and
+`unreviewed`.
+
+`review-registration` serves a separate, watermarked, browser-capability QA workspace
+from loopback. It shows native and registered volumes in all three planes with
+opacity, swipe, checkerboard, edges, landmarks, and physical-point residual tools.
+Agents can read only a privacy-minimized status; bearer authentication alone cannot
+fetch NRRDs or submit a decision. This is a separate browser capability, not proof a
+person is present. A downloaded self-attested JSON record anchors every byte of the unchanged
+six-file bundle. A qualified self-attested acceptance requires a trained clinician or
+medical physicist, every checklist item, full three-plane/four-mode coverage, three
+aligned qualitative landmarks, and at least three spatially distributed 3-D landmark
+pairs within the fixed geometry-derived tolerance. It can authorize only exploratory
+shared-coverage overlay/swipe; all other derivative uses stay false.
+`validate-registration-review` must be given the live bundle to establish source
+integrity. No command authenticates the reviewer or
+turns an event hash into a signature, and the ordinary viewer does not yet consume
+accepted records.

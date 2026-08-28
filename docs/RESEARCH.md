@@ -61,6 +61,19 @@ linear interpolation. Histogram matching is disabled: BRAINSFit's own guidance w
 that changing tumors or lesions can make histogram matching problematic. Generated
 results still require patient-specific visual and quantitative QA.
 
+The local QA design is adapted from [AAPM TG-132 registration QA
+concepts](https://www.aapm.org/pubs/reports/detail.asp?docid=164): verify the exact
+patient dataset both qualitatively and quantitatively, traverse the full shared
+coverage, use multiple complementary comparison methods, and inspect both the region
+of importance and distant stable anatomy. It is not represented as TG-132 compliance,
+commissioning, or clinical validation. The display methods follow Slicer's documented
+local [Compare Volumes](https://slicer.readthedocs.io/en/latest/user_guide/modules/comparevolumes.html)
+and [CheckerBoard](https://slicer.readthedocs.io/en/5.8/user_guide/modules/checkerboardfilter.html)
+patterns: native and registered side-by-side views, linked anatomical planes, opacity,
+swipe, checkerboard, and edges. Landmark residuals remain location-specific
+supplemental evidence. Any spatial authorization must be limited to the exact hashed
+transform and shared coverage; it cannot establish lesion identity or response.
+
 No required Slicer executable is installed on the current host, so the wrapper and
 bundle have been tested with a synthetic engine double but not yet with a real Slicer
 process. This limitation is explicit in status and does not trigger a download or

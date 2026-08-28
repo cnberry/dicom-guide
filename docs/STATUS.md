@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 15:13 PDT
+Last updated: 2026-08-28 16:19 PDT
 
 ## Data transfer
 
@@ -96,9 +96,19 @@ Last updated: 2026-08-28 15:13 PDT
 - Successful registration creates an atomic no-replace, owner-only six-file
   derivative directory containing fixed/moving/registered scalar NRRDs, one finite
   proper-rigid text ITK transform in DICOM patient LPS, an engine report, and a strict
-  v1 manifest. Every output remains `generated_pending_qa`/`unreviewed`; overlay,
-  swipe, subtraction, and mask
-  propagation are locked and there is no acceptance command yet.
+  v1 manifest. Every source bundle remains `generated_pending_qa`/`unreviewed`; review
+  never mutates it.
+- An isolated browser-capability registration-QA workspace now provides true LPS
+  axial/coronal/sagittal reformats for oblique/permuted NRRDs, native/registered views,
+  physical aspect, independent 3-D landmarks, opacity, swipe, checkerboard, edges,
+  strict browser-recorded full-coverage traversal evidence, and one separate
+  hash-bound JSON decision.
+  A bearer token alone cannot fetch the NRRDs or submit review. Qualified self-attested
+  acceptance requires a trained clinician/medical physicist, three spatially distributed
+  landmark pairs within the geometry-derived tolerance, three aligned qualitative
+  landmarks, every checklist item, every plane/mode, and no defect. It can authorize
+  only exploratory shared-coverage overlay/swipe; the ordinary viewer does not consume
+  that authorization yet and all other derivative uses remain locked.
 - Review and amendment commands always create a new owner-only archive. Event hashes
   bind the actor, checklist, note, source comparison, prior event, and parent archive;
   an amended comparison is rejoined to the visual evidence and reset to `unreviewed`.
@@ -117,8 +127,8 @@ Last updated: 2026-08-28 15:13 PDT
   authenticated exact-origin loopback POST invokes the same Python assembler, and
   the validated ZIP is returned with `no-store` without a server-side patient file.
 - Versioned measurement, key-image, numeric-comparison, visit-packet,
-  comparison-review, navigation-intent, viewer-state, and rigid-registration JSON
-  Schemas plus local validation are implemented. Same-series pairs, unknown units,
+  comparison-review, navigation-intent, viewer-state, rigid-registration, and
+  registration-QA JSON Schemas plus local validation are implemented. Same-series pairs, unknown units,
   mismatched measurement types, and mismatched visual/numeric evidence are refused;
   no response label is emitted.
 - Unified `scanview-agent launch` path implemented: one loopback process serves the
@@ -137,7 +147,7 @@ Last updated: 2026-08-28 15:13 PDT
 
 ## Verification
 
-- Python agent tests: 49 passing, including cross-patient and legacy-context
+- Python agent tests: 72 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -146,22 +156,26 @@ Last updated: 2026-08-28 15:13 PDT
   enforcement, expiry/revocation, static presentation integrity, registration hard
   gates, source immutability, pending-QA locks, child-process-group timeout, engine
   failure privacy, private permissions, parsed NRRD/transform integrity, fixed-space
-  geometry, and derivative tamper detection.
-- Viewer tests: 50 passing, including patient-context and local-only enforcement,
+  geometry, derivative tamper detection, strict registration-QA role/training,
+  full-traversal, tolerance, 3-D landmark, source-anchor, standalone-lock, strict-JSON,
+  atomic publication, browser-token separation, idempotent retry, and volume-FD checks.
+- Viewer tests: 64 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, exact three-file comparison-review transport and source-slice
   lookup, strict one-use navigation parsing and atomic source resolution, and
   complete/regular MPR geometry gating, privacy-minimized viewer-state construction,
-  source refusal, link-state labeling, and same-origin publication/clear transport.
-- All 12 JSON Schemas pass Draft 2020-12 validation.
+  source refusal, link-state labeling, same-origin publication/clear transport,
+  oblique/permuted/RAS patient-space NRRD reformats, physical aspect, through-plane
+  landmark mapping, bounded gzip decoding, strict QA context, and fail-closed probing.
+- All 13 JSON Schemas pass Draft 2020-12 validation.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- Self-contained staged Python wheel build: passing; the 2.8 MB wheel contains the
-  registration host/runner, viewer-state server module, viewer entry point, and all
-  11 built UI/worker/codec files (9.7 MB uncompressed). A prior isolated installation
-  resolved its embedded UI without the source checkout.
+- Self-contained staged Python wheel build: passing; the 2.85 MB wheel contains the
+  registration host/runner/review module, viewer-state server module, viewer entry
+  point, and all 11 built UI/worker/codec files (9.7 MB uncompressed). A fresh isolated
+  installation resolved its embedded UI without the source checkout.
 - Registration execution test: synthetic version-gated-engine success and failure
   paths pass, including required expected-launcher hash, strict engine report, parsed
   scalar NRRDs/fixed-space geometry, finite proper-rigid transform, owner-only modes,
@@ -173,6 +187,13 @@ Last updated: 2026-08-28 15:13 PDT
   this host, so a real-engine registration has not been claimed. Binary-distributor
   authentication and OS-enforced network denial remain unimplemented and are not
   claimed.
+- Registration-QA production-build smoke test: the distinct browser bootstrap/session
+  capability opened the isolated workspace while bearer-only access remained denied in
+  server tests. Five patient-space canvases rendered with correct sagittal A/P/S/I
+  orientation, the native moving pane stayed explicitly approximate, all three plane
+  buttons and four QA modes activated, untrained acceptance remained disabled, trained
+  role selection alone did not enable submission, no external resources were present,
+  and the browser console reported no errors. Synthetic fixtures were moved to Trash.
 - Synthetic browser smoke test: two canvases render; all five viewer controls activate.
 - Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
   1162×1200 canvases; the full folder produces 57 pixel series; local server logs show
@@ -293,9 +314,8 @@ Last updated: 2026-08-28 15:13 PDT
   Any future audit must exclude tokens, payloads, and patient content.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
-- Registration generation exists, but there is no installed required engine, trusted
-  full-engine signature/checksum verification, real
-  same-modality patient run, visual QA/acceptance workflow, or registered viewer
-  display. There is still no segmentation, response criteria, or automated medical
-  conclusion.
+- Registration generation and local QA exist, but there is no installed required
+  engine, trusted full-engine signature/checksum verification, real same-modality
+  patient run, qualified real-case decision, or ordinary registered viewer display.
+  There is still no segmentation, response criteria, or automated medical conclusion.
 - Linux packaging/smoke testing remains pending.

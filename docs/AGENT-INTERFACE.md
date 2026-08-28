@@ -312,6 +312,9 @@ scanview-agent run-rigid-registration '/safe/local/DICOM/root' \
   --expected-slicer-sha256 '<trusted 64-hex digest>' \
   --output '/safe/local/registration-job' --attest-series-selection
 scanview-agent validate-registration '/safe/local/registration-job'
+scanview-agent review-registration '/safe/local/registration-job'
+scanview-agent validate-registration-review registration-review.json \
+  --registration-bundle '/safe/local/registration-job'
 ```
 
 The executor requires one matching opaque patient context (identity unverified),
@@ -338,11 +341,33 @@ dates, paths, and engine diagnostics. The Python validator—not JSON Schema alo
 enforces cross-field semantics, parses the NRRD payloads and transform, requires fixed
 and registered geometry to match, and rejects non-owner-only or linked files.
 
-Generation is not acceptance. The only valid current state is
-`generated_pending_qa`/`unreviewed`; overlay, swipe, subtraction, and mask propagation
-must all remain locked. `computed_results` and `candidate_interpretations` must be
-empty. Agents must not load the registered volume into a human display or infer
-alignment quality until a future visual QA workflow records an explicit decision.
+Generation is not acceptance. The registration bundle remains
+`generated_pending_qa`/`unreviewed` forever; review never mutates it.
+`review-registration` mounts a visibly watermarked browser-capability human preview
+with native and registered views, three-plane traversal, four comparison modes,
+landmarks, and physical-point residual tools. A bearer token can read only
+`GET /v1/registration-qa`, a privacy-minimized status. Preview context, allowlisted
+NRRD bytes, and decision POST
+require the distinct HttpOnly browser session; the bearer agent interface cannot
+approve registration. Possession of the separate browser capability is not proof a
+person is present.
+
+The downloaded v1 review JSON anchors all six live bundle members, the source manifest
+and transform, fixed/registered geometry, reviewer-entered checks, landmark
+observations, quantitative residuals when recorded, and an event hash. Reviewer
+identity/training are self asserted and the hash is not a signature. Acceptance
+requires a self-attested trained clinician or medical physicist, every checklist item,
+full three-plane/four-mode coverage, at least three aligned qualitative landmarks, no
+material defect, and at least three spatially distributed 3-D landmark pairs within
+the fixed geometry-derived tolerance. That acceptance can set only `overlay` and
+`swipe` true for exploratory display within the exact shared coverage.
+Subtraction, mask propagation, segmentation, resampled-image measurements, and
+response conclusions remain false. If quantitative QA is unavailable, only a
+non-accepting record can be created and it carries a permanent
+spatial-error-not-quantified label.
+Agents must validate the record with its live bundle before relying on display flags;
+standalone validation deliberately reports source integrity as false. The ordinary
+viewer does not yet consume an accepted record.
 
 ## Source-read-only HTTP surface
 
@@ -365,10 +390,14 @@ GET /v1/health
 GET /v1/manifest
 GET /v1/viewer-state
 GET /v1/comparison-candidates
+GET /v1/registration-qa
+GET /v1/registration-qa/preview
+GET /v1/registration-qa/files/{fixed.nrrd|moving.nrrd|registered-moving.nrrd}
 GET /v1/instances/{opaque_id}
 POST /v1/viewer-state
 POST /v1/visit-packets
 POST /v1/comparison-reviews
+POST /v1/registration-reviews
 ```
 
 There is no source write, overwrite, or delete endpoint. The viewer-state POST is a
@@ -378,7 +407,9 @@ revocation, and a 30-second TTL apply. The other two POSTs are stateless derivat
 responses with exact ZIP allowlists. Visit input contains `baseline.zip` and
 `followup.zip`; review input adds only `comparison.json`. Both return
 `application/zip` with `no-store`. Non-health
-agent requests require `Authorization: Bearer <token>`. The browser receives a
+agent requests require `Authorization: Bearer <token>`. QA preview files and QA review
+submission reject bearer-only authorization and require the human browser cookie.
+The browser receives a
 SameSite, HttpOnly session cookie after a one-time loopback redirect; the token is
 not exposed to viewer JavaScript or retained in the visible URL.
 
@@ -407,9 +438,10 @@ it in `missing_context`; do not synthesize a diagnosis or response category.
 
 ## Future write boundary
 
-Registration QA/acceptance, segmentation and volume-measurement types, and signed
-evidence packets remain future explicit derivative workflows. Each must preserve the
-implemented registration foundation's source hashes, algorithm/tool version,
-parameters, outputs, limitations, and review status. Native DICOM files remain
-read-only, and no registration-derived display will unlock until its required QA
-state is accepted.
+Ordinary-viewer consumption of accepted registration QA, segmentation and volume-
+measurement types, and signed evidence packets remain future explicit derivative
+workflows. Each must preserve the implemented registration and QA source hashes,
+algorithm/tool version, parameters, outputs, limitations, and review state. Native
+DICOM files remain read-only. No ordinary registration-derived display will unlock
+until an accepted record is revalidated against its exact live bundle; that future
+integration may unlock exploratory overlay/swipe only.

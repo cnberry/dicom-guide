@@ -26,6 +26,10 @@ from .registration import (
     registration_doctor,
     run_rigid_registration,
 )
+from .registration_reviews import (
+    registration_review_summary,
+    write_registration_review,
+)
 from .server import serve
 from .visit_packets import visit_packet_summary, write_visit_packet
 
@@ -75,6 +79,7 @@ def parser() -> argparse.ArgumentParser:
     api.add_argument("--port", type=int, default=8765)
     api.add_argument("--token")
     api.add_argument("--no-hashes", action="store_true")
+    api.add_argument("--registration-bundle", type=Path)
 
     launch = commands.add_parser(
         "launch",
@@ -86,6 +91,7 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--no-hashes", action="store_true")
     launch.add_argument("--no-open", action="store_true")
     launch.add_argument("--ui-dist", type=Path)
+    launch.add_argument("--registration-bundle", type=Path)
     launch.add_argument("--baseline-series", help="Exact opaque baseline series ID")
     launch.add_argument("--baseline-instance", help="Exact opaque baseline instance ID")
     launch.add_argument("--followup-series", help="Optional exact opaque follow-up series ID")
@@ -239,7 +245,7 @@ def parser() -> argparse.ArgumentParser:
 
     run_registration = commands.add_parser(
         "run-rigid-registration",
-        help="Create one immutable local moving-to-fixed registration pending QA",
+        help="Create one non-overwriting local moving-to-fixed registration pending QA",
     )
     run_registration.add_argument("root", type=Path)
     run_registration.add_argument("--fixed-series", required=True)
@@ -271,6 +277,32 @@ def parser() -> argparse.ArgumentParser:
         help="Validate a local rigid-registration directory and its QA locks",
     )
     validate_registration.add_argument("directory", type=Path)
+
+    review_registration = commands.add_parser(
+        "review-registration",
+        help="Open a browser-capability human QA preview for one pending registration bundle",
+    )
+    review_registration.add_argument("directory", type=Path)
+    review_registration.add_argument("--port", type=int, default=8765)
+    review_registration.add_argument("--token")
+    review_registration.add_argument("--no-open", action="store_true")
+    review_registration.add_argument("--ui-dist", type=Path)
+
+    record_registration_review = commands.add_parser(
+        "record-registration-review",
+        help="Create one non-overwriting, hash-bound self-attested registration QA JSON record",
+    )
+    record_registration_review.add_argument("directory", type=Path)
+    record_registration_review.add_argument("request", type=Path)
+    record_registration_review.add_argument("--output", "-o", type=Path, required=True)
+    record_registration_review.add_argument("--previous-review", type=Path)
+
+    validate_registration_review = commands.add_parser(
+        "validate-registration-review",
+        help="Validate a registration QA record and optionally its live source bundle",
+    )
+    validate_registration_review.add_argument("record", type=Path)
+    validate_registration_review.add_argument("--registration-bundle", type=Path)
     return root
 
 
@@ -290,7 +322,13 @@ def main() -> None:
         _write_json(suggest_pairs(catalog), args.output)
     elif args.command == "serve":
         catalog, registry = build_catalog(args.root, include_hashes=not args.no_hashes)
-        serve(catalog, registry, port=args.port, token=args.token)
+        serve(
+            catalog,
+            registry,
+            port=args.port,
+            token=args.token,
+            registration_bundle=args.registration_bundle,
+        )
     elif args.command == "launch":
         try:
             ui_dist = _viewer_dist(args.ui_dist)
@@ -334,6 +372,7 @@ def main() -> None:
             ui_dist=ui_dist,
             open_browser=not args.no_open,
             navigation_fragment=navigation_fragment,
+            registration_bundle=args.registration_bundle,
         )
     elif args.command == "viewer-link":
         try:
@@ -486,6 +525,49 @@ def main() -> None:
             raise SystemExit(1)
     elif args.command == "validate-registration":
         summary = registration_bundle_summary(args.directory)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "review-registration":
+        try:
+            ui_dist = _viewer_dist(args.ui_dist)
+            serve(
+                {
+                    "schema_version": "1.0.0",
+                    "source": {"dicom_instances": 0},
+                    "studies": [],
+                },
+                {},
+                port=args.port,
+                token=args.token,
+                ui_dist=ui_dist,
+                open_browser=not args.no_open,
+                registration_bundle=args.directory,
+            )
+        except ValueError as error:
+            argument_parser.error(str(error))
+    elif args.command == "record-registration-review":
+        try:
+            write_registration_review(
+                args.directory,
+                args.request,
+                args.output,
+                previous_review=args.previous_review,
+            )
+        except (OSError, ValueError) as error:
+            argument_parser.error(str(error))
+        summary = registration_review_summary(
+            args.output,
+            registration_directory=args.directory,
+        )
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-registration-review":
+        summary = registration_review_summary(
+            args.record,
+            registration_directory=args.registration_bundle,
+        )
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

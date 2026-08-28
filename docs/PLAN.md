@@ -68,8 +68,12 @@ result into a medical conclusion.
 
 - Version-gated local Slicer/BRAINSFit rigid-registration execution and source-hashed,
   generated-pending-QA bundles (implemented; real-engine case execution pending).
-- Registration QA: opacity, checkerboard, edges, landmarks, accept/reject audit.
-- Accepted overlay/swipe and mask propagation gates.
+- Isolated local registration QA with native/registered views, all three planes,
+  opacity, swipe, checkerboard, edges, qualitative landmarks, quantitative 3-D
+  residuals mandatory for acceptance, and a separate hash-linked accept/reject record
+  (implemented; real-case review pending).
+- Consume a live-bundle-validated accepted record in the ordinary viewer to unlock
+  only exploratory overlay/swipe. Mask propagation remains locked.
 - DICOM SEG/SR import/export and separate derivative store.
 - Manual/semi-automatic component-specific tumor segmentation.
 
@@ -89,7 +93,8 @@ result into a medical conclusion.
 3. **Geometry honesty:** approximate index synchronization is labeled; clinical-looking
    overlay requires patient-space geometry or an accepted registration transform.
 4. **Registration gating:** reject/accept state is explicit and auditable; rejected or
-   unreviewed transforms cannot unlock overlay/subtraction/mask propagation.
+   unreviewed transforms cannot unlock overlay, and subtraction/mask propagation stay
+   locked regardless of this exploratory QA decision.
 5. **Measurement provenance:** geometry, source frames, units, method/version, author,
    timestamp, and tracking ID survive save/reopen.
 6. **No false response label:** missing diagnosis/age, selected criteria, clinical
@@ -105,7 +110,7 @@ result into a medical conclusion.
    native/derived state, registration QA, measurement method, sources, limitations,
    and an unreviewed watermark until sign-off.
 11. **Review trust:** local review records separate person-entered decisions from
-   immutable observations/computations, identify self-asserted credentials as
+   hash-bound observations/computations, identify self-asserted credentials as
    unverified, bind every event and parent derivative by hash, and never represent
    that chain as a digital signature or medical-record authentication.
 12. **Session-state consent:** live viewer inspection is off by default, visible to
@@ -114,3 +119,7 @@ result into a medical conclusion.
 13. **Exact navigation privacy:** agent navigation proves exact slice application,
     malformed-target refusal, clean URLs, and no fragment or opaque navigation
     references in HTTP logs.
+14. **Registration authority separation:** QA volume access and decision submission
+    require the separate browser session capability. Bearer access exposes only a
+    privacy-minimized status and cannot approve a transform; the capability alone does
+    not authenticate human presence.

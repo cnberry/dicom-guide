@@ -780,6 +780,9 @@ def _read_nrrd(path: Path) -> dict[str, Any]:
         raise ValueError("registration engine volume must use one embedded NRRD payload")
     if fields.get("dimension") != "3":
         raise ValueError("registration engine volume must be one 3-D scalar NRRD")
+    space = fields.get("space", "").lower()
+    if space not in {"left-posterior-superior", "right-anterior-superior"}:
+        raise ValueError("registration engine volume has an unsupported patient space")
     try:
         sizes = tuple(int(item) for item in fields.get("sizes", "").split())
     except ValueError as error:
@@ -824,6 +827,9 @@ def _read_nrrd(path: Path) -> dict[str, Any]:
         "sizes": sizes,
         "space_directions": directions,
         "space_origin": origin,
+        "space": space,
+        "scalar_type": scalar_type,
+        "encoding": encoding,
     }
 
 
@@ -891,6 +897,7 @@ def _check_engine_outputs(work: Path) -> None:
     registered_geometry = _read_nrrd(work / "registered-moving.nrrd")
     if (
         fixed_geometry["sizes"] != registered_geometry["sizes"]
+        or fixed_geometry["space"] != registered_geometry["space"]
         or any(
             abs(left - right) > 1e-5
             for left_row, right_row in zip(
