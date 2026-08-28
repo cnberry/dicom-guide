@@ -32,18 +32,21 @@ Zero candidates is valid and safer than cross-modality or object-type guessing.
 
 ## Measurement evidence packets
 
-The viewer exports manual length drafts conforming to
-`schemas/scanview-measurements-v1.schema.json`. Each accepted record contains:
+The viewer exports manual length and perpendicular bidirectional drafts. New exports
+conform to `schemas/scanview-measurements-v2.schema.json`; the importer and validator
+continue to accept length-only v1 packets. Each accepted record contains:
 
 - a stable tracking ID and `unreviewed` state;
 - opaque source series, instance, and optional frame-of-reference IDs;
-- two DICOM patient LPS world points;
-- a millimeter result only when pixel spacing is trustworthy;
+- two length or four bidirectional DICOM patient LPS world points;
+- a length, or long/short axes and bidimensional product, only when pixel spacing is
+  trustworthy;
 - the exact manual tool implementation and explicit limitations.
 
 Annotations without valid geometry or source mapping are excluded rather than
-exported as evidence. Agents can validate and summarize a packet without printing
-its identifiers, coordinates, or values:
+exported as evidence. Imported numeric results must agree with the patient-space
+geometry. Agents can validate and summarize a packet without printing its
+identifiers, coordinates, or values:
 
 ```bash
 scanview-agent validate-measurements '/safe/local/scanview-measurements.json'
@@ -53,6 +56,25 @@ The viewer can reopen a validated packet after the source folder is loaded. It
 restores overlays only on a selected series/instance whose opaque IDs match. Loading
 a new DICOM folder clears the annotation state, pixel cache, and file registry so
 measurements cannot silently carry across imaging sessions.
+
+## Numeric comparison drafts
+
+Agents can compute a deliberately limited measurement comparison locally:
+
+```bash
+scanview-agent compare-measurements baseline.json followup.json \
+  --baseline-id 'bidirectional:baseline-id' \
+  --followup-id 'bidirectional:followup-id' \
+  --output comparison.json
+```
+
+The command requires two valid packets, explicit tracking IDs, matching measurement
+types, trusted millimeter values, and distinct source series. Its output conforms to
+`schemas/scanview-measurement-comparison-v1.schema.json` and contains source-linked
+baseline/follow-up values, absolute and percentage changes, limitations, missing
+context, and questions for a clinician. `candidate_interpretations` is deliberately
+empty. The command does not establish same-lesion identity, scan compatibility, or
+the response criteria needed for a medical conclusion.
 
 ## Read-only HTTP surface
 
@@ -92,14 +114,14 @@ Agents should produce a separate draft document with:
 ```
 
 Every observation or computation must reference source series/instances and, where
-relevant, measurement IDs. Candidate interpretations must cite those observations,
-state the selected clinical criteria, and remain tentative. If required context is
-missing, return it in `missing_context`; do not synthesize a diagnosis or response
-category.
+relevant, measurement IDs. Any future candidate interpretation must cite those
+observations, state the selected clinical criteria, and remain tentative. The
+current comparison command never emits one. If required context is missing, return
+it in `missing_context`; do not synthesize a diagnosis or response category.
 
 ## Future write boundary
 
-Registration, segmentation, additional measurement types, and signed evidence
+Registration, segmentation, ROI/volume measurement types, and signed evidence
 packets will be explicit, idempotent derivative jobs in a separate store. Each will
 record source hashes, algorithm/tool version, parameters, outputs, limitations, and
 review status. Native DICOM files remain read-only, and no registration-derived

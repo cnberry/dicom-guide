@@ -1,9 +1,17 @@
-import { Enums, RenderingEngine, cache, init as initCore, type Types } from '@cornerstonejs/core';
+import {
+  Enums,
+  RenderingEngine,
+  cache,
+  eventTarget,
+  init as initCore,
+  type Types,
+} from '@cornerstonejs/core';
 import {
   init as initDicomImageLoader,
   wadouri,
 } from '@cornerstonejs/dicom-image-loader';
 import {
+  BidirectionalTool,
   Enums as ToolEnums,
   LengthTool,
   PanTool,
@@ -19,20 +27,21 @@ import {
   buildMeasurementEvidencePacket,
   type ImageSourceReference,
   type MeasurementEvidencePacket,
-  type RawLengthAnnotation,
+  type RawMeasurementAnnotation,
 } from './measurements';
 
 let initialization: Promise<void> | undefined;
 const imageReferences = new Map<string, ImageSourceReference>();
 const instanceImageIds = new Map<string, string>();
 
-export type ViewerTool = 'window' | 'pan' | 'zoom' | 'length';
+export type ViewerTool = 'window' | 'pan' | 'zoom' | 'length' | 'bidirectional';
 
 const toolClasses = {
   window: WindowLevelTool,
   pan: PanTool,
   zoom: ZoomTool,
   length: LengthTool,
+  bidirectional: BidirectionalTool,
 } as const;
 
 export type ViewportToolController = {
@@ -55,14 +64,17 @@ export const initializeCornerstone = (): Promise<void> => {
 };
 
 export const createMeasurementEvidencePacket = (): MeasurementEvidencePacket => {
-  const lengths: RawLengthAnnotation[] = annotation.state.getAllAnnotations()
-    .filter((item) => item.metadata?.toolName === LengthTool.toolName)
+  const measurements: RawMeasurementAnnotation[] = annotation.state.getAllAnnotations()
+    .filter((item) =>
+      [LengthTool.toolName, BidirectionalTool.toolName].includes(item.metadata?.toolName ?? ''),
+    )
     .map((item) => ({
       annotationId: item.annotationUID,
+      type: item.metadata?.toolName === BidirectionalTool.toolName ? 'bidirectional' : 'length',
       referencedImageId: item.metadata?.referencedImageId,
       worldPoints: item.data.handles?.points?.map((point) => Array.from(point)),
     }));
-  return buildMeasurementEvidencePacket(lengths, imageReferences);
+  return buildMeasurementEvidencePacket(measurements, imageReferences);
 };
 
 export const resetLocalImagingSession = (): void => {
@@ -71,6 +83,27 @@ export const resetLocalImagingSession = (): void => {
   instanceImageIds.clear();
   cache.purgeCache();
   wadouri.fileManager.purge();
+};
+
+export const subscribeToMeasurementChanges = (listener: () => void): (() => void) => {
+  const events = [
+    ToolEnums.Events.ANNOTATION_COMPLETED,
+    ToolEnums.Events.ANNOTATION_MODIFIED,
+    ToolEnums.Events.ANNOTATION_REMOVED,
+  ];
+  let animationFrame: number | undefined;
+  const notify = () => {
+    if (animationFrame !== undefined) return;
+    animationFrame = requestAnimationFrame(() => {
+      animationFrame = undefined;
+      listener();
+    });
+  };
+  events.forEach((eventName) => eventTarget.addEventListener(eventName, notify));
+  return () => {
+    if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
+    events.forEach((eventName) => eventTarget.removeEventListener(eventName, notify));
+  };
 };
 
 export const restoreMeasurementEvidencePacket = (
@@ -87,14 +120,27 @@ export const restoreMeasurementEvidencePacket = (
     if (measurement.source.series_id !== seriesId || existing.has(measurement.tracking_id)) return;
     const referencedImageId = instanceImageIds.get(measurement.source.instance_id);
     if (!referencedImageId) return;
-    LengthTool.hydrate(
-      viewportId,
-      measurement.geometry.world_points as [Types.Point3, Types.Point3],
-      {
+    if (measurement.type === 'bidirectional') {
+      const points = measurement.geometry.world_points as [
+        Types.Point3,
+        Types.Point3,
+        Types.Point3,
+        Types.Point3,
+      ];
+      BidirectionalTool.hydrate(viewportId, [[points[0], points[1]], [points[2], points[3]]], {
         annotationUID: measurement.tracking_id,
         referencedImageId,
-      },
-    );
+      });
+    } else {
+      LengthTool.hydrate(
+        viewportId,
+        measurement.geometry.world_points as [Types.Point3, Types.Point3],
+        {
+          annotationUID: measurement.tracking_id,
+          referencedImageId,
+        },
+      );
+    }
     existing.add(measurement.tracking_id);
     restored += 1;
   });

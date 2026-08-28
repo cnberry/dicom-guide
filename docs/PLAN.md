@@ -25,13 +25,15 @@ result into a medical conclusion.
 - Transparent compatibility suggestion with reasons/warnings.
 - Read-only catalog/API and versioned agent JSON contract.
 - Explicit safety, privacy, and provenance UI.
+- Source-linked manual length and bidirectional evidence with a human-readable table.
+- Explicit, numeric-only local measurement comparison for agents.
 
 ### Phase 2 — robust local archive and tools
 
 - Orthanc/DICOMweb import with localhost-only configuration.
 - OHIF longitudinal mode or ScanView mode extension.
 - Physical-coordinate linked crosshair, orientation overlays, and MPR.
-- Bidirectional and ROI measurements using the implemented source-linked length
+- ROI measurements using the implemented source-linked length/bidirectional
   tracking/evidence contract.
 - Evidence-packet export for clinician conversations.
 

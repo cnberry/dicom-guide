@@ -23,14 +23,26 @@
 4. Added versioned, source-traceable manual length export, local validation, and
    save/reopen overlay restoration.
 
+## Completed in the third milestone
+
+1. Added perpendicular bidirectional measurements with long axis, short axis, and
+   bidimensional product in trusted physical units.
+2. Added a human-readable evidence table with opaque source provenance, tracking IDs,
+   and persistent `unreviewed` labeling.
+3. Added v2 measurement packets, geometry/result consistency checks, local validation,
+   and bidirectional save/reopen restoration.
+4. Added a local agent comparison command that requires explicit tracking IDs from
+   distinct series and emits numeric change, limitations, missing context, and no
+   response interpretation.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
 2. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Add bidirectional/ROI measurements, a measurement table, orientation labels,
-   and key-image export using the existing evidence packet contract.
+3. Add ROI measurements, orientation labels, and key-image export using the existing
+   evidence packet contract.
 4. Serve instance bytes and static UI from one loopback process for a consistent
    macOS/Linux launcher and agent/viewer deep links.
 5. Define the clinician-reviewed evidence packet and sign-off workflow.

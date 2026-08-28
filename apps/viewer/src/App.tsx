@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DicomViewport } from './components/DicomViewport';
 import {
   createMeasurementEvidencePacket,
   resetLocalImagingSession,
+  subscribeToMeasurementChanges,
   type ViewerTool,
 } from './cornerstone';
 import {
@@ -15,6 +16,7 @@ import {
 } from './dicom';
 import {
   readMeasurementEvidencePacket,
+  type MeasurementEvidence,
   type MeasurementEvidencePacket,
 } from './measurements';
 
@@ -47,6 +49,71 @@ const SeriesSelect = ({
   </label>
 );
 
+const formatMeasurementResult = (measurement: MeasurementEvidence): string => {
+  if (measurement.type === 'length') {
+    return measurement.result.value === undefined
+      ? 'Physical units unavailable'
+      : `${measurement.result.value.toFixed(1)} mm`;
+  }
+  if (
+    measurement.result.long_axis === undefined ||
+    measurement.result.short_axis === undefined ||
+    measurement.result.product === undefined
+  ) {
+    return 'Physical units unavailable';
+  }
+  return `${measurement.result.long_axis.toFixed(1)} × ${measurement.result.short_axis.toFixed(1)} mm · ${measurement.result.product.toFixed(1)} mm²`;
+};
+
+const MeasurementTable = ({ measurements }: { measurements: MeasurementEvidence[] }) => (
+  <section className="measurement-panel" aria-label="Measurement evidence">
+    <div className="measurement-heading">
+      <div>
+        <span className="eyebrow">Source-linked evidence · never a response verdict</span>
+        <h2>Manual measurements</h2>
+      </div>
+      <span className="unreviewed-badge">{measurements.length} unreviewed</span>
+    </div>
+    <div className="measurement-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Result</th>
+            <th>Opaque source</th>
+            <th>Tracking ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          {measurements.length ? (
+            measurements.map((measurement) => (
+              <tr key={measurement.tracking_id}>
+                <td>{measurement.type === 'bidirectional' ? 'Bidirectional' : 'Length'}</td>
+                <td>{formatMeasurementResult(measurement)}</td>
+                <td>
+                  series {measurement.source.series_id.slice(0, 8)}… · instance{' '}
+                  {measurement.source.instance_id.slice(0, 8)}…
+                </td>
+                <td>
+                  <code>{measurement.tracking_id}</code>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={4}>No manual measurements. Draw on a selected native source image.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Numeric changes require deliberately paired lesions, compatible acquisitions, and the
+      diagnosis-specific clinical criteria. ScanView does not infer those inputs.
+    </p>
+  </section>
+);
+
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const measurementInputRef = useRef<HTMLInputElement>(null);
@@ -64,6 +131,7 @@ export default function App() {
     'Measurement drafts stay local and require clinician review.',
   );
   const [measurementPacket, setMeasurementPacket] = useState<MeasurementEvidencePacket>();
+  const [liveMeasurementPacket, setLiveMeasurementPacket] = useState<MeasurementEvidencePacket>();
 
   const baseline = series.find((item) => item.id === baselineId);
   const followup = series.find((item) => item.id === followupId);
@@ -72,6 +140,17 @@ export default function App() {
     [baseline, followup],
   );
   const linkStrategy = useMemo(() => getLinkStrategy(baseline, followup), [baseline, followup]);
+  const visibleMeasurements = liveMeasurementPacket
+    ? liveMeasurementPacket.measurements
+    : (measurementPacket?.measurements ?? []);
+
+  useEffect(
+    () =>
+      subscribeToMeasurementChanges(() => {
+        setLiveMeasurementPacket(createMeasurementEvidencePacket());
+      }),
+    [],
+  );
   const openFolder = () => {
     if (!inputRef.current) return;
     inputRef.current.value = '';
@@ -85,6 +164,7 @@ export default function App() {
     setBaselineId(undefined);
     setFollowupId(undefined);
     setMeasurementPacket(undefined);
+    setLiveMeasurementPacket(undefined);
     setMeasurementMessage('Measurement drafts stay local and require clinician review.');
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     resetLocalImagingSession();
@@ -125,7 +205,7 @@ export default function App() {
     const packet = createMeasurementEvidencePacket();
     if (packet.measurements.length === 0) {
       setMeasurementMessage(
-        'No length measurements to export. Draw one with the Length tool first.',
+        'No measurements to export. Draw a Length or Bidirectional measurement first.',
       );
       return;
     }
@@ -155,9 +235,11 @@ export default function App() {
       const parsed = readMeasurementEvidencePacket(JSON.parse(await file.text()));
       if (!parsed.packet) {
         setMeasurementPacket(undefined);
+        setLiveMeasurementPacket(undefined);
         setMeasurementMessage(`Measurement draft rejected: ${parsed.errors.join(' ')}`);
         return;
       }
+      setLiveMeasurementPacket(undefined);
       setMeasurementPacket(parsed.packet);
       setMeasurementMessage(
         `Loaded ${parsed.packet.measurements.length} unreviewed source-linked measurement${parsed.packet.measurements.length === 1 ? '' : 's'}; matching selected series are restored.`,
@@ -279,6 +361,7 @@ export default function App() {
                 ['pan', 'Pan'],
                 ['zoom', 'Zoom'],
                 ['length', 'Length'],
+                ['bidirectional', 'Bidirectional'],
               ] as const).map(([tool, label]) => (
                 <button
                   key={tool}
@@ -294,8 +377,11 @@ export default function App() {
               <button onClick={openMeasurementDraft}>Open measurement draft</button>
             </div>
             <p>
-              Primary drag: {activeTool === 'length' ? 'unreviewed measurement' : activeTool} · wheel:
-              slices · {!baseline || !followup
+              Primary drag:{' '}
+              {['length', 'bidirectional'].includes(activeTool)
+                ? 'unreviewed measurement'
+                : activeTool}{' '}
+              · wheel: slices · {!baseline || !followup
                 ? 'choose a follow-up to link'
                 : linkStrategy === 'patient-position'
                   ? 'shared-frame physical linking'
@@ -356,6 +442,7 @@ export default function App() {
               </div>
             </article>
           </section>
+          <MeasurementTable measurements={visibleMeasurements} />
         </>
       )}
 

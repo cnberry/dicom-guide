@@ -23,6 +23,7 @@ describe('measurement evidence export', () => {
       [
         {
           annotationId: 'annotation-1',
+          type: 'length',
           referencedImageId: 'dicomfile:1',
           worldPoints: [
             [0, 0, 0],
@@ -58,6 +59,7 @@ describe('measurement evidence export', () => {
     const packet = buildMeasurementEvidencePacket(
       [
         {
+          type: 'length',
           referencedImageId: 'dicomfile:2',
           worldPoints: [
             [0, 0, 0],
@@ -68,7 +70,10 @@ describe('measurement evidence export', () => {
       references,
     );
 
-    expect(packet.measurements[0].result).toEqual({ value: undefined, unit: 'unknown' });
+    expect(packet.measurements[0]).toMatchObject({
+      type: 'length',
+      result: { value: undefined, unit: 'unknown' },
+    });
     expect(packet.measurements[0].limitations.join(' ')).toContain('Pixel spacing');
   });
 
@@ -77,6 +82,7 @@ describe('measurement evidence export', () => {
       [
         {
           annotationId: 'orphan',
+          type: 'length',
           referencedImageId: 'missing',
           worldPoints: [
             [0, 0, 0],
@@ -113,5 +119,95 @@ describe('measurement evidence export', () => {
     expect(parsed.errors.join(' ')).toContain('unreviewed');
     expect(parsed.errors.join(' ')).toContain('source provenance');
     expect(parsed.errors.join(' ')).toContain('unsupported fields');
+  });
+
+  it('exports perpendicular axes and product for a bidirectional measurement', () => {
+    const references = new Map<string, ImageSourceReference>([
+      [
+        'dicomfile:3',
+        {
+          seriesId: '0123456789abcdef',
+          instanceId: 'fedcba9876543210',
+          frameOfReferenceId: '0011223344556677',
+          spacingTrusted: true,
+        },
+      ],
+    ]);
+    const packet = buildMeasurementEvidencePacket(
+      [
+        {
+          annotationId: 'annotation-2',
+          type: 'bidirectional',
+          referencedImageId: 'dicomfile:3',
+          worldPoints: [
+            [0, 0, 0],
+            [10, 0, 0],
+            [5, -2, 0],
+            [5, 2, 0],
+          ],
+        },
+      ],
+      references,
+    );
+
+    expect(packet.schema_version).toBe('2.0.0');
+    expect(packet.measurements[0]).toMatchObject({
+      tracking_id: 'bidirectional:annotation-2',
+      type: 'bidirectional',
+      result: {
+        long_axis: 10,
+        short_axis: 4,
+        product: 40,
+        unit: 'mm',
+        product_unit: 'mm2',
+      },
+    });
+    expect(readMeasurementEvidencePacket(packet)).toEqual({ packet, errors: [] });
+  });
+
+  it('rejects imported values that disagree with patient-space geometry', () => {
+    const packet = {
+      schema_version: '2.0.0',
+      created_at: '2026-08-28T00:00:00Z',
+      review_status: 'unreviewed',
+      measurements: [
+        {
+          tracking_id: 'bidirectional:inconsistent',
+          type: 'bidirectional',
+          review_status: 'unreviewed',
+          source: {
+            series_id: '0123456789abcdef',
+            instance_id: 'fedcba9876543210',
+          },
+          geometry: {
+            coordinate_system: 'DICOM patient LPS',
+            world_points: [
+              [0, 0, 0],
+              [10, 0, 0],
+              [5, -2, 0],
+              [5, 2, 0],
+            ],
+          },
+          result: {
+            long_axis: 99,
+            short_axis: 4,
+            product: 396,
+            unit: 'mm',
+            product_unit: 'mm2',
+          },
+          method: {
+            name: 'manual_perpendicular_bidirectional',
+            implementation: 'Cornerstone3D BidirectionalTool',
+          },
+          limitations: ['Manual and unreviewed.'],
+        },
+      ],
+      limitations: ['Not a response category.'],
+    };
+
+    const parsed = readMeasurementEvidencePacket(packet);
+
+    expect(parsed.packet).toBeUndefined();
+    expect(parsed.errors.join(' ')).toContain('disagrees with its geometry');
   });
 });

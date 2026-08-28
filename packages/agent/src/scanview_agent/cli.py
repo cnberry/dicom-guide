@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .catalog import build_catalog
 from .comparison import suggest_pairs
-from .measurements import measurement_packet_summary
+from .measurements import build_measurement_comparison, measurement_packet_summary
 from .server import serve
 
 
@@ -52,6 +52,16 @@ def parser() -> argparse.ArgumentParser:
         help="Validate and summarize a local ScanView measurement evidence packet",
     )
     validate_measurements.add_argument("packet", type=Path)
+
+    compare_measurements = commands.add_parser(
+        "compare-measurements",
+        help="Compare two explicitly selected manual measurements without assigning response",
+    )
+    compare_measurements.add_argument("baseline_packet", type=Path)
+    compare_measurements.add_argument("followup_packet", type=Path)
+    compare_measurements.add_argument("--baseline-id", required=True)
+    compare_measurements.add_argument("--followup-id", required=True)
+    compare_measurements.add_argument("--output", "-o", type=Path)
     return root
 
 
@@ -77,6 +87,19 @@ def main() -> None:
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)
+    elif args.command == "compare-measurements":
+        baseline_packet = json.loads(args.baseline_packet.read_text())
+        followup_packet = json.loads(args.followup_packet.read_text())
+        try:
+            comparison = build_measurement_comparison(
+                baseline_packet,
+                followup_packet,
+                baseline_tracking_id=args.baseline_id,
+                followup_tracking_id=args.followup_id,
+            )
+        except ValueError as error:
+            parser().error(str(error))
+        _write_json(comparison, args.output)
 
 
 if __name__ == "__main__":

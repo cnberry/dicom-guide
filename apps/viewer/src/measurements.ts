@@ -5,25 +5,36 @@ export type ImageSourceReference = {
   spacingTrusted: boolean;
 };
 
-export type RawLengthAnnotation = {
+export type MeasurementType = 'length' | 'bidirectional';
+
+export type RawMeasurementAnnotation = {
   annotationId?: string;
+  type: MeasurementType;
   referencedImageId?: string;
   worldPoints?: number[][];
 };
 
-export type LengthMeasurementEvidence = {
+type MeasurementSource = {
+  series_id: string;
+  instance_id: string;
+  frame_of_reference_id?: string;
+};
+
+type MeasurementGeometry = {
+  coordinate_system: 'DICOM patient LPS';
+  world_points: number[][];
+};
+
+type MeasurementBase = {
   tracking_id: string;
-  type: 'length';
   review_status: 'unreviewed';
-  source: {
-    series_id: string;
-    instance_id: string;
-    frame_of_reference_id?: string;
-  };
-  geometry: {
-    coordinate_system: 'DICOM patient LPS';
-    world_points: number[][];
-  };
+  source: MeasurementSource;
+  geometry: MeasurementGeometry;
+  limitations: string[];
+};
+
+export type LengthMeasurementEvidence = MeasurementBase & {
+  type: 'length';
   result: {
     value?: number;
     unit: 'mm' | 'unknown';
@@ -32,14 +43,32 @@ export type LengthMeasurementEvidence = {
     name: 'manual_two_point_length';
     implementation: 'Cornerstone3D LengthTool';
   };
-  limitations: string[];
 };
 
+export type BidirectionalMeasurementEvidence = MeasurementBase & {
+  type: 'bidirectional';
+  result: {
+    long_axis?: number;
+    short_axis?: number;
+    product?: number;
+    unit: 'mm' | 'unknown';
+    product_unit: 'mm2' | 'unknown';
+  };
+  method: {
+    name: 'manual_perpendicular_bidirectional';
+    implementation: 'Cornerstone3D BidirectionalTool';
+  };
+};
+
+export type MeasurementEvidence =
+  | LengthMeasurementEvidence
+  | BidirectionalMeasurementEvidence;
+
 export type MeasurementEvidencePacket = {
-  schema_version: '1.0.0';
+  schema_version: '1.0.0' | '2.0.0';
   created_at: string;
   review_status: 'unreviewed';
-  measurements: LengthMeasurementEvidence[];
+  measurements: MeasurementEvidence[];
   limitations: string[];
 };
 
@@ -49,15 +78,27 @@ const isPoint3 = (point: number[] | undefined): point is [number, number, number
 const distance = (left: number[], right: number[]): number =>
   Math.sqrt(left.reduce((sum, value, index) => sum + (value - right[index]) ** 2, 0));
 
+const trackingId = (annotation: RawMeasurementAnnotation, index: number): string => {
+  const prefix = `${annotation.type}:`;
+  return annotation.annotationId?.startsWith(prefix)
+    ? annotation.annotationId
+    : `${prefix}${annotation.annotationId ?? `export-${index + 1}`}`;
+};
+
 export const buildMeasurementEvidencePacket = (
-  annotations: RawLengthAnnotation[],
+  annotations: RawMeasurementAnnotation[],
   imageReferences: ReadonlyMap<string, ImageSourceReference>,
   createdAt = new Date().toISOString(),
 ): MeasurementEvidencePacket => {
   let excludedAnnotations = 0;
-  const measurements = annotations.flatMap((annotation, index) => {
+  const measurements = annotations.flatMap<MeasurementEvidence>((annotation, index) => {
     const points = annotation.worldPoints;
-    if (!points || points.length !== 2 || !isPoint3(points[0]) || !isPoint3(points[1])) {
+    const expectedPoints = annotation.type === 'length' ? 2 : 4;
+    if (
+      !points ||
+      points.length !== expectedPoints ||
+      !points.every((point) => isPoint3(point))
+    ) {
       excludedAnnotations += 1;
       return [];
     }
@@ -68,35 +109,62 @@ export const buildMeasurementEvidencePacket = (
       excludedAnnotations += 1;
       return [];
     }
+    const sourceEvidence: MeasurementSource = {
+      series_id: source.seriesId,
+      instance_id: source.instanceId,
+      frame_of_reference_id: source.frameOfReferenceId,
+    };
+    const geometry: MeasurementGeometry = {
+      coordinate_system: 'DICOM patient LPS',
+      world_points: points,
+    };
     const limitations = [
-      'Manual measurement; verify endpoints and intended tumor component with a qualified clinician.',
+      'Manual measurement; verify endpoints, image selection, and intended tumor component with a qualified clinician.',
     ];
     if (!source.spacingTrusted) {
-      limitations.push('Pixel spacing was unavailable; no physical length value is reported.');
+      limitations.push('Pixel spacing was unavailable; no physical measurement value is reported.');
     }
+    if (annotation.type === 'length') {
+      return [
+        {
+          tracking_id: trackingId(annotation, index),
+          type: 'length',
+          review_status: 'unreviewed',
+          source: sourceEvidence,
+          geometry,
+          result: {
+            value: source.spacingTrusted ? distance(points[0], points[1]) : undefined,
+            unit: source.spacingTrusted ? 'mm' : 'unknown',
+          },
+          method: {
+            name: 'manual_two_point_length',
+            implementation: 'Cornerstone3D LengthTool',
+          },
+          limitations,
+        },
+      ];
+    }
+    const firstAxis = distance(points[0], points[1]);
+    const secondAxis = distance(points[2], points[3]);
+    const longAxis = Math.max(firstAxis, secondAxis);
+    const shortAxis = Math.min(firstAxis, secondAxis);
     return [
       {
-        tracking_id: annotation.annotationId?.startsWith('length:')
-          ? annotation.annotationId
-          : `length:${annotation.annotationId ?? `export-${index + 1}`}`,
-        type: 'length' as const,
-        review_status: 'unreviewed' as const,
-        source: {
-          series_id: source.seriesId,
-          instance_id: source.instanceId,
-          frame_of_reference_id: source.frameOfReferenceId,
-        },
-        geometry: {
-          coordinate_system: 'DICOM patient LPS' as const,
-          world_points: points,
-        },
+        tracking_id: trackingId(annotation, index),
+        type: 'bidirectional',
+        review_status: 'unreviewed',
+        source: sourceEvidence,
+        geometry,
         result: {
-          value: source.spacingTrusted ? distance(points[0], points[1]) : undefined,
-          unit: source.spacingTrusted ? ('mm' as const) : ('unknown' as const),
+          long_axis: source.spacingTrusted ? longAxis : undefined,
+          short_axis: source.spacingTrusted ? shortAxis : undefined,
+          product: source.spacingTrusted ? longAxis * shortAxis : undefined,
+          unit: source.spacingTrusted ? 'mm' : 'unknown',
+          product_unit: source.spacingTrusted ? 'mm2' : 'unknown',
         },
         method: {
-          name: 'manual_two_point_length' as const,
-          implementation: 'Cornerstone3D LengthTool' as const,
+          name: 'manual_perpendicular_bidirectional',
+          implementation: 'Cornerstone3D BidirectionalTool',
         },
         limitations,
       },
@@ -105,6 +173,7 @@ export const buildMeasurementEvidencePacket = (
   const limitations = [
     'This packet contains unreviewed derived measurements, not a diagnosis or treatment-response conclusion.',
     'The copied DICOM instances remain the authoritative source.',
+    'A numeric change must not be converted into a response category without the diagnosis-specific criteria and required clinical context.',
   ];
   if (excludedAnnotations) {
     limitations.push(
@@ -112,7 +181,7 @@ export const buildMeasurementEvidencePacket = (
     );
   }
   return {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     created_at: createdAt,
     review_status: 'unreviewed',
     measurements,
@@ -128,6 +197,12 @@ const isOpaqueId = (value: unknown): value is string =>
 
 const hasOnlyKeys = (value: Record<string, unknown>, allowed: string[]): boolean =>
   Object.keys(value).every((key) => allowed.includes(key));
+
+const isFiniteNonNegative = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+const approximatelyEqual = (left: number, right: number): boolean =>
+  Math.abs(left - right) <= Math.max(0.001, Math.abs(right) * 0.001);
 
 export const readMeasurementEvidencePacket = (
   value: unknown,
@@ -145,7 +220,10 @@ export const readMeasurementEvidencePacket = (
   ) {
     errors.push('Measurement packet contains unsupported fields.');
   }
-  if (value.schema_version !== '1.0.0') errors.push('Unsupported measurement schema version.');
+  const schemaVersion = value.schema_version;
+  if (!['1.0.0', '2.0.0'].includes(String(schemaVersion))) {
+    errors.push('Unsupported measurement schema version.');
+  }
   if (value.review_status !== 'unreviewed') errors.push('Measurement packet must be unreviewed.');
   if (typeof value.created_at !== 'string' || !value.created_at) {
     errors.push('Measurement packet is missing its creation time.');
@@ -182,23 +260,22 @@ export const readMeasurementEvidencePacket = (
       ) {
         errors.push(`Measurement ${index + 1} contains unsupported fields.`);
       }
-      const source = item.source;
-      const geometry = item.geometry;
-      const points = isRecord(geometry) ? geometry.world_points : undefined;
-      const result = item.result;
-      const method = item.method;
+      const measurementType = item.type;
       if (
-        item.type !== 'length' ||
+        !['length', 'bidirectional'].includes(String(measurementType)) ||
+        (schemaVersion === '1.0.0' && measurementType !== 'length') ||
         item.review_status !== 'unreviewed' ||
         typeof item.tracking_id !== 'string' ||
         !item.tracking_id
       ) {
-        errors.push(`Measurement ${index + 1} has invalid identity or review state.`);
+        errors.push(`Measurement ${index + 1} has invalid identity, type, or review state.`);
       } else if (trackingIds.has(item.tracking_id)) {
         errors.push(`Measurement ${index + 1} has a duplicate tracking ID.`);
       } else {
         trackingIds.add(item.tracking_id);
       }
+
+      const source = item.source;
       if (
         !isRecord(source) ||
         !isOpaqueId(source.series_id) ||
@@ -209,36 +286,105 @@ export const readMeasurementEvidencePacket = (
       } else if (!hasOnlyKeys(source, ['series_id', 'instance_id', 'frame_of_reference_id'])) {
         errors.push(`Measurement ${index + 1} source contains unsupported fields.`);
       }
-      if (
-        !isRecord(geometry) ||
-        geometry.coordinate_system !== 'DICOM patient LPS' ||
-        !Array.isArray(points) ||
-        points.length !== 2 ||
-        !points.every(
+
+      const geometry = item.geometry;
+      const points = isRecord(geometry) ? geometry.world_points : undefined;
+      const expectedPoints = measurementType === 'bidirectional' ? 4 : 2;
+      const validPoints =
+        Array.isArray(points) &&
+        points.length === expectedPoints &&
+        points.every(
           (point) =>
             Array.isArray(point) &&
             point.length === 3 &&
             point.every((coordinate) => Number.isFinite(coordinate)),
-        )
+        );
+      if (
+        !isRecord(geometry) ||
+        geometry.coordinate_system !== 'DICOM patient LPS' ||
+        !validPoints
       ) {
         errors.push(`Measurement ${index + 1} has invalid patient-space geometry.`);
       } else if (!hasOnlyKeys(geometry, ['coordinate_system', 'world_points'])) {
         errors.push(`Measurement ${index + 1} geometry contains unsupported fields.`);
       }
-      if (
-        !isRecord(result) ||
-        !['mm', 'unknown'].includes(String(result.unit)) ||
-        (result.unit === 'mm' &&
-          (typeof result.value !== 'number' || !Number.isFinite(result.value) || result.value < 0))
-      ) {
+
+      const result = item.result;
+      if (!isRecord(result) || !['mm', 'unknown'].includes(String(result.unit))) {
         errors.push(`Measurement ${index + 1} has an invalid result.`);
-      } else if (!hasOnlyKeys(result, ['value', 'unit'])) {
-        errors.push(`Measurement ${index + 1} result contains unsupported fields.`);
+      } else if (measurementType === 'bidirectional') {
+        const physicalResult =
+          result.unit === 'mm' &&
+          result.product_unit === 'mm2' &&
+          isFiniteNonNegative(result.long_axis) &&
+          isFiniteNonNegative(result.short_axis) &&
+          isFiniteNonNegative(result.product);
+        const unknownResult = result.unit === 'unknown' && result.product_unit === 'unknown';
+        if (!physicalResult && !unknownResult) {
+          errors.push(`Measurement ${index + 1} has invalid bidirectional values.`);
+        }
+        if (
+          unknownResult &&
+          [result.long_axis, result.short_axis, result.product].some(
+            (measurement) => measurement !== undefined,
+          )
+        ) {
+          errors.push(`Measurement ${index + 1} reports values with unknown units.`);
+        }
+        if (physicalResult && validPoints) {
+          const typedPoints = points as number[][];
+          const axes = [
+            distance(typedPoints[0], typedPoints[1]),
+            distance(typedPoints[2], typedPoints[3]),
+          ].sort((left, right) => right - left);
+          if (
+            !approximatelyEqual(result.long_axis as number, axes[0]) ||
+            !approximatelyEqual(result.short_axis as number, axes[1]) ||
+            !approximatelyEqual(result.product as number, axes[0] * axes[1])
+          ) {
+            errors.push(`Measurement ${index + 1} result disagrees with its geometry.`);
+          }
+        }
+        if (
+          !hasOnlyKeys(result, [
+            'long_axis',
+            'short_axis',
+            'product',
+            'unit',
+            'product_unit',
+          ])
+        ) {
+          errors.push(`Measurement ${index + 1} result contains unsupported fields.`);
+        }
+      } else {
+        if (result.unit === 'mm' && !isFiniteNonNegative(result.value)) {
+          errors.push(`Measurement ${index + 1} has an invalid length value.`);
+        }
+        if (result.unit === 'unknown' && result.value !== undefined) {
+          errors.push(`Measurement ${index + 1} reports a value with unknown units.`);
+        }
+        if (
+          result.unit === 'mm' &&
+          isFiniteNonNegative(result.value) &&
+          validPoints &&
+          !approximatelyEqual(result.value, distance((points as number[][])[0], (points as number[][])[1]))
+        ) {
+          errors.push(`Measurement ${index + 1} result disagrees with its geometry.`);
+        }
+        if (!hasOnlyKeys(result, ['value', 'unit'])) {
+          errors.push(`Measurement ${index + 1} result contains unsupported fields.`);
+        }
       }
+
+      const method = item.method;
+      const expectedMethod =
+        measurementType === 'bidirectional'
+          ? ['manual_perpendicular_bidirectional', 'Cornerstone3D BidirectionalTool']
+          : ['manual_two_point_length', 'Cornerstone3D LengthTool'];
       if (
         !isRecord(method) ||
-        method.name !== 'manual_two_point_length' ||
-        method.implementation !== 'Cornerstone3D LengthTool'
+        method.name !== expectedMethod[0] ||
+        method.implementation !== expectedMethod[1]
       ) {
         errors.push(`Measurement ${index + 1} has an unsupported method.`);
       } else if (!hasOnlyKeys(method, ['name', 'implementation'])) {

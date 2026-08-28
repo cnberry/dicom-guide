@@ -15,7 +15,9 @@ Immutable copied DICOM
         |
         +--> Browser folder picker --> Cornerstone3D --> human side-by-side view
         |                                      |
-        |                                      +--> measurement packet --> save/reopen / agents
+        |                                      +--> measurement packet --> table / save/reopen
+        |                                                                   |
+        |                                                                   +--> local numeric comparison
         |
         +--> scanview-agent catalog --> manifest v1 --> agents / automation
                                   |
@@ -41,8 +43,9 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    only opaque IDs and an allowlisted metadata contract, and has no write/delete API.
 5. **Derivatives:** future transforms, resampled images, masks, additional
    measurements, and reports go to a separate store with source references and
-   review status. Manual length drafts already use this contract as versioned local
-   JSON and never modify native instances.
+   review status. Manual length/bidirectional drafts already use this contract as
+   versioned local JSON and never modify native instances. Agent comparisons accept
+   only explicit, distinct-series measurement selections and emit no response label.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

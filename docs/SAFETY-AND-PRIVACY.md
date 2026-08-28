@@ -60,3 +60,8 @@ Agent output must keep these separate and source-linked:
 
 Free-text conclusions without source image/series and measurement references are
 not acceptable evidence.
+
+The current `compare-measurements` command goes further: it always leaves
+`candidate_interpretations` empty. It reports only source-linked numeric differences,
+requires distinct source series and trusted physical units, and lists the clinical
+context still needed before anyone applies response criteria.

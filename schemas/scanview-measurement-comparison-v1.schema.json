@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-measurement-comparison-v1.schema.json",
+  "title": "ScanView unreviewed measurement comparison v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_at",
+    "review_status",
+    "pairing",
+    "observations",
+    "computed_results",
+    "candidate_interpretations",
+    "limitations",
+    "missing_context",
+    "questions_for_clinician"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "review_status": { "const": "unreviewed" },
+    "pairing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "baseline_measurement_id",
+        "followup_measurement_id"
+      ],
+      "properties": {
+        "method": { "const": "explicit_tracking_id_selection" },
+        "baseline_measurement_id": { "type": "string", "minLength": 1 },
+        "followup_measurement_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "#/$defs/baselineObservation" },
+        { "$ref": "#/$defs/followupObservation" }
+      ]
+    },
+    "computed_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/computedResult" }
+    },
+    "candidate_interpretations": {
+      "type": "array",
+      "maxItems": 0,
+      "description": "Deliberately empty until a qualified review workflow exists."
+    },
+    "limitations": { "$ref": "#/$defs/nonEmptyStrings" },
+    "missing_context": { "$ref": "#/$defs/nonEmptyStrings" },
+    "questions_for_clinician": { "$ref": "#/$defs/nonEmptyStrings" }
+  },
+  "$defs": {
+    "opaqueId": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["series_id", "instance_id"],
+      "properties": {
+        "series_id": { "$ref": "#/$defs/opaqueId" },
+        "instance_id": { "$ref": "#/$defs/opaqueId" },
+        "frame_of_reference_id": { "$ref": "#/$defs/opaqueId" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timepoint", "measurement_type", "source", "review_status"],
+      "properties": {
+        "timepoint": { "enum": ["baseline", "followup"] },
+        "measurement_type": { "enum": ["length", "bidirectional"] },
+        "source": { "$ref": "#/$defs/source" },
+        "review_status": { "const": "unreviewed" }
+      }
+    },
+    "baselineObservation": {
+      "allOf": [
+        { "$ref": "#/$defs/observation" },
+        { "properties": { "timepoint": { "const": "baseline" } } }
+      ]
+    },
+    "followupObservation": {
+      "allOf": [
+        { "$ref": "#/$defs/observation" },
+        { "properties": { "timepoint": { "const": "followup" } } }
+      ]
+    },
+    "computedResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric",
+        "baseline",
+        "followup",
+        "absolute_change",
+        "unit",
+        "source_measurement_ids",
+        "review_status"
+      ],
+      "properties": {
+        "metric": {
+          "enum": ["length", "long_axis", "short_axis", "bidimensional_product"]
+        },
+        "baseline": { "type": "number", "minimum": 0 },
+        "followup": { "type": "number", "minimum": 0 },
+        "absolute_change": { "type": "number" },
+        "percent_change": { "type": "number" },
+        "unit": { "enum": ["mm", "mm2"] },
+        "source_measurement_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "review_status": { "const": "unreviewed" }
+      }
+    },
+    "nonEmptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

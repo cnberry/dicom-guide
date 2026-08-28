@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import stat
+import sys
 from pathlib import Path
 
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, MRImageStorage, generate_uid
 
 from scanview_agent.catalog import build_catalog
+from scanview_agent.cli import main
 from scanview_agent.comparison import suggest_pairs
-from scanview_agent.measurements import measurement_packet_summary
+from scanview_agent.measurements import build_measurement_comparison, measurement_packet_summary
 from scanview_agent.server import serve
 
 
@@ -210,6 +214,7 @@ def test_measurement_packet_validation_preserves_unreviewed_source_provenance() 
         "schema_version": "1.0.0",
         "review_status": "unreviewed",
         "measurement_count": 1,
+        "counts_by_type": {"length": 1, "bidirectional": 0},
         "errors": [],
     }
 
@@ -217,3 +222,252 @@ def test_measurement_packet_validation_preserves_unreviewed_source_provenance() 
     summary = measurement_packet_summary(packet)
     assert summary["valid"] is False
     assert "unsupported fields" in " ".join(summary["errors"])
+
+
+def test_bidirectional_measurement_packet_validation() -> None:
+    packet = {
+        "schema_version": "2.0.0",
+        "created_at": "2026-08-28T00:00:00Z",
+        "review_status": "unreviewed",
+        "measurements": [
+            {
+                "tracking_id": "bidirectional:test",
+                "type": "bidirectional",
+                "review_status": "unreviewed",
+                "source": {
+                    "series_id": "0123456789abcdef",
+                    "instance_id": "fedcba9876543210",
+                },
+                "geometry": {
+                    "coordinate_system": "DICOM patient LPS",
+                    "world_points": [[0, 0, 0], [10, 0, 0], [5, -2, 0], [5, 2, 0]],
+                },
+                "result": {
+                    "long_axis": 10,
+                    "short_axis": 4,
+                    "product": 40,
+                    "unit": "mm",
+                    "product_unit": "mm2",
+                },
+                "method": {
+                    "name": "manual_perpendicular_bidirectional",
+                    "implementation": "Cornerstone3D BidirectionalTool",
+                },
+                "limitations": ["Manual and unreviewed."],
+            }
+        ],
+        "limitations": ["Not a response category."],
+    }
+
+    summary = measurement_packet_summary(packet)
+
+    assert summary["valid"] is True
+    assert summary["counts_by_type"] == {"length": 0, "bidirectional": 1}
+
+
+def bidirectional_packet(
+    tracking_id: str,
+    long_axis: float,
+    short_axis: float,
+    *,
+    series_id: str,
+    unit: str = "mm",
+) -> dict:
+    result = (
+        {
+            "long_axis": long_axis,
+            "short_axis": short_axis,
+            "product": long_axis * short_axis,
+            "unit": "mm",
+            "product_unit": "mm2",
+        }
+        if unit == "mm"
+        else {"unit": "unknown", "product_unit": "unknown"}
+    )
+    return {
+        "schema_version": "2.0.0",
+        "created_at": "2026-08-28T00:00:00Z",
+        "review_status": "unreviewed",
+        "measurements": [
+            {
+                "tracking_id": tracking_id,
+                "type": "bidirectional",
+                "review_status": "unreviewed",
+                "source": {
+                    "series_id": series_id,
+                    "instance_id": "fedcba9876543210",
+                },
+                "geometry": {
+                    "coordinate_system": "DICOM patient LPS",
+                    "world_points": [
+                        [0, 0, 0],
+                        [long_axis, 0, 0],
+                        [0, -short_axis / 2, 0],
+                        [0, short_axis / 2, 0],
+                    ],
+                },
+                "result": result,
+                "method": {
+                    "name": "manual_perpendicular_bidirectional",
+                    "implementation": "Cornerstone3D BidirectionalTool",
+                },
+                "limitations": ["Manual and unreviewed."],
+            }
+        ],
+        "limitations": ["Not a response category."],
+    }
+
+
+def test_explicit_bidirectional_comparison_is_numeric_and_unreviewed() -> None:
+    comparison = build_measurement_comparison(
+        bidirectional_packet(
+            "bidirectional:baseline", 10, 4, series_id="0123456789abcdef"
+        ),
+        bidirectional_packet(
+            "bidirectional:followup", 8, 3, series_id="1123456789abcdef"
+        ),
+        baseline_tracking_id="bidirectional:baseline",
+        followup_tracking_id="bidirectional:followup",
+    )
+
+    assert comparison["review_status"] == "unreviewed"
+    assert comparison["pairing"]["method"] == "explicit_tracking_id_selection"
+    assert comparison["candidate_interpretations"] == []
+    assert comparison["computed_results"] == [
+        {
+            "metric": "long_axis",
+            "baseline": 10.0,
+            "followup": 8.0,
+            "absolute_change": -2.0,
+            "unit": "mm",
+            "source_measurement_ids": [
+                "bidirectional:baseline",
+                "bidirectional:followup",
+            ],
+            "review_status": "unreviewed",
+            "percent_change": -20.0,
+        },
+        {
+            "metric": "short_axis",
+            "baseline": 4.0,
+            "followup": 3.0,
+            "absolute_change": -1.0,
+            "unit": "mm",
+            "source_measurement_ids": [
+                "bidirectional:baseline",
+                "bidirectional:followup",
+            ],
+            "review_status": "unreviewed",
+            "percent_change": -25.0,
+        },
+        {
+            "metric": "bidimensional_product",
+            "baseline": 40.0,
+            "followup": 24.0,
+            "absolute_change": -16.0,
+            "unit": "mm2",
+            "source_measurement_ids": [
+                "bidirectional:baseline",
+                "bidirectional:followup",
+            ],
+            "review_status": "unreviewed",
+            "percent_change": -40.0,
+        },
+    ]
+    assert "diagnosis-specific response criteria" in comparison["missing_context"]
+
+
+def test_comparison_refuses_unknown_units_and_inconsistent_results() -> None:
+    baseline = bidirectional_packet(
+        "bidirectional:baseline", 10, 4, series_id="0123456789abcdef"
+    )
+    followup = bidirectional_packet(
+        "bidirectional:followup",
+        8,
+        3,
+        series_id="1123456789abcdef",
+        unit="unknown",
+    )
+
+    try:
+        build_measurement_comparison(
+            baseline,
+            followup,
+            baseline_tracking_id="bidirectional:baseline",
+            followup_tracking_id="bidirectional:followup",
+        )
+    except ValueError as error:
+        assert "millimeter" in str(error)
+    else:
+        raise AssertionError("Unknown-unit measurements must not be compared")
+
+    baseline["measurements"][0]["result"]["long_axis"] = 999
+    summary = measurement_packet_summary(baseline)
+    assert summary["valid"] is False
+    assert "disagrees with its geometry" in " ".join(summary["errors"])
+
+
+def test_comparison_refuses_the_same_source_series() -> None:
+    baseline = bidirectional_packet(
+        "bidirectional:baseline", 10, 4, series_id="0123456789abcdef"
+    )
+    followup = bidirectional_packet(
+        "bidirectional:followup", 8, 3, series_id="0123456789abcdef"
+    )
+
+    try:
+        build_measurement_comparison(
+            baseline,
+            followup,
+            baseline_tracking_id="bidirectional:baseline",
+            followup_tracking_id="bidirectional:followup",
+        )
+    except ValueError as error:
+        assert "distinct source series" in str(error)
+    else:
+        raise AssertionError("A same-series measurement pair must not be treated as longitudinal")
+
+
+def test_comparison_cli_writes_owner_only_unreviewed_output(
+    tmp_path: Path, monkeypatch
+) -> None:
+    baseline_path = tmp_path / "baseline.json"
+    followup_path = tmp_path / "followup.json"
+    output_path = tmp_path / "comparison.json"
+    baseline_path.write_text(
+        json.dumps(
+            bidirectional_packet(
+                "bidirectional:baseline", 10, 4, series_id="0123456789abcdef"
+            )
+        )
+    )
+    followup_path.write_text(
+        json.dumps(
+            bidirectional_packet(
+                "bidirectional:followup", 8, 3, series_id="1123456789abcdef"
+            )
+        )
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "scanview-agent",
+            "compare-measurements",
+            str(baseline_path),
+            str(followup_path),
+            "--baseline-id",
+            "bidirectional:baseline",
+            "--followup-id",
+            "bidirectional:followup",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    main()
+
+    comparison = json.loads(output_path.read_text())
+    assert comparison["candidate_interpretations"] == []
+    assert comparison["review_status"] == "unreviewed"
+    assert stat.S_IMODE(output_path.stat().st_mode) == 0o600

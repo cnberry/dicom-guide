@@ -10,9 +10,15 @@ scanview-agent manifest '/path/to/copied/DICOM' --output manifest.json
 scanview-agent candidates manifest.json
 scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent validate-measurements '/path/to/scanview-measurements.json'
+scanview-agent compare-measurements baseline.json followup.json \
+  --baseline-id 'bidirectional:baseline-id' \
+  --followup-id 'bidirectional:followup-id' \
+  --output comparison.json
 ```
 
 The server prints a random bearer token and only binds to `127.0.0.1`. It has no
 write or delete endpoint. Measurement validation returns only validity, schema,
 review state, count, and errors; it does not echo source identifiers, coordinates,
-or values.
+or values. Comparison requires explicit tracking IDs from distinct source series and
+trusted millimeter results. It emits source-linked numeric change, missing context,
+and clinician questions with an empty interpretation list and `unreviewed` state.
