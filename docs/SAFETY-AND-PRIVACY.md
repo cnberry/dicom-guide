@@ -24,6 +24,10 @@ quality-system, and regulatory review.
 - Manifests and derivatives stay outside Git and are treated as sensitive.
 - Source delete and overwrite operations do not exist.
 - Generated content is `derived` and `unreviewed` until explicitly accepted.
+- A key-image ZIP remains sensitive medical data. Its PNG can contain burned-in
+  identifiers or recognizable anatomy inherited from the displayed pixels, so it
+  requires the same sharing safeguards as the original DICOM even though its JSON
+  uses opaque IDs and omits direct names and paths.
 
 ## De-identification warning
 

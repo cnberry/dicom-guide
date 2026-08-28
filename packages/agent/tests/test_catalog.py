@@ -4,7 +4,10 @@ import hashlib
 import json
 import math
 import stat
+import struct
 import sys
+import zipfile
+import zlib
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -14,6 +17,7 @@ from pydicom.uid import ExplicitVRLittleEndian, MRImageStorage, generate_uid
 from scanview_agent.catalog import build_catalog
 from scanview_agent.cli import main
 from scanview_agent.comparison import suggest_pairs
+from scanview_agent.key_images import key_image_archive_summary
 from scanview_agent.measurements import build_measurement_comparison, measurement_packet_summary
 from scanview_agent.server import serve
 
@@ -434,6 +438,126 @@ def test_explicit_elliptical_roi_comparison_is_numeric_and_unreviewed() -> None:
     Draft202012Validator(
         comparison_schema, format_checker=FormatChecker()
     ).validate(comparison)
+
+
+def png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+    )
+
+
+def one_pixel_png() -> bytes:
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+        + png_chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
+        + png_chunk(b"IEND", b"")
+    )
+
+
+def write_key_image_archive(path: Path, *, image_digest: str | None = None) -> dict:
+    measurements = elliptical_roi_packet(
+        "elliptical_roi:key-image", 10, 4, series_id="0123456789abcdef"
+    )
+    measurement_bytes = (json.dumps(measurements, indent=2) + "\n").encode()
+    png_bytes = one_pixel_png()
+    packet = {
+        "schema_version": "1.0.0",
+        "created_at": "2026-08-28T00:00:00Z",
+        "review_status": "unreviewed",
+        "artifact_type": "derived_display_key_image",
+        "source": {
+            "series_id": "0123456789abcdef",
+            "instance_id": "fedcba9876543210",
+            "modality": "MR",
+            "acquisition_date": "20260828",
+            "series_description": "Synthetic axial",
+            "instance_number": 2,
+        },
+        "display": {
+            "viewport_role": "baseline",
+            "stack_position": 2,
+            "stack_count": 3,
+            "source_kind": "loopback-service",
+            "viewport_width_px": 512,
+            "viewport_height_px": 512,
+            "patient_orientation": {
+                "left": "R",
+                "right": "L",
+                "top": "A",
+                "bottom": "P",
+            },
+            "presentation": {
+                "voi_range": {"lower": 0, "upper": 1000},
+                "invert": False,
+                "zoom": 1,
+                "pan": [0, 0],
+            },
+        },
+        "image": {
+            "filename": "key-image.png",
+            "mime_type": "image/png",
+            "width_px": 1,
+            "height_px": 1,
+            "sha256": image_digest or hashlib.sha256(png_bytes).hexdigest(),
+        },
+        "measurement_evidence": {
+            "filename": "measurements.json",
+            "schema_version": "3.0.0",
+            "measurement_count": 1,
+            "tracking_ids": ["elliptical_roi:key-image"],
+            "sha256": hashlib.sha256(measurement_bytes).hexdigest(),
+        },
+        "implementation": {
+            "name": "ScanView key-image exporter",
+            "version": "0.1.0",
+            "renderer": "Cornerstone3D 5.8.2",
+        },
+        "limitations": ["Unreviewed display derivative; original DICOM is authoritative."],
+    }
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("key-image.json", json.dumps(packet, indent=2) + "\n")
+        archive.writestr("key-image.png", png_bytes)
+        archive.writestr("measurements.json", measurement_bytes)
+    return packet
+
+
+def test_key_image_archive_validates_integrity_and_embedded_measurements(tmp_path: Path) -> None:
+    archive_path = tmp_path / "synthetic-key-image.zip"
+    packet = write_key_image_archive(archive_path)
+
+    summary = key_image_archive_summary(archive_path)
+
+    assert summary == {
+        "valid": True,
+        "schema_version": "1.0.0",
+        "review_status": "unreviewed",
+        "artifact_type": "derived_display_key_image",
+        "measurement_count": 1,
+        "image_integrity": True,
+        "measurement_integrity": True,
+        "errors": [],
+    }
+    repository_root = Path(__file__).parents[3]
+    schema = json.loads(
+        (repository_root / "schemas" / "scanview-key-image-v1.schema.json").read_text()
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(packet)
+
+
+def test_key_image_archive_rejects_a_mismatched_image_digest(tmp_path: Path) -> None:
+    archive_path = tmp_path / "tampered-key-image.zip"
+    write_key_image_archive(archive_path, image_digest="0" * 64)
+
+    summary = key_image_archive_summary(archive_path)
+
+    assert summary["valid"] is False
+    assert summary["image_integrity"] is False
+    assert "digest or dimensions disagree" in " ".join(summary["errors"])
 
 
 def test_explicit_bidirectional_comparison_is_numeric_and_unreviewed() -> None:

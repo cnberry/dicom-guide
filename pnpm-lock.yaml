@@ -25,6 +25,9 @@ importers:
       events:
         specifier: 3.3.0
         version: 3.3.0
+      fflate:
+        specifier: 0.7.3
+        version: 0.7.3
       react:
         specifier: 19.1.1
         version: 19.1.1

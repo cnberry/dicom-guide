@@ -196,6 +196,13 @@ main { min-height: 100vh; }
 .viewport-heading > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .viewport-heading strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .native-badge { color: #9bb0aa; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; white-space: nowrap; }
+.viewport-heading .viewport-actions { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 6px; }
+.key-image-button { border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; color: #c7d6d2; background: #081512; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; cursor: pointer; }
+.key-image-button:hover:not(:disabled) { border-color: rgba(110, 231, 194, 0.42); color: var(--accent); }
+.key-image-button:disabled { cursor: default; opacity: 0.55; }
+.key-image-button.saved { color: var(--accent); border-color: rgba(110, 231, 194, 0.38); }
+.key-image-button.error { color: #ffb5ae; border-color: rgba(255, 141, 132, 0.42); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .dicom-viewport { height: min(52vw, 600px); min-height: 360px; position: relative; background: #020504; overflow: hidden; }
 .cornerstone-host { position: absolute; inset: 0; }
 .orientation-labels { position: absolute; inset: 0; z-index: 1; pointer-events: none; color: #dce8e4; font: 500 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-shadow: 0 1px 3px #000, 0 0 4px #000; }

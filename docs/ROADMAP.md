@@ -50,23 +50,35 @@
 4. Verified the full ROI export/validate/reopen path with a synthetic local DICOM
    stack and no external runtime request.
 
+## Completed in the fifth milestone
+
+1. Added per-viewport local key-image ZIP export with a watermarked PNG, exact
+   opaque source/presentation provenance, and a source-scoped v3 measurement packet.
+2. Added local SHA-256 cross-links plus strict agent validation of archive contents,
+   PNG structure/dimensions, measurement integrity, and exact source-instance match.
+3. Added a versioned JSON Schema for the key-image evidence contract using opaque
+   source IDs and no source paths or DICOM UIDs.
+4. Verified the production browser export and agent validation round-trip on a
+   synthetic native MR stack with an ROI, no browser errors, and no external calls.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
 2. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Add native key-image export using the existing evidence packet contract.
+3. Define the clinician-reviewed visit packet and sign-off workflow around the
+   source-traceable key-image archive.
 4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
    links around the self-contained Python wheel.
-5. Define the clinician-reviewed evidence packet and sign-off workflow.
+5. Add measurement-table editing, MPR, and a paired key-image review sheet.
 
 ## Next milestone
 
 1. Add Orthanc as an optional DICOMweb archive and pin/test its local configuration.
 2. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-3. Implement evidence packets: native key images, exact sequences/dates, compatibility
-   and QA badges, measurements, limitations, questions, and clinician sign-off.
+3. Extend key-image evidence into a clinician visit packet with exact sequences/dates,
+   compatibility and QA badges, measurements, limitations, questions, and sign-off.
 4. Add append-only audit records for access, comparison drafts, and review decisions.
 5. Package and smoke-test on macOS Apple Silicon and Linux x86_64.
 

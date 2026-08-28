@@ -22,7 +22,11 @@ Immutable copied DICOM
                          |                                      +--> measurement packet
                          |                                                   |
                          +--> static bundled UI                              +--> table / reopen
-                                                                             |
+                         |                                      |
+                         |                                      +--> key-image ZIP
+                         |                                           (PNG + provenance + measurements)
+                         |                                                   |
+                         +---------------------------------------------------+--> local agent validation
                                                                              +--> local numeric comparison
 
 Alternate local input: browser folder picker --> Cornerstone3D
@@ -50,9 +54,11 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    measurement IDs join directly to that manifest; legacy folder IDs remain accepted.
 5. **Derivatives:** future transforms, resampled images, masks, additional
    measurements, and reports go to a separate store with source references and
-   review status. Manual length/bidirectional/elliptical ROI drafts already use this contract as
-   versioned local JSON and never modify native instances. Agent comparisons accept
-   only explicit, distinct-series measurement selections and emit no response label.
+   review status. Manual length/bidirectional/elliptical ROI drafts use versioned
+   local JSON; key-image ZIPs bind a watermarked display PNG to its exact source and
+   visible measurements with local SHA-256 digests. Neither modifies native instances.
+   Agent comparisons accept only explicit, distinct-series measurement selections
+   and emit no response label.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

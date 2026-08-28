@@ -63,6 +63,31 @@ Service-backed measurement packets use the catalog's `series_*`, `instance_*`, a
 without filenames or DICOM UIDs. Validators also accept the earlier 16-hex local
 folder IDs for backward compatibility.
 
+## Key-image evidence archives
+
+Each viewport can save a source-traceable local ZIP with exactly three members:
+
+- `key-image.png`: the displayed native slice plus visible annotation overlay,
+  orientation labels, and a permanent unreviewed/derived/not-for-diagnosis footer;
+- `key-image.json`: exact opaque series/instance/frame references, modality/date,
+  stack location, display role, patient orientation, viewport dimensions, window,
+  invert, zoom, pan, implementation versions, limitations, and integrity digests;
+- `measurements.json`: a v3 packet containing only measurements on that displayed
+  source series and instance.
+
+The image and measurement JSON are SHA-256 cross-linked from `key-image.json`.
+Agents validate archive composition, size limits, PNG chunks/CRC/dimensions, both
+digests, the embedded measurement schema, tracking IDs, and exact source linkage:
+
+```bash
+scanview-agent validate-key-image '/safe/local/scanview-key-image.zip'
+```
+
+The validator returns only versions, review/artifact state, measurement count,
+integrity booleans, and errors; it does not print source identifiers or values. A
+valid archive remains sensitive, `unreviewed`, and a display derivative. The native
+DICOM is authoritative, and validation is not clinical approval.
+
 ## Numeric comparison drafts
 
 Agents can compute a deliberately limited measurement comparison locally:

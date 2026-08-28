@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .catalog import build_catalog
 from .comparison import suggest_pairs
+from .key_images import key_image_archive_summary
 from .measurements import build_measurement_comparison, measurement_packet_summary
 from .server import serve
 
@@ -75,6 +76,12 @@ def parser() -> argparse.ArgumentParser:
     )
     validate_measurements.add_argument("packet", type=Path)
 
+    validate_key_image = commands.add_parser(
+        "validate-key-image",
+        help="Validate a local ScanView key-image archive and its integrity links",
+    )
+    validate_key_image.add_argument("archive", type=Path)
+
     compare_measurements = commands.add_parser(
         "compare-measurements",
         help="Compare two explicitly selected manual measurements without assigning response",
@@ -126,6 +133,11 @@ def main() -> None:
     elif args.command == "validate-measurements":
         packet = json.loads(args.packet.read_text())
         summary = measurement_packet_summary(packet)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-key-image":
+        summary = key_image_archive_summary(args.archive)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

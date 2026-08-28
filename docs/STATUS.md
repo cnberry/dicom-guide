@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 10:58 PDT
+Last updated: 2026-08-28 11:15 PDT
 
 ## Data transfer
 
@@ -46,6 +46,10 @@ Last updated: 2026-08-28 10:58 PDT
   limitations, and review state.
 - Human-readable source evidence table implemented; imported values are rejected when
   they disagree with their geometry.
+- Each native viewport can export one local key-image ZIP with a watermarked PNG,
+  exact opaque source/presentation provenance, and only the v3 measurements visible
+  on that source instance. A privacy-minimized agent validator checks archive shape,
+  PNG structure/dimensions, SHA-256 cross-links, and source linkage.
 - Versioned measurement/comparison JSON Schemas, local validation, and explicit
   numeric-only agent comparison implemented. Same-series pairs, unknown units, and
   mismatched measurement types are refused; no response label is emitted.
@@ -65,10 +69,10 @@ Last updated: 2026-08-28 10:58 PDT
 
 ## Verification
 
-- Python agent tests: 14 passing, including v3 JSON Schema conformance and elliptical
-  ROI geometry/area comparison checks.
-- Viewer tests: 23 passing, including local-only endpoint enforcement, pairing safety,
-  physical-position mapping, and measurement provenance/import validation.
+- Python agent tests: 16 passing, including key-image archive integrity, v3 JSON
+  Schema conformance, and elliptical ROI geometry/area comparison checks.
+- Viewer tests: 25 passing, including local-only endpoint enforcement, pairing safety,
+  physical-position mapping, key-image cross-linking, and measurement validation.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
@@ -95,6 +99,12 @@ Last updated: 2026-08-28 10:58 PDT
   a locally valid v3 packet, and restored the overlay after a complete page reopen.
   The session requested only loopback UI/worker/instance resources; synthetic artifacts
   and the exported draft were moved to Trash.
+- Key-image browser smoke test: a synthetic native ROI exported as a 151 KB ZIP whose
+  1162×1296 PNG visibly retained the ellipse, patient-orientation labels, and permanent
+  unreviewed footer. The local agent verified both SHA-256 links, PNG structure and
+  dimensions, embedded v3 measurement, and exact source-instance linkage. The browser
+  reported no errors or non-loopback requests; all synthetic artifacts were moved to
+  Trash after inspection.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -107,8 +117,8 @@ Last updated: 2026-08-28 10:58 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- Measurement table editing, key-image export, and MPR remain. Elliptical ROI is a 2D
-  manual draft, not segmentation or volume measurement.
+- Measurement table editing, a clinician-reviewed visit packet, and MPR remain.
+  Elliptical ROI is a 2D manual draft, not segmentation or volume measurement.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

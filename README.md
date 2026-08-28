@@ -36,6 +36,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Human-readable measurement table plus versioned draft export/reopen with opaque
   series/instance references, patient-space geometry, tracking IDs, limitations,
   and `unreviewed` state.
+- Per-viewport local key-image export: one ZIP containing a watermarked PNG, exact
+  source/presentation provenance, and the visible source-scoped measurement packet.
 - Local agent comparison of explicitly selected, distinct-series measurements;
   numeric changes remain source-linked and never become a response verdict.
 - Transparent metadata compatibility score and warnings.
@@ -108,6 +110,7 @@ python3 -m venv .venv
 .venv/bin/scanview-agent serve '/path/to/copied/DICOM'
 .venv/bin/scanview-agent launch '/path/to/copied/DICOM'
 .venv/bin/scanview-agent validate-measurements '/path/to/scanview-measurements.json'
+.venv/bin/scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
 .venv/bin/scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
@@ -140,6 +143,26 @@ different source series. It refuses unknown physical units, mismatched tool type
 and geometry/result disagreements. Its output contains deltas, limitations, missing
 clinical context, and questions—not a treatment-response category. An ellipse is a
 2D area draft only; it is not tumor segmentation, volume, or a response verdict.
+
+## Save and validate a key image
+
+After a native image renders, choose **Save key image** in that viewport. ScanView
+creates one local ZIP containing `key-image.png`, `key-image.json`, and
+`measurements.json`. The PNG includes the visible overlays, R/L/A/P labels when
+available, and a permanent **unreviewed derived display key image—not for
+diagnosis** footer. The sidecars record the exact opaque source instance, stack
+position, display settings, implementation versions, limitations, and SHA-256
+digests that bind the image to its source-scoped measurement evidence.
+
+Validate an archive locally without printing identifiers or measurement values:
+
+```bash
+.venv/bin/scanview-agent validate-key-image '/safe/local/scanview-key-image.zip'
+```
+
+The ZIP is sensitive derived medical data, not a de-identified or diagnostic
+artifact. Keep the original DICOM as the authority and share the archive only with
+the same safeguards used for the scans.
 
 ## Preserve and verify removable media
 

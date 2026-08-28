@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RenderingEngine, Types } from '@cornerstonejs/core';
 import {
+  createMeasurementEvidencePacket,
   createStackViewport,
   restoreMeasurementEvidencePacket,
   type ViewerTool,
   type ViewportToolController,
 } from '../cornerstone';
 import { getPatientOrientationLabels, type DicomSeries } from '../dicom';
+import { exportKeyImageArchive, type KeyImagePresentation } from '../keyImages';
 import type { MeasurementEvidencePacket } from '../measurements';
 
 type Props = {
@@ -35,6 +37,10 @@ export function DicomViewport({
   const viewportRef = useRef<Types.IStackViewport | undefined>(undefined);
   const toolsRef = useRef<ViewportToolController | undefined>(undefined);
   const [status, setStatus] = useState('Choose a series');
+  const [keyImageState, setKeyImageState] = useState<'idle' | 'working' | 'saved' | 'error'>(
+    'idle',
+  );
+  const [keyImageError, setKeyImageError] = useState('');
 
   useEffect(() => {
     const element = elementRef.current;
@@ -48,6 +54,8 @@ export function DicomViewport({
     let ownedEngine: RenderingEngine | undefined;
     let ownedTools: ViewportToolController | undefined;
     setStatus('Loading pixels locally…');
+    setKeyImageState('idle');
+    setKeyImageError('');
     engineRef.current?.destroy();
 
     createStackViewport(
@@ -123,6 +131,61 @@ export function DicomViewport({
 
   const maxIndex = Math.max(0, (series?.instances.length ?? 1) - 1);
   const orientationLabels = getPatientOrientationLabels(series?.geometry.orientation);
+  const saveKeyImage = async () => {
+    const viewport = viewportRef.current;
+    const element = elementRef.current;
+    if (!viewport || !element || !series) return;
+    const actualIndex = viewport.getCurrentImageIdIndex();
+    const instance = series.instances[actualIndex];
+    if (!instance) return;
+    setKeyImageState('working');
+    setKeyImageError('');
+    try {
+      const properties = viewport.getProperties();
+      const presentation: KeyImagePresentation = {
+        invert: properties.invert,
+        zoom: viewport.getZoom(),
+        pan: viewport.getPan(),
+      };
+      if (
+        properties.voiRange &&
+        Number.isFinite(properties.voiRange.lower) &&
+        Number.isFinite(properties.voiRange.upper) &&
+        properties.voiRange.upper > properties.voiRange.lower
+      ) {
+        presentation.voi_range = {
+          lower: properties.voiRange.lower,
+          upper: properties.voiRange.upper,
+        };
+      }
+      await exportKeyImageArchive({
+        viewportCanvas: viewport.getCanvas(),
+        annotationSvg: element.querySelector<SVGSVGElement>('svg.svg-layer') ?? undefined,
+        orientationLabels,
+        viewportRole: id,
+        source: {
+          series_id: series.id,
+          instance_id: instance.instanceId,
+          frame_of_reference_id: series.frameOfReferenceId,
+          modality: series.modality,
+          acquisition_date: series.acquisitionDate,
+          series_description: series.description,
+          instance_number: instance.instanceNumber,
+        },
+        display: {
+          stack_position: actualIndex + 1,
+          stack_count: series.instances.length,
+          source_kind: series.sourceKind,
+          presentation,
+        },
+        measurementPacket: createMeasurementEvidencePacket(),
+      });
+      setKeyImageState(viewport.getCurrentImageIdIndex() === actualIndex ? 'saved' : 'idle');
+    } catch (error) {
+      setKeyImageError(error instanceof Error ? error.message : 'Key-image export failed.');
+      setKeyImageState('error');
+    }
+  };
 
   return (
     <section className="viewport-shell" aria-label={`${label} DICOM viewport`}>
@@ -131,11 +194,34 @@ export function DicomViewport({
           <span className="eyebrow">{label}</span>
           <strong>{series?.description ?? 'No series selected'}</strong>
         </div>
-        <span className="native-badge">
-          {series
-            ? `Native source · ${series.sourceKind === 'loopback-service' ? 'local service' : 'folder'}`
-            : 'Native source'}
-        </span>
+        <div className="viewport-actions">
+          <span className="native-badge">
+            {series
+              ? `Native source · ${series.sourceKind === 'loopback-service' ? 'local service' : 'folder'}`
+              : 'Native source'}
+          </span>
+          <button
+            className={`key-image-button ${keyImageState}`}
+            disabled={!series || keyImageState === 'working' || Boolean(status)}
+            title={keyImageError || 'Save a local ZIP with PNG, provenance, and measurements'}
+            onClick={() => void saveKeyImage()}
+          >
+            {keyImageState === 'working'
+              ? 'Saving…'
+              : keyImageState === 'saved'
+                ? 'Saved key image'
+                : keyImageState === 'error'
+                  ? 'Export failed'
+                  : 'Save key image'}
+          </button>
+          <span className="sr-only" aria-live="polite">
+            {keyImageState === 'saved'
+              ? 'Local key-image archive saved.'
+              : keyImageState === 'error'
+                ? keyImageError
+                : ''}
+          </span>
+        </div>
       </div>
       <div
         className="dicom-viewport"
