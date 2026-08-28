@@ -106,6 +106,19 @@
 5. Verified a 62-slice copied JPEG 2000 MR series through the bundled OpenJPEG codec
    without retaining a patient screenshot or creating a derivative file.
 
+## Completed in the ninth milestone
+
+1. Added physically linked crosshairs that move one DICOM patient-space point across
+   the axial, coronal, and sagittal planes of a single local source volume.
+2. Added an accessible live LPS coordinate display with explicit axis semantics for
+   people and browser-operating agents.
+3. Used Cornerstone minimal mode to suppress oblique rotation and slab-thickness
+   controls while retaining point jumps, line translation, and canonical planes.
+4. Verified point movement, tool switching, reset, cleanup, reopen, three-plane SVG
+   rendering, and loopback-only requests with a synthetic 24-slice volume.
+5. Repeated movement and reset against a copied 62-slice JPEG 2000 MR series through
+   bundled OpenJPEG without retaining or displaying a patient screenshot.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
@@ -116,7 +129,8 @@
    around the implemented unreviewed visit packet.
 4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
    links around the self-contained Python wheel.
-5. Add measurement-table editing and physically linked MPR crosshairs.
+5. Add safe measurement-table editing for labels, deletion, and explicit lesion
+   pairing without changing immutable geometry or source provenance.
 
 ## Next milestone
 

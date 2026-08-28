@@ -6,6 +6,7 @@ import {
   type MprViewportController,
 } from '../cornerstone';
 import { assessMprEligibility, formatDicomDate, type DicomSeries } from '../dicom';
+import { formatMprPatientPoint, type MprPatientPoint } from '../mpr';
 
 type Props = {
   series: DicomSeries;
@@ -23,7 +24,8 @@ export function MprPanel({ series, onClose }: Props) {
   const coronalRef = useRef<HTMLDivElement>(null);
   const sagittalRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<MprViewportController | undefined>(undefined);
-  const [activeTool, setActiveTool] = useState<MprTool>('window');
+  const [activeTool, setActiveTool] = useState<MprTool>('crosshairs');
+  const [patientPoint, setPatientPoint] = useState<MprPatientPoint>();
   const [status, setStatus] = useState('Building local volume from source slices…');
   const eligibility = assessMprEligibility(series);
 
@@ -38,12 +40,14 @@ export function MprPanel({ series, onClose }: Props) {
     const elements: Record<MprOrientation, HTMLDivElement> = { axial, coronal, sagittal };
     let cancelled = false;
     let ownedController: MprViewportController | undefined;
+    let unsubscribePatientPoint: (() => void) | undefined;
+    setPatientPoint(undefined);
     setStatus('Building local volume from source slices…');
     void createMprViewports(
       `scanview-mpr-${series.id}-${crypto.randomUUID()}`,
       elements,
       series,
-      'window',
+      'crosshairs',
     )
       .then((controller) => {
         ownedController = controller;
@@ -52,6 +56,7 @@ export function MprPanel({ series, onClose }: Props) {
           return;
         }
         controllerRef.current = controller;
+        unsubscribePatientPoint = controller.subscribeToPatientPoint(setPatientPoint);
         setStatus('');
       })
       .catch((error: unknown) => {
@@ -62,6 +67,7 @@ export function MprPanel({ series, onClose }: Props) {
     return () => {
       cancelled = true;
       observer.disconnect();
+      unsubscribePatientPoint?.();
       ownedController?.destroy();
       if (controllerRef.current === ownedController) controllerRef.current = undefined;
     };
@@ -86,6 +92,7 @@ export function MprPanel({ series, onClose }: Props) {
         <div className="mpr-actions">
           {(
             [
+              ['crosshairs', 'Linked crosshairs'],
               ['window', 'Window / level'],
               ['pan', 'Pan'],
               ['zoom', 'Zoom'],
@@ -111,12 +118,26 @@ export function MprPanel({ series, onClose }: Props) {
         DERIVED INTERPOLATED RESLICES · NOT REGISTERED · NOT FOR DIAGNOSIS · ORIGINAL DICOM
         REMAINS AUTHORITATIVE
       </div>
+      <div className="mpr-link-note">
+        <strong>One patient-space point, three planes.</strong> With Linked crosshairs selected,
+        click or drag in any pane to move the same DICOM patient-coordinate location in all three.
+        The tool does not align different scans.
+        {patientPoint && (
+          <output aria-label="Current DICOM patient coordinate">
+            {' '}Current LPS point: {formatMprPatientPoint(patientPoint)}
+            {' '}· +X left, +Y posterior, +Z head
+          </output>
+        )}
+      </div>
       <div className="mpr-grid">
         {orientationLabels.map(({ id, label }) => (
           <article className="mpr-viewport-card" key={id}>
             <header>
               <strong>{label}</strong>
-              <span>Patient-axis reslice · wheel to navigate</span>
+              <span>
+                Patient-axis reslice ·{' '}
+                {activeTool === 'crosshairs' ? 'click to link' : 'wheel to navigate'}
+              </span>
             </header>
             <div
               ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}

@@ -29,7 +29,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Extension-independent DICOM Part 10 parsing.
 - MRI/CT stack rendering through Cornerstone3D's maintained codecs.
 - Geometry-gated, single-series axial/coronal/sagittal MPR built locally from native
-  source slices, with window/level, pan, zoom, wheel navigation, and reset.
+  source slices, with physically linked patient-space crosshairs, visible LPS
+  coordinates, window/level, pan, zoom, wheel navigation, and reset.
 - Window/level, pan, zoom, reset, DICOM patient-orientation labels, and manual
   length/bidirectional/elliptical ROI measurement tools.
 - Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
@@ -190,8 +191,16 @@ slice spacing. Axial, coronal, and sagittal patient-axis views are reconstructed
 memory with the bundled Cornerstone volume renderer; wheel navigation and display
 controls remain local.
 
+**Linked crosshairs** is the default MPR tool. Click or drag in any plane to move one
+shared DICOM patient-space point through all three views. The current LPS coordinate
+is displayed in millimetres (`+X` left, `+Y` posterior, `+Z` head). Minimal mode
+keeps the planes canonical: oblique rotation and slab-thickness controls are not
+exposed.
+
 MPR planes are interpolated display derivatives. They are not registration,
 segmentation, tumor response, or diagnosis, and original DICOM remains authoritative.
+The shared point links only the three planes reconstructed from that one source series;
+it does not align baseline and follow-up exams.
 Evidence export stays on the native source panes until derived-image provenance is
 implemented.
 

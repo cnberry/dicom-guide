@@ -62,7 +62,10 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    registry before the new imaging session begins.
    Single-series MPR additionally requires complete, regular patient-space geometry;
    its interpolated orthographic planes remain navigation-only derivatives and do
-   not enter native key-image evidence.
+   not enter native key-image evidence. A Cornerstone crosshair controller moves one
+   shared LPS point across those three planes. Minimal mode suppresses oblique rotation
+   and slab controls, and the coordinate is neither persisted nor used to imply
+   cross-exam registration.
 4. **Local API:** binds to loopback only, uses an ephemeral bearer token for agents
    and an HttpOnly same-origin session for the browser, returns only opaque IDs and
    an allowlisted metadata contract, and has no source write/delete API. The single

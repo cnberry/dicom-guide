@@ -102,6 +102,9 @@ DICOM is authoritative, and validation is not clinical approval.
 The human viewer's MPR planes are local navigation-only derivatives and are not part
 of the key-image or agent evidence contract. Agents should continue to reference
 native source instances until a versioned derived-image provenance contract exists.
+The live MPR panel exposes its current LPS patient coordinate in accessible UI text so
+an agent can help a person navigate, but that transient point is not saved, compared,
+or promoted to an observation.
 
 ## Clinician visit-packet archives
 

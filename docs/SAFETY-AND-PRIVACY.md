@@ -65,6 +65,9 @@ are established.
 - MPR reslices interpolate a single source volume. Missing or irregular geometry
   disables MPR, and a valid render still does not make the reslice a native image,
   registration result, segmentation, diagnosis, or response assessment.
+- MPR crosshairs link one patient-space point only within that source volume. The
+  visible LPS coordinate is a navigation aid, not a lesion finding or a transform
+  between exams; oblique rotation and slab-thickness controls remain withheld.
 - Deformable registration and propagated masks are research-only until validated.
 - Pseudoprogression, treatment effect, steroid change, and clinical status cannot be
   resolved from a simple size difference.

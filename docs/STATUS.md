@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 12:18 PDT
+Last updated: 2026-08-28 12:35 PDT
 
 ## Data transfer
 
@@ -42,6 +42,9 @@ Last updated: 2026-08-28 12:18 PDT
 - Geometry-gated single-series MPR implemented with local axial, coronal, and
   sagittal orthographic volume views, wheel navigation, window/level, pan, zoom,
   reset, cache cleanup, and permanent derived/interpolated safety labeling.
+- MPR planes now share one physically linked DICOM patient-space crosshair and an
+  accessible live LPS coordinate. Minimal interaction mode keeps the planes canonical
+  by withholding oblique rotation and slab-thickness controls.
 - Validated DICOM patient-orientation labels implemented; labels are withheld rather
   than guessed when Image Orientation (Patient) is missing or malformed.
 - Follow-up auto-selection removed; same-exam pairings are explicitly incompatible
@@ -91,7 +94,7 @@ Last updated: 2026-08-28 12:18 PDT
 - Python agent tests: 29 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, and ROI comparison checks.
-- Viewer tests: 32 passing, including patient-context and local-only enforcement,
+- Viewer tests: 35 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, and complete/regular MPR geometry gating.
@@ -153,6 +156,13 @@ Last updated: 2026-08-28 12:18 PDT
   three stable planes through only the bundled OpenJPEG WebAssembly decoder and
   opaque loopback instance routes. No copied-study screenshot or derivative was
   retained; the synthetic source was moved to Trash.
+- Linked-crosshair production smoke test: the same synthetic volume visibly showed
+  colored crosshairs in all three planes; axial and coronal clicks changed one shared
+  accessible LPS point, reset returned to the exact volume center, and close/reopen
+  rebuilt without failure. A copied 62-slice JPEG 2000 MR then exposed 12 SVG lines
+  and 3 center markers; point movement and reset succeeded through bundled OpenJPEG
+  and only opaque loopback routes. No copied-study screenshot or derivative was
+  created or retained; the synthetic source was moved to recoverable Trash.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -165,8 +175,8 @@ Last updated: 2026-08-28 12:18 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- Measurement table editing, clinician sign-off state, and physically linked MPR
-  crosshairs remain. Elliptical ROI is a 2D manual draft, not segmentation or volume measurement.
+- Measurement table editing and clinician sign-off state remain. Elliptical ROI is a
+  2D manual draft, not segmentation or volume measurement.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

@@ -14,6 +14,7 @@ import {
 } from '@cornerstonejs/dicom-image-loader';
 import {
   BidirectionalTool,
+  CrosshairsTool,
   EllipticalROITool,
   Enums as ToolEnums,
   LengthTool,
@@ -33,6 +34,7 @@ import {
   type MeasurementEvidencePacket,
   type RawMeasurementAnnotation,
 } from './measurements';
+import { mprCrosshairConfiguration, type MprPatientPoint } from './mpr';
 
 let initialization: Promise<void> | undefined;
 const imageReferences = new Map<string, ImageSourceReference>();
@@ -54,10 +56,11 @@ export type ViewportToolController = {
   destroy: () => void;
 };
 
-export type MprTool = 'window' | 'pan' | 'zoom';
+export type MprTool = 'crosshairs' | 'window' | 'pan' | 'zoom';
 export type MprOrientation = 'axial' | 'coronal' | 'sagittal';
 export type MprViewportController = {
   setPrimaryTool: (tool: MprTool) => void;
+  subscribeToPatientPoint: (listener: (point: MprPatientPoint) => void) => () => void;
   reset: () => void;
   resize: () => void;
   destroy: () => void;
@@ -73,6 +76,7 @@ export const initializeCornerstone = (): Promise<void> => {
       initTools();
       Object.values(toolClasses).forEach((toolClass) => addTool(toolClass));
       addTool(StackScrollTool);
+      addTool(CrosshairsTool);
     })();
   }
   return initialization;
@@ -309,11 +313,13 @@ export const createMprViewports = async (
     [WindowLevelTool, PanTool, ZoomTool, StackScrollTool].forEach((toolClass) =>
       toolGroup.addTool(toolClass.toolName),
     );
+    toolGroup.addTool(CrosshairsTool.toolName, mprCrosshairConfiguration);
     viewportIds.forEach((viewportId) => toolGroup.addViewport(viewportId, engineId));
     toolGroup.setToolActive(StackScrollTool.toolName, {
       bindings: [{ mouseButton: ToolEnums.MouseBindings.Wheel }],
     });
     const mprToolClasses = {
+      crosshairs: CrosshairsTool,
       window: WindowLevelTool,
       pan: PanTool,
       zoom: ZoomTool,
@@ -330,18 +336,38 @@ export const createMprViewports = async (
     const viewports = viewportIds.map(
       (viewportId) => engine.getViewport(viewportId) as Types.IVolumeViewport,
     );
+    const crosshairs = toolGroup.getToolInstance(CrosshairsTool.toolName) as CrosshairsTool;
     viewports.forEach((viewport) => {
       viewport.resetCamera();
       viewport.render();
     });
     return {
       setPrimaryTool,
+      subscribeToPatientPoint: (listener) => {
+        const emitCurrentPoint = () => {
+          const point = crosshairs.toolCenter;
+          if (point?.length === 3 && point.every(Number.isFinite)) {
+            listener([point[0], point[1], point[2]]);
+          }
+        };
+        const onCenterChanged = (event: Event) => {
+          const detail = (event as CustomEvent<{ toolGroupId?: string }>).detail;
+          if (detail?.toolGroupId === toolGroupId) emitCurrentPoint();
+        };
+        eventTarget.addEventListener(ToolEnums.Events.CROSSHAIR_TOOL_CENTER_CHANGED, onCenterChanged);
+        emitCurrentPoint();
+        return () =>
+          eventTarget.removeEventListener(
+            ToolEnums.Events.CROSSHAIR_TOOL_CENTER_CHANGED,
+            onCenterChanged,
+          );
+      },
       reset: () => {
         viewports.forEach((viewport) => {
           viewport.resetProperties();
-          viewport.resetCamera();
-          viewport.render();
         });
+        crosshairs.resetCrosshairs();
+        viewports.forEach((viewport) => viewport.render());
       },
       resize: () => engine.resize(true, false),
       destroy: () => {
