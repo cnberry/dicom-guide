@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 13:56 PDT
+Last updated: 2026-08-28 14:19 PDT
 
 ## Data transfer
 
@@ -79,6 +79,12 @@ Last updated: 2026-08-28 13:56 PDT
   manifest series/instances. The CLI and launcher validate catalog membership; the
   browser applies all targets or none, clears the fragment immediately, and visibly
   states that pairing remains unreviewed. URL fragments never reach the local server.
+- People can now explicitly opt in to a memory-only local viewer-state bridge for
+  bearer-authorized agents. It publishes only exact opaque pane positions, tool/link
+  state, optional MPR series, and evidence counts; catalog validation, 30-second
+  expiry, visible opt-out, publisher revocation, `no-store`, and default-off behavior
+  are enforced. It contains no pixels, descriptions, dates, measurement content,
+  paths, or direct identifiers.
 - Review and amendment commands always create a new owner-only archive. Event hashes
   bind the actor, checklist, note, source comparison, prior event, and parent archive;
   an amended comparison is rejoined to the visual evidence and reset to `unreviewed`.
@@ -97,9 +103,10 @@ Last updated: 2026-08-28 13:56 PDT
   authenticated exact-origin loopback POST invokes the same Python assembler, and
   the validated ZIP is returned with `no-store` without a server-side patient file.
 - Versioned measurement, key-image, numeric-comparison, visit-packet,
-  comparison-review, and navigation-intent JSON Schemas plus local validation are
-  implemented. Same-series pairs, unknown units, mismatched measurement types, and
-  mismatched visual/numeric evidence are refused; no response label is emitted.
+  comparison-review, navigation-intent, and viewer-state JSON Schemas plus local
+  validation are implemented. Same-series pairs, unknown units, mismatched
+  measurement types, and mismatched visual/numeric evidence are refused; no response
+  label is emitted.
 - Unified `scanview-agent launch` path implemented: one loopback process serves the
   bundled UI, manifest, pairing candidates, and protected native DICOM instances.
 - The staged release builder embeds the viewer, workers, and local codecs into a
@@ -116,24 +123,28 @@ Last updated: 2026-08-28 13:56 PDT
 
 ## Verification
 
-- Python agent tests: 42 passing, including cross-patient and legacy-context
+- Python agent tests: 45 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
   same-origin HTTP enforcement, local navigation membership/base-origin refusal,
-  owner-only intent output, and static presentation integrity.
-- Viewer tests: 46 passing, including patient-context and local-only enforcement,
+  owner-only intent output, exact viewer-state catalog validation, same-origin/auth
+  enforcement, expiry/revocation, and static presentation integrity.
+- Viewer tests: 50 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, exact three-file comparison-review transport and source-slice
   lookup, strict one-use navigation parsing and atomic source resolution, and
-  complete/regular MPR geometry gating.
+  complete/regular MPR geometry gating, privacy-minimized viewer-state construction,
+  source refusal, link-state labeling, and same-origin publication/clear transport.
+- All 11 JSON Schemas pass Draft 2020-12 validation.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- Self-contained staged Python wheel build: passing; the 2.7 MB wheel contains the viewer
-  entry point plus all 11 built UI/worker/codec files (9.7 MB uncompressed), and an
-  isolated installation resolves its embedded UI without the source checkout.
+- Self-contained staged Python wheel build: passing; the 2.8 MB wheel contains the
+  viewer-state server module plus the viewer entry point and all 11 built
+  UI/worker/codec files (9.7 MB uncompressed). A prior isolated installation resolved
+  its embedded UI without the source checkout.
 - Synthetic browser smoke test: two canvases render; all five viewer controls activate.
 - Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
   1162×1200 canvases; the full folder produces 57 pixel series; local server logs show
@@ -226,6 +237,14 @@ Last updated: 2026-08-28 13:56 PDT
   Server logs contained only `/`, bundled assets, the manifest,
   and opaque instance routes—never the fragment or navigation IDs. Temporary intent
   and manifest files were moved to recoverable Trash.
+- Opt-in viewer-state production smoke test: the synthetic unified workspace returned
+  `not_shared` before consent, visibly enabled sharing, and exposed exact opaque
+  baseline/follow-up positions plus `zoom` and `patient_position` after UI changes.
+  The response contained fixed no-pixels/no-direct-identifiers/no-persistence flags
+  and no descriptions, dates, measurement values, geometry, or paths. Opt-out
+  immediately returned to `not_shared`; browser diagnostics had no errors, and server
+  logs contained only loopback assets, opaque instance routes, and payload-free
+  viewer-state request lines.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -242,9 +261,8 @@ Last updated: 2026-08-28 13:56 PDT
   record sign-off remain. The current review chain is self-attested and explicitly
   unverified. Elliptical ROI is a 2D manual draft, not segmentation or volume
   measurement.
-- There is not yet an explicit opt-in read-only bridge for an agent to inspect the
-  viewer's current in-memory pane/tool state; exact startup and live navigation are
-  implemented.
+- Bearer reads of live viewer state do not yet have an append-only access audit.
+  Any future audit must exclude tokens, payloads, and patient content.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

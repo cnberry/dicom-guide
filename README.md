@@ -59,12 +59,17 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Versioned agent-to-viewer navigation opens exact opaque baseline/follow-up source
   instances through a one-use URL fragment. Targets are checked against the local
   catalog, the fragment is removed immediately, and pairing remains unreviewed.
+- Explicit opt-in viewer-state sharing lets a bearer-authorized local agent read the
+  current opaque series/instance positions, active tool, link mode, MPR series, and
+  evidence counts. It is off by default, memory-only, pixel/PHI-free, and expires
+  within 30 seconds without a browser heartbeat.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
-- Versioned measurement, key-image, comparison, visit-packet, review-record, and
-  navigation-intent JSON Schemas; committed tests use synthetic data only.
+- Versioned measurement, key-image, comparison, visit-packet, review-record,
+  navigation-intent, and viewer-state JSON Schemas; committed tests use synthetic
+  data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
 ## Launch the unified local workspace
@@ -152,19 +157,23 @@ The server exposes:
 
 - `GET /v1/health` (no token required)
 - `GET /v1/manifest`
+- `GET /v1/viewer-state` (opt-in, expiring browser session state)
 - `GET /v1/comparison-candidates`
 - `GET /v1/instances/{opaque_id}`
+- `POST /v1/viewer-state` (same-origin browser publication/clear; memory only)
 - `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
 - `POST /v1/comparison-reviews` (same-origin browser session; in-memory derivative only)
 
 All endpoints except health require the bearer token printed at startup. The unified
 browser uses a same-origin HttpOnly session cookie instead of exposing that token to
-application JavaScript. Both POSTs additionally require the exact local origin and a
-bounded, exact-member transport ZIP. Visit-packet input contains only the two derived
-key-image archives. Comparison-review input contains those same two archives plus the
-current normalized comparison JSON; the server builds the nested visit packet and
-review archive entirely in memory. Each route returns a validated ZIP with `no-store`
-and creates no server-side file. There is no source mutation or deletion endpoint.
+application JavaScript. All POSTs additionally require the exact local origin and
+bounded route-specific content. The viewer-state route accepts at most 16 KiB of
+strict JSON and keeps only the latest 30-second publication in memory. Visit-packet
+input contains only the two derived key-image archives. Comparison-review input
+contains those same two archives plus the current normalized comparison JSON; the
+server builds the nested visit packet and review archive entirely in memory. Every
+route returns `no-store` and creates no server-side file. There is no source mutation
+or deletion endpoint.
 The server refuses non-loopback bind addresses. This loopback interface is part of
 the offline local application, not an external processing API.
 
@@ -192,6 +201,29 @@ targets or none, and removes the fragment with `history.replaceState`. URL fragm
 are never sent to the HTTP server. Opaque IDs remain sensitive and potentially
 linkable; this navigation is not pair approval, registration, review, or a medical
 conclusion.
+
+## Share the current view with a local agent
+
+In the unified workspace, choose **Agent state: off** to opt in. The button visibly
+changes to **Agent state: on**. A bearer-authorized local agent can then read the
+short-lived state:
+
+```bash
+curl --fail --silent \
+  -H 'Authorization: Bearer <token printed by the launcher>' \
+  http://127.0.0.1:8765/v1/viewer-state
+```
+
+Do not put the bearer token in shared scripts, shell history, screenshots, or logs.
+The response conforms to `schemas/scanview-viewer-state-v1.schema.json`. It contains
+opaque local series/instance IDs and stack positions, tool/link state, an optional
+opaque MPR series ID, measurement count, and whether a comparison draft exists. It
+never contains pixels, descriptions, dates, measurement values/geometry/labels,
+paths, or direct patient identifiers. Every posted field is checked against the
+local manifest. Turning sharing off clears and revokes that tab's ephemeral publisher;
+closing the page also clears it, and missed cleanup still expires within 30 seconds.
+This state is navigation context, not an imaging observation, pairing decision,
+clinical review, or medical conclusion.
 
 ## Save and reopen a measurement draft
 

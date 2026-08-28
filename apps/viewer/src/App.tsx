@@ -36,6 +36,13 @@ import {
   type NavigationParseResult,
 } from './navigationIntent';
 import { saveVisitPacket as saveLocalVisitPacket } from './visitPacketService';
+import {
+  buildViewerStatePublication,
+  clearViewerState,
+  createViewerStatePublisherId,
+  publishViewerState,
+  VIEWER_STATE_HEARTBEAT_MS,
+} from './viewerStateService';
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
@@ -75,6 +82,10 @@ export default function App() {
   const followupViewportRef = useRef<DicomViewportHandle>(null);
   const sourceGenerationRef = useRef(0);
   const sourceSummaryRef = useRef('No scan folder loaded');
+  const [agentPublisherId, setAgentPublisherId] = useState(createViewerStatePublisherId);
+  const agentPublisherIdRef = useRef(agentPublisherId);
+  const agentStateSharingRef = useRef(false);
+  const agentPublishQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [series, setSeries] = useState<DicomSeries[]>([]);
   const [baselineId, setBaselineId] = useState<string>();
   const [followupId, setFollowupId] = useState<string>();
@@ -104,6 +115,10 @@ export default function App() {
   const [comparisonReviewState, setComparisonReviewState] = useState<ExportState>('idle');
   const [comparisonReviewMessage, setComparisonReviewMessage] = useState(
     'Build an explicit numeric preview to enable one-click local review export.',
+  );
+  const [agentStateSharing, setAgentStateSharing] = useState(false);
+  const [agentStateMessage, setAgentStateMessage] = useState(
+    'Agent viewer state is off by default. Enable it to share only expiring opaque positions locally.',
   );
 
   const baseline = series.find((item) => item.id === baselineId);
@@ -136,6 +151,35 @@ export default function App() {
   );
   const evidenceExportWorking =
     visitPacketState === 'working' || comparisonReviewState === 'working';
+  const viewerStatePublication = useMemo(
+    () =>
+      buildViewerStatePublication({
+        publisherId: agentPublisherId,
+        activeTool,
+        synchronized,
+        linkStrategy,
+        baseline,
+        baselineIndex,
+        followup,
+        followupIndex,
+        mprSeries,
+        measurementCount: visibleMeasurements.length,
+        comparisonDraftPresent: Boolean(measurementComparisonDraft),
+      }),
+    [
+      activeTool,
+      agentPublisherId,
+      baseline,
+      baselineIndex,
+      followup,
+      followupIndex,
+      linkStrategy,
+      measurementComparisonDraft,
+      mprSeries,
+      synchronized,
+      visibleMeasurements.length,
+    ],
+  );
 
   useEffect(() => {
     setVisitPacketState('idle');
@@ -182,6 +226,79 @@ export default function App() {
       setFollowupIndex(comparisonSourceIndexes.followup);
     }
   }, [comparisonSourceIndexes]);
+
+  useEffect(() => {
+    agentStateSharingRef.current = agentStateSharing;
+  }, [agentStateSharing]);
+
+  useEffect(() => {
+    agentPublisherIdRef.current = agentPublisherId;
+  }, [agentPublisherId]);
+
+  useEffect(() => {
+    if (!agentStateSharing) return;
+    if (!viewerStatePublication) {
+      agentStateSharingRef.current = false;
+      setAgentStateSharing(false);
+      setAgentStateMessage(
+        'Agent viewer state stopped: it is available only through the authenticated local launcher.',
+      );
+      const revokedPublisherId = agentPublisherId;
+      setAgentPublisherId(createViewerStatePublisherId());
+      void clearViewerState(revokedPublisherId).catch(() => undefined);
+      return;
+    }
+    let active = true;
+    const send = async () => {
+      let published = false;
+      try {
+        const queued = agentPublishQueueRef.current
+          .catch(() => undefined)
+          .then(async () => {
+            if (
+              !agentStateSharingRef.current ||
+              agentPublisherIdRef.current !== viewerStatePublication.publisher_id
+            ) {
+              return;
+            }
+            await publishViewerState(viewerStatePublication);
+            published = true;
+          });
+        agentPublishQueueRef.current = queued.catch(() => undefined);
+        await queued;
+        if (active && published) {
+          setAgentStateMessage(
+            'Sharing opaque viewer state with bearer-authorized local agents · memory-only · expires within 30 seconds.',
+          );
+        }
+      } catch (error) {
+        if (active) {
+          setAgentStateMessage(
+            `${error instanceof Error ? error.message : 'Local viewer-state update failed.'} Any previous state expires automatically.`,
+          );
+        }
+      }
+    };
+    const initial = window.setTimeout(() => void send(), 100);
+    const heartbeat = window.setInterval(() => void send(), VIEWER_STATE_HEARTBEAT_MS);
+    return () => {
+      active = false;
+      window.clearTimeout(initial);
+      window.clearInterval(heartbeat);
+    };
+  }, [agentPublisherId, agentStateSharing, viewerStatePublication]);
+
+  useEffect(() => {
+    const clearPublishedState = () => {
+      if (!agentStateSharingRef.current) return;
+      void clearViewerState(agentPublisherIdRef.current, true).catch(() => undefined);
+    };
+    window.addEventListener('pagehide', clearPublishedState);
+    return () => {
+      window.removeEventListener('pagehide', clearPublishedState);
+      clearPublishedState();
+    };
+  }, []);
 
   useEffect(
     () =>
@@ -317,6 +434,33 @@ export default function App() {
         setBaselineIndex(mapLinkedIndex(next, followup, baseline).index);
       }
     }
+  };
+
+  const toggleAgentStateSharing = () => {
+    if (agentStateSharing) {
+      const revokedPublisherId = agentPublisherId;
+      agentStateSharingRef.current = false;
+      setAgentStateSharing(false);
+      setAgentPublisherId(createViewerStatePublisherId());
+      setAgentStateMessage(
+        'Agent viewer state is off. The memory-only publication has been cleared locally.',
+      );
+      void clearViewerState(revokedPublisherId).catch((error) => {
+        setAgentStateMessage(
+          `${error instanceof Error ? error.message : 'Local viewer-state cleanup failed.'} Any state still expires within 30 seconds.`,
+        );
+      });
+      return;
+    }
+    if (!viewerStatePublication) {
+      setAgentStateMessage(
+        'Agent viewer state requires scans opened through the authenticated local launcher.',
+      );
+      return;
+    }
+    agentStateSharingRef.current = true;
+    setAgentStateSharing(true);
+    setAgentStateMessage('Starting the memory-only local viewer-state bridge…');
   };
 
   const exportMeasurementDraft = () => {
@@ -638,6 +782,19 @@ export default function App() {
                 Paste measurement JSON
               </button>
               <button
+                className={agentStateSharing ? 'active' : ''}
+                aria-pressed={agentStateSharing}
+                disabled={!viewerStatePublication}
+                title={
+                  viewerStatePublication
+                    ? 'Opt in to an expiring, privacy-minimized state for bearer-authorized local agents'
+                    : 'Available only through the authenticated local launcher'
+                }
+                onClick={toggleAgentStateSharing}
+              >
+                Agent state: {agentStateSharing ? 'on' : 'off'}
+              </button>
+              <button
                 className={`visit-packet-button ${visitPacketState}`}
                 disabled={!visitPacketReady || evidenceExportWorking}
                 title={
@@ -696,7 +853,8 @@ export default function App() {
                   : 'index linking is approximate'}<br />
               {measurementMessage}<br />
               {visitPacketMessage}<br />
-              {comparisonReviewMessage}
+              {comparisonReviewMessage}<br />
+              {agentStateMessage}
             </p>
           </section>
 

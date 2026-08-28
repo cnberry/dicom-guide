@@ -254,6 +254,51 @@ approve compatibility, prove chronology or same-lesion identity, accept registra
 hydrate measurements, or generate a conclusion. Existing compatibility and evidence
 export gates run normally after navigation.
 
+## Opt-in live viewer state
+
+An agent can inspect what the unified viewer is currently showing without scraping
+the UI. The person must first choose **Agent state: off** so it becomes **Agent state:
+on**. Sharing is otherwise absent—not merely empty.
+
+```bash
+curl --fail --silent \
+  -H 'Authorization: Bearer <token printed by scanview-agent>' \
+  http://127.0.0.1:8765/v1/viewer-state
+```
+
+Keep that token out of shared scripts, shell history, screenshots, and logs. The v1
+response is defined by `schemas/scanview-viewer-state-v1.schema.json`. When available,
+`state` contains exactly:
+
+- opaque baseline and optional follow-up series/instance IDs with exact one-based
+  stack position/count;
+- active tool and explicit `unpaired`, `independent`, `patient_position`, or
+  `approximate_index` slice-link state;
+- an optional opaque MPR series ID;
+- measurement count and whether an in-memory comparison draft is present;
+- `unreviewed` status and fixed local-only/no-pixels/no-direct-identifiers/no-persistence
+  declarations.
+
+It excludes pixels, rendered images, descriptions, dates, modality/anatomy labels,
+measurement values/labels/geometry, LPS coordinates, source paths, DICOM UIDs, and
+direct identifiers. Resolve opaque IDs through the separately authorized manifest
+only when the task requires it; do not print sensitive catalog metadata by default.
+Every position/count/reference is independently checked against the current local
+manifest before publication becomes visible.
+
+The browser heartbeats every 10 seconds. The server keeps one latest state only in
+memory and returns its receipt time, age, and remaining lifetime with `no-store`.
+It becomes unavailable after 30 seconds without a heartbeat. Opt-out clears the state
+and revokes the tab's ephemeral publisher ID, so an older in-flight heartbeat cannot
+restore it; a later opt-in uses a new ID. Page close also attempts immediate cleanup.
+Multiple tabs are last-valid-publication-wins, and a tab can clear only its own current
+publication.
+
+This endpoint reports transient UI/navigation context. It is not a source-image
+observation, pairing approval, registration result, measurement validation, clinical
+review, diagnosis, or response conclusion. Agents needing evidentiary output must use
+the source-linked measurement/key-image/review contracts.
+
 ## Source-read-only HTTP surface
 
 Start the local service:
@@ -273,17 +318,21 @@ It binds only to `127.0.0.1`, prints a random bearer token, and exposes:
 ```text
 GET /v1/health
 GET /v1/manifest
+GET /v1/viewer-state
 GET /v1/comparison-candidates
 GET /v1/instances/{opaque_id}
+POST /v1/viewer-state
 POST /v1/visit-packets
 POST /v1/comparison-reviews
 ```
 
-There is no source write, overwrite, or delete endpoint. Both POSTs are stateless
-derivative responses: they require the private browser session, exact loopback
-Origin, route-specific media type, declared bounded length, and an exact ZIP member
-allowlist. Visit input contains `baseline.zip` and `followup.zip`; review input adds
-only `comparison.json`. Both return `application/zip` with `no-store`. Non-health
+There is no source write, overwrite, or delete endpoint. The viewer-state POST is a
+memory-only session publication/clear route: exact loopback Origin, private browser
+session, exact media type, 16 KiB limit, strict fields, catalog validation, publisher
+revocation, and a 30-second TTL apply. The other two POSTs are stateless derivative
+responses with exact ZIP allowlists. Visit input contains `baseline.zip` and
+`followup.zip`; review input adds only `comparison.json`. Both return
+`application/zip` with `no-store`. Non-health
 agent requests require `Authorization: Bearer <token>`. The browser receives a
 SameSite, HttpOnly session cookie after a one-time loopback redirect; the token is
 not exposed to viewer JavaScript or retained in the visible URL.

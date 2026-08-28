@@ -29,6 +29,11 @@ Immutable copied DICOM
                          |                                                   |
                          +--> static bundled UI                              +--> table / reopen
                          |                                      |
+                         |                                      +--> opt-in viewer state
+                         |                                           (30-second memory TTL)
+                         |                                                   |
+                         |                                                   +--> authorized local agent
+                         |                                      |
                          |                                      +--> key-image ZIP
                          |                                           (PNG + provenance + measurements)
                          |                                                   |
@@ -67,6 +72,11 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    consumes it once, clears it immediately, validates an exact allowlist and local
    catalog membership, then applies both requested panes atomically. Navigation does
    not alter compatibility, registration, or review state.
+   A separate visible opt-in publishes only opaque current pane positions, tool/link
+   state, optional MPR series, and evidence counts. The browser never publishes
+   pixels, descriptions, dates, measurement content, paths, or direct identifiers.
+   Opt-out rotates and revokes the tab publisher; page close clears it and a missing
+   heartbeat expires it within 30 seconds.
    Single-series MPR additionally requires complete, regular patient-space geometry;
    its interpolated orthographic planes remain navigation-only derivatives and do
    not enter native key-image evidence. A Cornerstone crosshair controller moves one
@@ -75,12 +85,18 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    cross-exam registration.
 4. **Local API:** binds to loopback only, uses an ephemeral bearer token for agents
    and an HttpOnly same-origin session for the browser, returns only opaque IDs and
-   an allowlisted metadata contract, and has no source write/delete API. Its two
-   POSTs accept bounded outer ZIPs from an exact local Origin. Visit input contains
-   only `baseline.zip` and `followup.zip`; review input adds only `comparison.json`.
+   an allowlisted metadata contract, and has no source write/delete API. Its
+   derivative POSTs accept bounded outer ZIPs from an exact local Origin. Visit input
+   contains only `baseline.zip` and `followup.zip`; review input adds only
+   `comparison.json`.
    The service assembles and revalidates every nested derivative in memory, returns
    it with `no-store`, and persists nothing. Service-backed measurement IDs join
    directly to the manifest; legacy folder IDs remain accepted.
+   The viewer-state POST is a distinct bounded session-control route, not a source or
+   derivative write. It independently validates exact catalog positions, retains one
+   latest publication under a lock, marks it `unreviewed`, and serves it only to an
+   authenticated local GET with `no-store`. Publisher revocation closes opt-out races;
+   the in-memory TTL is a fallback, not a consent substitute.
 5. **Derivatives:** future transforms, resampled images, masks, additional
    measurements, and reports go to a separate store with source references and
    review status. Manual length/bidirectional/elliptical ROI drafts use versioned

@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-viewer-state-v1.schema.json",
+  "title": "ScanView expiring local viewer state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "available"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "available": { "type": "boolean" },
+    "received_at": { "type": "string", "format": "date-time" },
+    "age_seconds": { "type": "number", "minimum": 0 },
+    "expires_in_seconds": { "type": "number", "minimum": 0, "maximum": 30 },
+    "reason": { "enum": ["not_shared", "stale"] },
+    "expires_after_seconds": { "const": 30 },
+    "state": { "$ref": "#/$defs/state" }
+  },
+  "oneOf": [
+    {
+      "properties": { "available": { "const": true } },
+      "required": ["received_at", "age_seconds", "expires_in_seconds", "state"],
+      "not": {
+        "anyOf": [
+          { "required": ["reason"] },
+          { "required": ["expires_after_seconds"] }
+        ]
+      }
+    },
+    {
+      "properties": { "available": { "const": false } },
+      "required": ["reason", "expires_after_seconds"],
+      "not": {
+        "anyOf": [
+          { "required": ["received_at"] },
+          { "required": ["age_seconds"] },
+          { "required": ["expires_in_seconds"] },
+          { "required": ["state"] }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["series_id", "instance_id", "stack_position", "stack_count"],
+      "properties": {
+        "series_id": {
+          "type": "string",
+          "pattern": "^series_[0-9a-f]{20}$"
+        },
+        "instance_id": {
+          "type": "string",
+          "pattern": "^instance_[0-9a-f]{20}$"
+        },
+        "stack_position": { "type": "integer", "minimum": 1 },
+        "stack_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "sharing",
+        "publisher_id",
+        "review_status",
+        "active_tool",
+        "slice_link",
+        "baseline",
+        "followup",
+        "mpr_series_id",
+        "measurement_count",
+        "comparison_draft_present",
+        "privacy"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.0.0" },
+        "sharing": { "const": true },
+        "publisher_id": {
+          "type": "string",
+          "pattern": "^publisher_[0-9a-f]{32}$"
+        },
+        "review_status": { "const": "unreviewed" },
+        "active_tool": {
+          "enum": ["window", "pan", "zoom", "length", "bidirectional", "roi"]
+        },
+        "slice_link": {
+          "enum": ["unpaired", "independent", "patient_position", "approximate_index"]
+        },
+        "baseline": {
+          "oneOf": [{ "$ref": "#/$defs/target" }, { "type": "null" }]
+        },
+        "followup": {
+          "oneOf": [{ "$ref": "#/$defs/target" }, { "type": "null" }]
+        },
+        "mpr_series_id": {
+          "oneOf": [
+            { "type": "string", "pattern": "^series_[0-9a-f]{20}$" },
+            { "type": "null" }
+          ]
+        },
+        "measurement_count": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "comparison_draft_present": { "type": "boolean" },
+        "privacy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "local_only",
+            "contains_pixels",
+            "contains_direct_identifiers",
+            "persisted"
+          ],
+          "properties": {
+            "local_only": { "const": true },
+            "contains_pixels": { "const": false },
+            "contains_direct_identifiers": { "const": false },
+            "persisted": { "const": false }
+          }
+        }
+      }
+    }
+  }
+}

@@ -35,7 +35,7 @@ wheel with the built UI under `scanview_agent/ui`. A regular agent-only wheel st
 lightweight. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
 and the API from one loopback origin. It establishes an
 HttpOnly browser session, while agents continue to use the printed bearer token.
-The server has no source-write or delete endpoint. The unified viewer's two local
+The server has no source-write or delete endpoint. The unified viewer's derivative
 POSTs accept exact bounded transports: two derived key-image bundles for a visit
 packet, or those same bundles plus one normalized comparison for a comparison-review
 packet. Both recursively assemble and revalidate in memory, return `no-store`, and
@@ -71,3 +71,13 @@ the same baseline/follow-up ID options for an initial view. The browser consumes
 fragment atomically, clears it from the address bar, and leaves compatibility and
 clinical review gates unchanged. Fragments never reach the HTTP service, and no
 navigation state is stored server-side.
+
+The unified viewer also has an explicit **Agent state** opt-in. While enabled, it
+publishes a strict, memory-only summary to `POST /v1/viewer-state`; a bearer-authorized
+agent reads it with `GET /v1/viewer-state`. The summary contains only opaque catalog
+series/instance positions, tool/link state, optional MPR series, and evidence counts.
+It contains no pixels, descriptions, dates, measurement values/labels/geometry,
+paths, or direct identifiers. The server independently checks catalog membership,
+serves it with `no-store`, and expires it after 30 seconds without a heartbeat.
+Opt-out revokes that ephemeral publisher so an in-flight older update cannot restore
+sharing. This is transient navigation context, not observation or clinical review.

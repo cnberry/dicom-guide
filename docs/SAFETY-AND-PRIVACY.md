@@ -16,16 +16,26 @@ quality-system, and regulatory review.
 ## Data handling
 
 - Originals are immutable and hashed.
-- The app makes no runtime network request by default.
+- The app makes no external runtime network request; unified-workspace traffic stays
+  on the loopback origin.
 - DICOM processing never depends on an external API; the CSP blocks external origins.
 - The API binds to loopback and requires a random bearer token; the unified browser
   uses a SameSite, HttpOnly session cookie established by a one-time local redirect.
-- The two local POSTs are not external DICOM-processing dependencies. They accept
+- The derivative POSTs are not external DICOM-processing dependencies. They accept
   only exact bounded ZIP transports from the exact loopback origin. Visit input has
   two derived key-image ZIPs; review input adds one normalized comparison JSON.
   Compressed and uncompressed size limits, duplicate/extra/encrypted-member refusal,
   recursive in-memory validation, and `no-store` responses apply. No server-side
   patient file is created.
+- Live agent inspection is explicitly off by default. If a person opts in, the
+  browser publishes at most 16 KiB of exact allowlisted JSON to the same-origin
+  loopback process: opaque current series/instance positions, tool/link state,
+  optional MPR series, and evidence counts. It never sends pixels, descriptive
+  metadata, dates, paths, measurement values/labels/geometry, or direct identifiers.
+  The server validates every reference against the local catalog, stores only the
+  latest state in memory, returns `no-store`, and requires the bearer token to read
+  it. Opt-out clears and revokes the ephemeral publisher; absent heartbeats expire
+  within 30 seconds. Opaque IDs remain sensitive and potentially linkable.
 - Paths, patient names/IDs, DICOM headers, and response bodies are absent from logs.
 - Agent viewer links contain only opaque local catalog IDs in a bounded URL fragment.
   Fragments are not transmitted in HTTP, are removed immediately on receipt, and
@@ -117,6 +127,11 @@ An exact navigation intent is not a pairing decision. It can select native sourc
 for discussion, but it cannot approve compatibility, unlock registered display,
 load measurement evidence, or change any review state. A malformed or partially
 resolvable intent is rejected as a whole and the ordinary local default view is used.
+
+Live viewer state is not an observation, even when its opaque references are exact.
+It says what the interface is showing and which tool is selected; it does not prove
+that a lesion exists, that two series are comparable, that measurements are correct,
+or that a person reviewed the images.
 
 The comparison-review workflow keeps the arithmetic comparison immutable and
 `unreviewed`. A review decision is a separate self-attested event with explicit

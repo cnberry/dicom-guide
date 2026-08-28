@@ -52,6 +52,9 @@ result into a medical conclusion.
 - Versioned agent-to-human navigation from exact opaque catalog series/instances via
   a one-use local fragment, with atomic catalog resolution, immediate URL cleanup,
   and no effect on pairing or review state.
+- Explicit opt-in, read-only agent access to privacy-minimized live viewer state via
+  the authenticated loopback service; publications are memory-only, validated
+  against the catalog, revoked on opt-out, and expire after 30 seconds.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
 ### Phase 2 — robust local archive and tools
@@ -104,3 +107,6 @@ result into a medical conclusion.
    immutable observations/computations, identify self-asserted credentials as
    unverified, bind every event and parent derivative by hash, and never represent
    that chain as a digital signature or medical-record authentication.
+12. **Session-state consent:** live viewer inspection is off by default, visible to
+   the person, contains no pixels/direct identifiers/measurement values, is never
+   persisted, and becomes unavailable on opt-out or heartbeat expiry.

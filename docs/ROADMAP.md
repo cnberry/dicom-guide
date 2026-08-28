@@ -180,18 +180,32 @@
    proving exact slice application, malformed-target refusal, clean URLs, and no
    fragment or opaque navigation references in HTTP logs.
 
+## Completed in the fourteenth milestone
+
+1. Added a visible **Agent state** control that is off by default and available only
+   in the authenticated unified local workspace.
+2. Added strict browser publication of opaque current pane positions, active tool,
+   link state, optional MPR series, and evidence counts—never pixels, descriptions,
+   dates, measurement values/labels/geometry, paths, or direct identifiers.
+3. Added bearer-authenticated `GET /v1/viewer-state`, exact-origin bounded publication,
+   independent local-catalog validation, `no-store`, and a 30-second memory-only TTL.
+4. Made opt-out race-safe by revoking each ephemeral publisher ID before a later
+   opt-in; stale in-flight updates cannot silently restore sharing.
+5. Added a versioned response schema plus server, validation, privacy, transport,
+   expiry, and browser-publisher tests.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
 2. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Design an explicit opt-in, read-only local viewer-state bridge so an agent can
-   inspect the current opaque series/instance/tool without pixels, PHI, or UI scraping.
-4. Produce signed/notarized macOS/Linux release artifacts around the self-contained
+3. Produce signed/notarized macOS/Linux release artifacts around the self-contained
    Python wheel.
-5. Design optional authenticated signature integration for clinical organizations;
+4. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
+5. Design an append-only, privacy-minimized local audit for bearer access to live
+   viewer state without recording patient content or putting tokens in logs.
 
 ## Next milestone
 

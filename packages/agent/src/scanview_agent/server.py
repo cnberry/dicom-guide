@@ -4,6 +4,8 @@ import io
 import json
 import mimetypes
 import secrets
+import threading
+import time
 import webbrowser
 from datetime import datetime, timezone
 from http.cookies import SimpleCookie
@@ -25,6 +27,16 @@ from .visit_packets import (
     visit_packet_from_transport,
     visit_packet_summary,
 )
+from .viewer_state import (
+    MAX_VIEWER_STATE_BYTES,
+    VIEWER_STATE_MEDIA_TYPE,
+    VIEWER_STATE_TTL_SECONDS,
+    available_viewer_state_response,
+    is_clear_viewer_state,
+    unavailable_viewer_state_response,
+    utc_now,
+    validate_viewer_state,
+)
 
 
 class ScanViewServer(ThreadingHTTPServer):
@@ -32,6 +44,53 @@ class ScanViewServer(ThreadingHTTPServer):
     registry: dict[str, Path]
     token: str
     ui_dist: Path | None
+    viewer_state_lock: threading.Lock
+    viewer_state: dict[str, Any] | None
+    viewer_state_received_at: str | None
+    viewer_state_received_monotonic: float | None
+    viewer_state_revoked_publishers: set[str]
+
+    def publish_viewer_state(self, state: dict[str, Any]) -> bool:
+        with self.viewer_state_lock:
+            if state["publisher_id"] in self.viewer_state_revoked_publishers:
+                return False
+            self.viewer_state = state
+            self.viewer_state_received_at = utc_now()
+            self.viewer_state_received_monotonic = time.monotonic()
+            return True
+
+    def clear_viewer_state(self, publisher_id: str) -> bool:
+        with self.viewer_state_lock:
+            self.viewer_state_revoked_publishers.add(publisher_id)
+            removed = bool(
+                self.viewer_state
+                and self.viewer_state.get("publisher_id") == publisher_id
+            )
+            if removed:
+                self.viewer_state = None
+                self.viewer_state_received_at = None
+                self.viewer_state_received_monotonic = None
+            return removed
+
+    def viewer_state_response(self) -> dict[str, Any]:
+        with self.viewer_state_lock:
+            if (
+                self.viewer_state is None
+                or self.viewer_state_received_at is None
+                or self.viewer_state_received_monotonic is None
+            ):
+                return unavailable_viewer_state_response("not_shared")
+            age = time.monotonic() - self.viewer_state_received_monotonic
+            if age > VIEWER_STATE_TTL_SECONDS:
+                self.viewer_state = None
+                self.viewer_state_received_at = None
+                self.viewer_state_received_monotonic = None
+                return unavailable_viewer_state_response("stale")
+            return available_viewer_state_response(
+                self.viewer_state,
+                received_at=self.viewer_state_received_at,
+                age_seconds=age,
+            )
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -161,6 +220,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/v1/manifest":
             self._send_json(self.server.catalog)
             return
+        if path == "/v1/viewer-state":
+            self._send_json(self.server.viewer_state_response())
+            return
         if path == "/v1/comparison-candidates":
             self._send_json(suggest_pairs(self.server.catalog))
             return
@@ -188,6 +250,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if path == "/v1/viewer-state":
+            self._handle_viewer_state_post()
+            return
         supported = {
             "/v1/visit-packets": (
                 "application/vnd.scanview.visit-input+zip",
@@ -268,6 +333,67 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _handle_viewer_state_post(self) -> None:
+        if not self._authorized():
+            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
+            return
+        if not self._same_origin():
+            self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
+            return
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != VIEWER_STATE_MEDIA_TYPE:
+            self._send_json(
+                {"error": "unsupported_media_type"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+            )
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send_json({"error": "content_length_required"}, HTTPStatus.LENGTH_REQUIRED)
+            return
+        if content_length <= 0 or content_length > MAX_VIEWER_STATE_BYTES:
+            self._send_json({"error": "request_too_large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+            return
+        body = self.rfile.read(content_length)
+        if len(body) != content_length:
+            self._send_json({"error": "incomplete_request"}, HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            value = json.loads(body.decode("utf-8"))
+            clear, publisher_id = is_clear_viewer_state(value)
+            if clear and publisher_id is not None:
+                removed = self.server.clear_viewer_state(publisher_id)
+                self._send_json(
+                    {
+                        "schema_version": "1.0.0",
+                        "accepted": True,
+                        "sharing": False,
+                        "removed": removed,
+                    }
+                )
+                return
+            state = validate_viewer_state(value, self.server.catalog)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            self._send_json(
+                {"error": "invalid_viewer_state", "detail": str(error)},
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+            return
+        if not self.server.publish_viewer_state(state):
+            self._send_json(
+                {"error": "publisher_revoked"},
+                HTTPStatus.CONFLICT,
+            )
+            return
+        self._send_json(
+            {
+                "schema_version": "1.0.0",
+                "accepted": True,
+                "sharing": True,
+                "expires_after_seconds": int(VIEWER_STATE_TTL_SECONDS),
+            }
+        )
+
 
 def create_server(
     catalog: dict[str, Any],
@@ -288,6 +414,11 @@ def create_server(
     server.registry = registry
     server.token = token or secrets.token_urlsafe(24)
     server.ui_dist = resolved_ui
+    server.viewer_state_lock = threading.Lock()
+    server.viewer_state = None
+    server.viewer_state_received_at = None
+    server.viewer_state_received_monotonic = None
+    server.viewer_state_revoked_publishers = set()
     return server
 
 
@@ -328,8 +459,8 @@ def serve(
         if open_browser:
             webbrowser.open(session_url)
     print(
-        "Source mutation and deletion are disabled; visit/review derivatives are returned "
-        "from memory only. Press Ctrl-C to stop."
+        "Source mutation and deletion are disabled; visit/review derivatives and opt-in "
+        "viewer state remain memory-only. Press Ctrl-C to stop."
     )
     try:
         server.serve_forever()
