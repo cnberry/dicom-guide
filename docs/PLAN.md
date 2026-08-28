@@ -28,6 +28,8 @@ result into a medical conclusion.
 - Source-linked manual length and bidirectional evidence with a human-readable table.
 - Validated DICOM patient-orientation labels and source-linked 2D elliptical ROI
   evidence.
+- Geometry-gated single-series local MPR with three orthographic patient-axis planes
+  and explicit interpolated-derivative labeling.
 - Source-linked local key-image archives with display provenance, permanent review
   labeling, measurement evidence, and agent-verifiable integrity.
 - Local clinician visit-packet assembly with hard longitudinal gates, a static
@@ -42,7 +44,7 @@ result into a medical conclusion.
 
 - Orthanc/DICOMweb import with localhost-only configuration.
 - OHIF longitudinal mode or ScanView mode extension.
-- Physical-coordinate linked crosshair and MPR.
+- Physical-coordinate linked crosshairs across MPR planes.
 - Explicit clinician review/sign-off workflow built around the implemented key-image,
   measurement, and visit-packet contracts.
 

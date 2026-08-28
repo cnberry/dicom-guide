@@ -62,6 +62,9 @@ are established.
 - CT and MRI intensities must never be subtracted.
 - Registration can create plausible but wrong alignment; tumor, edema, surgery, and
   ventricles may change anatomy. Every clinical-looking overlay needs case QA.
+- MPR reslices interpolate a single source volume. Missing or irregular geometry
+  disables MPR, and a valid render still does not make the reslice a native image,
+  registration result, segmentation, diagnosis, or response assessment.
 - Deformable registration and propagated masks are research-only until validated.
 - Pseudoprogression, treatment effect, steroid change, and clinical status cannot be
   resolved from a simple size difference.

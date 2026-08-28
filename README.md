@@ -28,6 +28,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - No external processing API: decoding, metadata, and comparisons stay on-device.
 - Extension-independent DICOM Part 10 parsing.
 - MRI/CT stack rendering through Cornerstone3D's maintained codecs.
+- Geometry-gated, single-series axial/coronal/sagittal MPR built locally from native
+  source slices, with window/level, pan, zoom, wheel navigation, and reset.
 - Window/level, pan, zoom, reset, DICOM patient-orientation labels, and manual
   length/bidirectional/elliptical ROI measurement tools.
 - Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
@@ -178,6 +180,20 @@ Validate an archive locally without printing identifiers or measurement values:
 The ZIP is sensitive derived medical data, not a de-identified or diagnostic
 artifact. Keep the original DICOM as the authority and share the archive only with
 the same safeguards used for the scans.
+
+## Inspect one source series with MPR
+
+Choose **Open MPR** beside a native viewport. ScanView enables it only when at least
+three MR/CT slices have a stable Frame of Reference, validated orientation, positive
+matrix/pixel spacing, finite patient positions, and sufficiently regular projected
+slice spacing. Axial, coronal, and sagittal patient-axis views are reconstructed in
+memory with the bundled Cornerstone volume renderer; wheel navigation and display
+controls remain local.
+
+MPR planes are interpolated display derivatives. They are not registration,
+segmentation, tumor response, or diagnosis, and original DICOM remains authoritative.
+Evidence export stays on the native source panes until derived-image provenance is
+implemented.
 
 ## Assemble a clinician visit packet
 

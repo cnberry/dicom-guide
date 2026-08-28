@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assessCompatibility,
+  assessMprEligibility,
   formatDicomDate,
   getPatientOrientationLabels,
   getLinkStrategy,
@@ -160,5 +161,63 @@ describe('display formatting', () => {
     });
 
     expect(getLinkStrategy(baseline, followup)).toBe('normalized');
+  });
+});
+
+describe('MPR geometry gate', () => {
+  const volumetricSeries = (overrides: Partial<DicomSeries> = {}): DicomSeries =>
+    series({
+      geometry: {
+        rows: 128,
+        columns: 128,
+        pixelSpacing: [0.8, 0.8],
+        orientation: [1, 0, 0, 0, 1, 0],
+      },
+      instances: [instance(0), instance(1), instance(2), instance(3)],
+      ...overrides,
+    });
+
+  it('accepts a source series with complete, regular patient-space geometry', () => {
+    expect(assessMprEligibility(volumetricSeries())).toEqual({
+      eligible: true,
+      reason: 'Geometry supports local orthographic reslicing.',
+      sliceSpacingMm: 1,
+    });
+  });
+
+  it('refuses missing orientation, spacing, frame, or slice position', () => {
+    expect(
+      assessMprEligibility(
+        volumetricSeries({ geometry: { rows: 128, columns: 128, pixelSpacing: [1, 1] } }),
+      ).reason,
+    ).toContain('orientation');
+    expect(
+      assessMprEligibility(
+        volumetricSeries({
+          geometry: { rows: 128, columns: 128, orientation: [1, 0, 0, 0, 1, 0] },
+        }),
+      ).reason,
+    ).toContain('pixel spacing');
+    expect(assessMprEligibility(volumetricSeries({ frameOfReferenceId: undefined })).reason).toContain(
+      'Frame of Reference',
+    );
+    expect(
+      assessMprEligibility(
+        volumetricSeries({ instances: [instance(0), { ...instance(1), imagePosition: undefined }, instance(2)] }),
+      ).reason,
+    ).toContain('patient position');
+  });
+
+  it('refuses duplicate or irregular source slice positions', () => {
+    expect(
+      assessMprEligibility(
+        volumetricSeries({ instances: [instance(0), instance(1), instance(1, 2)] }),
+      ).reason,
+    ).toContain('overlap');
+    expect(
+      assessMprEligibility(
+        volumetricSeries({ instances: [instance(0), instance(1), instance(4)] }),
+      ).reason,
+    ).toContain('irregular');
   });
 });

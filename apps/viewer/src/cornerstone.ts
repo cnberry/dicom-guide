@@ -4,7 +4,9 @@ import {
   cache,
   eventTarget,
   init as initCore,
+  setVolumesForViewports,
   type Types,
+  volumeLoader,
 } from '@cornerstonejs/core';
 import {
   init as initDicomImageLoader,
@@ -16,6 +18,7 @@ import {
   Enums as ToolEnums,
   LengthTool,
   PanTool,
+  StackScrollTool,
   ToolGroupManager,
   WindowLevelTool,
   ZoomTool,
@@ -51,6 +54,15 @@ export type ViewportToolController = {
   destroy: () => void;
 };
 
+export type MprTool = 'window' | 'pan' | 'zoom';
+export type MprOrientation = 'axial' | 'coronal' | 'sagittal';
+export type MprViewportController = {
+  setPrimaryTool: (tool: MprTool) => void;
+  reset: () => void;
+  resize: () => void;
+  destroy: () => void;
+};
+
 export const initializeCornerstone = (): Promise<void> => {
   if (!initialization) {
     initialization = (async () => {
@@ -60,10 +72,36 @@ export const initializeCornerstone = (): Promise<void> => {
       });
       initTools();
       Object.values(toolClasses).forEach((toolClass) => addTool(toolClass));
+      addTool(StackScrollTool);
     })();
   }
   return initialization;
 };
+
+const imageIdsForSeries = (series: DicomSeries): string[] =>
+  series.instances.map((instance) => {
+    const existing = instanceImageIds.get(instance.instanceId);
+    if (existing) return existing;
+    const imageId = instance.file
+      ? wadouri.fileManager.add(instance.file)
+      : instance.imageUrl
+        ? `wadouri:${instance.imageUrl}`
+        : undefined;
+    if (!imageId) {
+      throw new Error(`Instance ${instance.instanceId} has no local pixel source.`);
+    }
+    imageReferences.set(imageId, {
+      seriesId: series.id,
+      instanceId: instance.instanceId,
+      frameOfReferenceId: series.frameOfReferenceId,
+      spacingTrusted: Boolean(
+        series.geometry.pixelSpacing?.length === 2 &&
+          series.geometry.pixelSpacing.every((value) => Number.isFinite(value) && value > 0),
+      ),
+    });
+    instanceImageIds.set(instance.instanceId, imageId);
+    return imageId;
+  });
 
 export const createMeasurementEvidencePacket = (): MeasurementEvidencePacket => {
   const measurements: RawMeasurementAnnotation[] = annotation.state.getAllAnnotations()
@@ -213,24 +251,7 @@ export const createStackViewport = async (
   };
   setPrimaryTool(primaryTool);
 
-  const imageIds = series.instances.map((instance) => {
-    if (instance.file) return wadouri.fileManager.add(instance.file);
-    if (instance.imageUrl) return `wadouri:${instance.imageUrl}`;
-    throw new Error(`Instance ${instance.instanceId} has no local pixel source.`);
-  });
-  imageIds.forEach((imageId, index) => {
-    const instance = series.instances[index];
-    imageReferences.set(imageId, {
-      seriesId: series.id,
-      instanceId: instance.instanceId,
-      frameOfReferenceId: series.frameOfReferenceId,
-      spacingTrusted: Boolean(
-        series.geometry.pixelSpacing?.length === 2 &&
-          series.geometry.pixelSpacing.every((value) => Number.isFinite(value) && value > 0),
-      ),
-    });
-    instanceImageIds.set(instance.instanceId, imageId);
-  });
+  const imageIds = imageIdsForSeries(series);
   await viewport.setStack(imageIds, Math.floor(imageIds.length / 2));
   viewport.render();
   return {
@@ -242,4 +263,97 @@ export const createStackViewport = async (
       destroy: () => ToolGroupManager.destroyToolGroup(toolGroupId),
     },
   };
+};
+
+export const createMprViewports = async (
+  engineId: string,
+  elements: Record<MprOrientation, HTMLDivElement>,
+  series: DicomSeries,
+  primaryTool: MprTool,
+): Promise<MprViewportController> => {
+  await initializeCornerstone();
+  const engine = new RenderingEngine(engineId);
+  const volumeId = `cornerstoneStreamingImageVolume:${engineId}-volume`;
+  const toolGroupId = `${engineId}-tools`;
+  const removeVolume = () => {
+    if (cache.getVolumeLoadObject(volumeId)) cache.removeVolumeLoadObject(volumeId);
+  };
+  const orientations: Array<{
+    id: MprOrientation;
+    axis: Enums.OrientationAxis;
+  }> = [
+    { id: 'axial', axis: Enums.OrientationAxis.AXIAL },
+    { id: 'coronal', axis: Enums.OrientationAxis.CORONAL },
+    { id: 'sagittal', axis: Enums.OrientationAxis.SAGITTAL },
+  ];
+  try {
+    engine.setViewports(
+      orientations.map(({ id, axis }) => ({
+        viewportId: `${engineId}-${id}`,
+        type: Enums.ViewportType.ORTHOGRAPHIC,
+        element: elements[id],
+        defaultOptions: {
+          background: [0.02, 0.03, 0.05] as Types.Point3,
+          orientation: axis,
+        },
+      })),
+    );
+    const imageIds = imageIdsForSeries(series);
+    const volume = await volumeLoader.createAndCacheVolume(volumeId, { imageIds });
+    volume.load();
+    const viewportIds = orientations.map(({ id }) => `${engineId}-${id}`);
+    await setVolumesForViewports(engine, [{ volumeId }], viewportIds);
+
+    const toolGroup = ToolGroupManager.createToolGroup(toolGroupId);
+    if (!toolGroup) throw new Error('Unable to create the local MPR tool group.');
+    [WindowLevelTool, PanTool, ZoomTool, StackScrollTool].forEach((toolClass) =>
+      toolGroup.addTool(toolClass.toolName),
+    );
+    viewportIds.forEach((viewportId) => toolGroup.addViewport(viewportId, engineId));
+    toolGroup.setToolActive(StackScrollTool.toolName, {
+      bindings: [{ mouseButton: ToolEnums.MouseBindings.Wheel }],
+    });
+    const mprToolClasses = {
+      window: WindowLevelTool,
+      pan: PanTool,
+      zoom: ZoomTool,
+    } as const;
+    const setPrimaryTool = (tool: MprTool) => {
+      Object.values(mprToolClasses).forEach((toolClass) =>
+        toolGroup.setToolPassive(toolClass.toolName, { removeAllBindings: true }),
+      );
+      toolGroup.setToolActive(mprToolClasses[tool].toolName, {
+        bindings: [{ mouseButton: ToolEnums.MouseBindings.Primary }],
+      });
+    };
+    setPrimaryTool(primaryTool);
+    const viewports = viewportIds.map(
+      (viewportId) => engine.getViewport(viewportId) as Types.IVolumeViewport,
+    );
+    viewports.forEach((viewport) => {
+      viewport.resetCamera();
+      viewport.render();
+    });
+    return {
+      setPrimaryTool,
+      reset: () => {
+        viewports.forEach((viewport) => {
+          viewport.resetProperties();
+          viewport.resetCamera();
+          viewport.render();
+        });
+      },
+      resize: () => engine.resize(true, false),
+      destroy: () => {
+        ToolGroupManager.destroyToolGroup(toolGroupId);
+        engine.destroy();
+        removeVolume();
+      },
+    };
+  } catch (error) {
+    ToolGroupManager.destroyToolGroup(toolGroupId);
+    engine.destroy();
+    removeVolume();
+    throw error;
+  }
 };

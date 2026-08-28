@@ -19,6 +19,9 @@ Immutable copied DICOM
                          |
                          +--> protected native instances --> Cornerstone3D human view
                          |                                      |
+                         |                                      +--> geometry gate --> local MPR
+                         |                                      |                     (derived navigation)
+                         |                                      |
                          |                                      +--> measurement packet
                          |                                                   |
                          +--> static bundled UI                              +--> table / reopen
@@ -57,6 +60,9 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    (plus in-memory `blob:`/`data:` assets where required).
    Loading a different folder clears annotations, decoded-image cache, and file
    registry before the new imaging session begins.
+   Single-series MPR additionally requires complete, regular patient-space geometry;
+   its interpolated orthographic planes remain navigation-only derivatives and do
+   not enter native key-image evidence.
 4. **Local API:** binds to loopback only, uses an ephemeral bearer token for agents
    and an HttpOnly same-origin session for the browser, returns only opaque IDs and
    an allowlisted metadata contract, and has no source write/delete API. The single

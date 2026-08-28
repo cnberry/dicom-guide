@@ -99,6 +99,10 @@ integrity booleans, and errors; it does not print source identifiers or values. 
 valid archive remains sensitive, `unreviewed`, and a display derivative. The native
 DICOM is authoritative, and validation is not clinical approval.
 
+The human viewer's MPR planes are local navigation-only derivatives and are not part
+of the key-image or agent evidence contract. Agents should continue to reference
+native source instances until a versioned derived-image provenance contract exists.
+
 ## Clinician visit-packet archives
 
 Agents can assemble two explicitly ordered key-image archives into one local

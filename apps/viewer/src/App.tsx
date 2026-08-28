@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
+import { MprPanel } from './components/MprPanel';
 import {
   createMeasurementEvidencePacket,
   resetLocalImagingSession,
@@ -148,6 +149,7 @@ export default function App() {
   const [followupId, setFollowupId] = useState<string>();
   const [baselineIndex, setBaselineIndex] = useState(0);
   const [followupIndex, setFollowupIndex] = useState(0);
+  const [mprSeriesId, setMprSeriesId] = useState<string>();
   const [synchronized, setSynchronized] = useState(true);
   const [activeTool, setActiveTool] = useState<ViewerTool>('window');
   const [resetNonce, setResetNonce] = useState(0);
@@ -167,6 +169,7 @@ export default function App() {
 
   const baseline = series.find((item) => item.id === baselineId);
   const followup = series.find((item) => item.id === followupId);
+  const mprSeries = series.find((item) => item.id === mprSeriesId);
   const compatibility = useMemo(
     () => assessCompatibility(baseline, followup),
     [baseline, followup],
@@ -229,6 +232,7 @@ export default function App() {
     setSeries([]);
     setBaselineId(undefined);
     setFollowupId(undefined);
+    setMprSeriesId(undefined);
     setMeasurementPacket(undefined);
     setLiveMeasurementPacket(undefined);
     setMeasurementMessage('Measurement drafts stay local and require clinician review.');
@@ -538,6 +542,7 @@ export default function App() {
               activeTool={activeTool}
               resetNonce={resetNonce}
               measurementPacket={measurementPacket}
+              onOpenMpr={() => baseline && setMprSeriesId(baseline.id)}
             />
             <DicomViewport
               ref={followupViewportRef}
@@ -549,8 +554,11 @@ export default function App() {
               activeTool={activeTool}
               resetNonce={resetNonce}
               measurementPacket={measurementPacket}
+              onOpenMpr={() => followup && setMprSeriesId(followup.id)}
             />
           </section>
+
+          {mprSeries && <MprPanel series={mprSeries} onClose={() => setMprSeriesId(undefined)} />}
 
           <section className="review-grid">
             <article className={`compatibility-card ${compatibility.level}`}>

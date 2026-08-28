@@ -7,7 +7,7 @@ import {
   type ViewerTool,
   type ViewportToolController,
 } from '../cornerstone';
-import { getPatientOrientationLabels, type DicomSeries } from '../dicom';
+import { assessMprEligibility, getPatientOrientationLabels, type DicomSeries } from '../dicom';
 import {
   createKeyImageArchive,
   downloadArchive,
@@ -25,6 +25,7 @@ type Props = {
   activeTool: ViewerTool;
   resetNonce: number;
   measurementPacket?: MeasurementEvidencePacket;
+  onOpenMpr?: () => void;
 };
 
 export type DicomViewportHandle = {
@@ -32,7 +33,17 @@ export type DicomViewportHandle = {
 };
 
 export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function DicomViewport(
-  { id, label, series, index, onIndexChange, activeTool, resetNonce, measurementPacket }: Props,
+  {
+    id,
+    label,
+    series,
+    index,
+    onIndexChange,
+    activeTool,
+    resetNonce,
+    measurementPacket,
+    onOpenMpr,
+  }: Props,
   ref,
 ) {
   const elementRef = useRef<HTMLDivElement>(null);
@@ -134,6 +145,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
 
   const maxIndex = Math.max(0, (series?.instances.length ?? 1) - 1);
   const orientationLabels = getPatientOrientationLabels(series?.geometry.orientation);
+  const mprEligibility = assessMprEligibility(series);
   const buildKeyImage = async (createdAt?: string): Promise<KeyImageArchive> => {
     const viewport = viewportRef.current;
     const element = elementRef.current;
@@ -226,6 +238,14 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
               ? `Native source · ${series.sourceKind === 'loopback-service' ? 'local service' : 'folder'}`
               : 'Native source'}
           </span>
+          <button
+            className="key-image-button"
+            disabled={!mprEligibility.eligible || Boolean(status)}
+            title={mprEligibility.reason}
+            onClick={onOpenMpr}
+          >
+            Open MPR
+          </button>
           <button
             className={`key-image-button ${keyImageState}`}
             disabled={!series || keyImageState === 'working' || Boolean(status)}

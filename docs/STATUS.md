@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 12:01 PDT
+Last updated: 2026-08-28 12:18 PDT
 
 ## Data transfer
 
@@ -39,6 +39,9 @@ Last updated: 2026-08-28 12:01 PDT
   registration safety gate implemented.
 - Window/level, pan, zoom, reset, manual length, perpendicular bidirectional, and
   elliptical ROI tools implemented.
+- Geometry-gated single-series MPR implemented with local axial, coronal, and
+  sagittal orthographic volume views, wheel navigation, window/level, pan, zoom,
+  reset, cache cleanup, and permanent derived/interpolated safety labeling.
 - Validated DICOM patient-orientation labels implemented; labels are withheld rather
   than guessed when Image Orientation (Patient) is missing or malformed.
 - Follow-up auto-selection removed; same-exam pairings are explicitly incompatible
@@ -88,10 +91,10 @@ Last updated: 2026-08-28 12:01 PDT
 - Python agent tests: 29 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, and ROI comparison checks.
-- Viewer tests: 29 passing, including patient-context and local-only enforcement,
+- Viewer tests: 32 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
-  validation, plus the exact two-file visit-packet transport and relative same-origin
-  endpoint contract.
+  validation, the exact two-file visit-packet transport and relative same-origin
+  endpoint contract, and complete/regular MPR geometry gating.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
@@ -143,6 +146,13 @@ Last updated: 2026-08-28 12:01 PDT
   presentation validation with a 73-day interval and no computed result or response
   conclusion. The server log contained only opaque local resource paths and one
   successful loopback POST. The synthetic studies and export were moved to Trash.
+- MPR production smoke test: a synthetic 24-slice MR volume visibly rendered the
+  expected three-dimensional structure in axial, coronal, and sagittal planes; all
+  controls activated and close/reopen cleaned up without errors. The copied study
+  then exposed 42 geometry-eligible series, and a 62-slice MR volume reached all
+  three stable planes through only the bundled OpenJPEG WebAssembly decoder and
+  opaque loopback instance routes. No copied-study screenshot or derivative was
+  retained; the synthetic source was moved to Trash.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -155,8 +165,8 @@ Last updated: 2026-08-28 12:01 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- Measurement table editing, clinician sign-off state, and
-  MPR remain. Elliptical ROI is a 2D manual draft, not segmentation or volume measurement.
+- Measurement table editing, clinician sign-off state, and physically linked MPR
+  crosshairs remain. Elliptical ROI is a 2D manual draft, not segmentation or volume measurement.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

@@ -92,6 +92,20 @@
    downloaded nine-file packet passed every local integrity check and the service
    created no patient-data output file.
 
+## Completed in the eighth milestone
+
+1. Added a strict local MPR eligibility gate for MR/CT source count, Frame of
+   Reference, matrix, pixel spacing, orthonormal orientation, patient positions, and
+   regular projected slice spacing.
+2. Added Cornerstone streaming-volume construction and axial, coronal, and sagittal
+   orthographic viewports with wheel navigation, window/level, pan, zoom, and reset.
+3. Added visible derived/interpolated/not-registered/not-for-diagnosis labeling and
+   kept measurement/key-image evidence export on authoritative native source panes.
+4. Verified synthetic three-plane rendering, controls, cleanup, and reopen using
+   only loopback source instances and bundled assets.
+5. Verified a 62-slice copied JPEG 2000 MR series through the bundled OpenJPEG codec
+   without retaining a patient screenshot or creating a derivative file.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
@@ -102,7 +116,7 @@
    around the implemented unreviewed visit packet.
 4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
    links around the self-contained Python wheel.
-5. Add measurement-table editing and MPR.
+5. Add measurement-table editing and physically linked MPR crosshairs.
 
 ## Next milestone
 

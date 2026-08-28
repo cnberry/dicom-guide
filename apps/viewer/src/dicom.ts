@@ -39,6 +39,12 @@ export type DicomSeries = {
   instances: DicomInstance[];
 };
 
+export type MprEligibility = {
+  eligible: boolean;
+  reason: string;
+  sliceSpacingMm?: number;
+};
+
 type ParsedHeader = Omit<DicomSeries, 'instances'> & DicomInstance;
 
 const textTag = (dataset: dicomParser.DataSet, tag: string): string | undefined => {
@@ -121,6 +127,78 @@ const normalFromOrientation = (orientation?: number[]): number[] | undefined => 
   const normal = [ry * cz - rz * cy, rz * cx - rx * cz, rx * cy - ry * cx];
   const magnitude = Math.sqrt(dot(normal, normal));
   return magnitude > 0 ? normal.map((value) => value / magnitude) : undefined;
+};
+
+const median = (values: number[]): number => {
+  const sorted = [...values].sort((left, right) => left - right);
+  const midpoint = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[midpoint]
+    : (sorted[midpoint - 1] + sorted[midpoint]) / 2;
+};
+
+export const assessMprEligibility = (series?: DicomSeries): MprEligibility => {
+  if (!series) return { eligible: false, reason: 'Choose a source series first.' };
+  if (!['MR', 'CT'].includes(series.modality)) {
+    return { eligible: false, reason: 'MPR is limited to MR and CT pixel series.' };
+  }
+  if (series.instances.length < 3) {
+    return { eligible: false, reason: 'MPR requires at least three source slices.' };
+  }
+  if (!series.frameOfReferenceId) {
+    return { eligible: false, reason: 'DICOM Frame of Reference is unavailable.' };
+  }
+  if (
+    !Number.isInteger(series.geometry.rows) ||
+    !Number.isInteger(series.geometry.columns) ||
+    (series.geometry.rows ?? 0) < 2 ||
+    (series.geometry.columns ?? 0) < 2
+  ) {
+    return { eligible: false, reason: 'Source matrix dimensions are unavailable.' };
+  }
+  if (
+    !series.geometry.pixelSpacing ||
+    series.geometry.pixelSpacing.length !== 2 ||
+    !series.geometry.pixelSpacing.every((value) => Number.isFinite(value) && value > 0)
+  ) {
+    return { eligible: false, reason: 'Trusted in-plane pixel spacing is unavailable.' };
+  }
+  if (!getPatientOrientationLabels(series.geometry.orientation)) {
+    return { eligible: false, reason: 'Validated DICOM image orientation is unavailable.' };
+  }
+  const normal = normalFromOrientation(series.geometry.orientation);
+  if (!normal) {
+    return { eligible: false, reason: 'A source slice normal cannot be derived.' };
+  }
+  if (
+    series.instances.some(
+      (instance) =>
+        instance.imagePosition?.length !== 3 ||
+        !instance.imagePosition.every(Number.isFinite),
+    )
+  ) {
+    return { eligible: false, reason: 'Every source slice needs a finite patient position.' };
+  }
+  const coordinates = series.instances.map((instance) => dot(instance.imagePosition!, normal));
+  const spacings = coordinates
+    .slice(1)
+    .map((coordinate, index) => Math.abs(coordinate - coordinates[index]));
+  if (spacings.some((spacing) => !Number.isFinite(spacing) || spacing < 0.01)) {
+    return { eligible: false, reason: 'Source slice positions overlap or are malformed.' };
+  }
+  const sliceSpacingMm = median(spacings);
+  const tolerance = Math.max(0.1, sliceSpacingMm * 0.1);
+  if (spacings.some((spacing) => Math.abs(spacing - sliceSpacingMm) > tolerance)) {
+    return {
+      eligible: false,
+      reason: 'Source slice spacing is too irregular for trustworthy local MPR.',
+    };
+  }
+  return {
+    eligible: true,
+    reason: 'Geometry supports local orthographic reslicing.',
+    sliceSpacingMm,
+  };
 };
 
 const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
