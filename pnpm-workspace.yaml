@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+
+onlyBuiltDependencies:
+  - core-js-pure
+allowBuilds:
+  core-js-pure: true

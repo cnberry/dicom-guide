@@ -1,0 +1,15 @@
+{
+  "name": "mila-scan-view",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "pnpm --filter @scanview/viewer dev",
+    "build": "pnpm --filter @scanview/viewer build",
+    "test": "pnpm --filter @scanview/viewer test",
+    "typecheck": "pnpm --filter @scanview/viewer typecheck"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

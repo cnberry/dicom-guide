@@ -1,0 +1,30 @@
+.DS_Store
+.idea/
+.vscode/
+
+# JavaScript
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+*.py[cod]
+
+# Patient data and generated artifacts must never enter version control.
+data/*
+!data/README.md
+*.dcm
+*.dicom
+DICOMDIR
+manifests/
+derivatives/
+audit/
+
+# Local configuration
+.env
+.env.*
+!.env.example
