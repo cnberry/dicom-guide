@@ -23,6 +23,7 @@ DICOMDIR
 manifests/
 derivatives/
 audit/
+release/
 
 # Local configuration
 .env

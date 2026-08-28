@@ -7,7 +7,14 @@ from datetime import timezone
 from typing import Any
 
 
-OPAQUE_ID = re.compile(r"^[0-9a-f]{16}$")
+LEGACY_OPAQUE_ID = re.compile(r"^[0-9a-f]{16}$")
+
+
+def _valid_opaque_id(value: Any, kind: str) -> bool:
+    return isinstance(value, str) and bool(
+        LEGACY_OPAQUE_ID.fullmatch(value)
+        or re.fullmatch(rf"{re.escape(kind)}_[0-9a-f]{{20}}", value)
+    )
 
 
 def _has_only_keys(value: dict[str, Any], allowed: set[str]) -> bool:
@@ -121,13 +128,13 @@ def validate_measurement_packet(packet: Any) -> list[str]:
                 source, {"series_id", "instance_id", "frame_of_reference_id"}
             ):
                 errors.append(f"{prefix}.source contains unsupported fields")
-            for key in ("series_id", "instance_id"):
-                if not isinstance(source.get(key), str) or not OPAQUE_ID.fullmatch(source[key]):
-                    errors.append(f"{prefix}.source.{key} must be a 16-character opaque ID")
+            for key, kind in (("series_id", "series"), ("instance_id", "instance")):
+                if not _valid_opaque_id(source.get(key), kind):
+                    errors.append(f"{prefix}.source.{key} must be a supported opaque ID")
             frame = source.get("frame_of_reference_id")
-            if frame is not None and (not isinstance(frame, str) or not OPAQUE_ID.fullmatch(frame)):
+            if frame is not None and not _valid_opaque_id(frame, "frame"):
                 errors.append(
-                    f"{prefix}.source.frame_of_reference_id must be a 16-character opaque ID"
+                    f"{prefix}.source.frame_of_reference_id must be a supported opaque ID"
                 )
         geometry = measurement.get("geometry")
         if not isinstance(geometry, dict) or geometry.get("coordinate_system") != "DICOM patient LPS":

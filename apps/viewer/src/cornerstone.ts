@@ -82,6 +82,7 @@ export const resetLocalImagingSession = (): void => {
   imageReferences.clear();
   instanceImageIds.clear();
   cache.purgeCache();
+  wadouri.dataSetCacheManager.purge();
   wadouri.fileManager.purge();
 };
 
@@ -186,7 +187,11 @@ export const createStackViewport = async (
   };
   setPrimaryTool(primaryTool);
 
-  const imageIds = series.instances.map((instance) => wadouri.fileManager.add(instance.file));
+  const imageIds = series.instances.map((instance) => {
+    if (instance.file) return wadouri.fileManager.add(instance.file);
+    if (instance.imageUrl) return `wadouri:${instance.imageUrl}`;
+    throw new Error(`Instance ${instance.instanceId} has no local pixel source.`);
+  });
   imageIds.forEach((imageId, index) => {
     const instance = series.instances[index];
     imageReferences.set(imageId, {

@@ -126,9 +126,9 @@ describe('measurement evidence export', () => {
       [
         'dicomfile:3',
         {
-          seriesId: '0123456789abcdef',
-          instanceId: 'fedcba9876543210',
-          frameOfReferenceId: '0011223344556677',
+          seriesId: 'series_0123456789abcdef0123',
+          instanceId: 'instance_0123456789abcdef0123',
+          frameOfReferenceId: 'frame_0123456789abcdef0123',
           spacingTrusted: true,
         },
       ],
@@ -154,6 +154,10 @@ describe('measurement evidence export', () => {
     expect(packet.measurements[0]).toMatchObject({
       tracking_id: 'bidirectional:annotation-2',
       type: 'bidirectional',
+      source: {
+        series_id: 'series_0123456789abcdef0123',
+        instance_id: 'instance_0123456789abcdef0123',
+      },
       result: {
         long_axis: 10,
         short_axis: 4,

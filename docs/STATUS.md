@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 10:21 PDT
+Last updated: 2026-08-28 10:43 PDT
 
 ## Data transfer
 
@@ -47,6 +47,14 @@ Last updated: 2026-08-28 10:21 PDT
 - Versioned measurement/comparison JSON Schemas, local validation, and explicit
   numeric-only agent comparison implemented. Same-series pairs, unknown units, and
   mismatched measurement types are refused; no response label is emitted.
+- Unified `scanview-agent launch` path implemented: one loopback process serves the
+  bundled UI, manifest, pairing candidates, and protected native DICOM instances.
+- The staged release builder embeds the viewer, workers, and local codecs into a
+  self-contained wheel without breaking lightweight agent-only builds;
+  signing/notarization and Linux execution remain pending.
+- Browser sessions use a one-time local redirect and SameSite, HttpOnly cookie;
+  service-backed measurement IDs join directly to the agent manifest while legacy
+  folder-import drafts remain supported.
 - Python DICOM catalog, provenance hashing, pairing candidates, local agent API, and
   JSON Schema implemented.
 - Copy/repair/SHA-256 verification utility implemented.
@@ -55,12 +63,15 @@ Last updated: 2026-08-28 10:21 PDT
 
 ## Verification
 
-- Python agent tests: 10 passing.
-- Viewer tests: 15 passing, including local-only endpoint enforcement, pairing safety,
+- Python agent tests: 12 passing.
+- Viewer tests: 18 passing, including local-only endpoint enforcement, pairing safety,
   physical-position mapping, and measurement provenance/import validation.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
+- Self-contained staged Python wheel build: passing; the 2.7 MB wheel contains the viewer
+  entry point plus all 11 built UI/worker/codec files (9.7 MB uncompressed), and an
+  isolated installation resolves its embedded UI without the source checkout.
 - Synthetic browser smoke test: two canvases render; all five viewer controls activate.
 - Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
   1162×1200 canvases; the full folder produces 57 pixel series; local server logs show
@@ -72,6 +83,14 @@ Last updated: 2026-08-28 10:21 PDT
   37.7 × 25.1 mm overlay and 946.2 mm² table result; its v2 packet passed local agent
   validation and restored after a complete page/source reopen with no browser errors.
   The test files were moved to Trash after verification.
+- Unified synthetic smoke test: the browser established a private local session,
+  discovered the catalog without a folder picker, streamed native DICOM pixels,
+  exported a valid bidirectional packet, and produced series/instance IDs that joined
+  directly to the manifest.
+- Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
+  10,286 instances loaded from the local service. A 62-slice native stack rendered
+  through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
+  requests.
 - Real patient metadata inventory: complete without logging identifying metadata.
 - Full source/destination SHA-256 verification: passing for all 10,321 source files.
 
@@ -81,6 +100,7 @@ Last updated: 2026-08-28 10:21 PDT
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
 - ROI tools, measurement table editing, MPR, and orientation overlays remain.
-- Viewer folder import and agent API are separate entry paths in this increment.
+- Signed/notarized macOS/Linux release packaging remains pending; the self-contained
+  wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.
 - Linux packaging/smoke testing remains pending.

@@ -23,6 +23,7 @@ const series = (overrides: Partial<DicomSeries> = {}): DicomSeries => ({
   modality: 'MR',
   description: 'T1 POST CONTRAST',
   imageType: ['ORIGINAL', 'PRIMARY'],
+  sourceKind: 'browser-folder',
   geometry: { rows: 512, columns: 512 },
   frameOfReferenceId: 'frame-a',
   instances: [],

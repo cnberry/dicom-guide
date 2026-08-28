@@ -27,6 +27,7 @@ result into a medical conclusion.
 - Explicit safety, privacy, and provenance UI.
 - Source-linked manual length and bidirectional evidence with a human-readable table.
 - Explicit, numeric-only local measurement comparison for agents.
+- Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
 ### Phase 2 — robust local archive and tools
 

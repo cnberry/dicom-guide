@@ -130,7 +130,11 @@ export function DicomViewport({
           <span className="eyebrow">{label}</span>
           <strong>{series?.description ?? 'No series selected'}</strong>
         </div>
-        <span className="native-badge">Native source</span>
+        <span className="native-badge">
+          {series
+            ? `Native source · ${series.sourceKind === 'loopback-service' ? 'local service' : 'folder'}`
+            : 'Native source'}
+        </span>
       </div>
       <div
         className="dicom-viewport"

@@ -57,6 +57,11 @@ restores overlays only on a selected series/instance whose opaque IDs match. Loa
 a new DICOM folder clears the annotation state, pixel cache, and file registry so
 measurements cannot silently carry across imaging sessions.
 
+Service-backed measurement packets use the catalog's `series_*`, `instance_*`, and
+`frame_*` opaque IDs directly, so agents can join evidence to manifest records
+without filenames or DICOM UIDs. Validators also accept the earlier 16-hex local
+folder IDs for backward compatibility.
+
 ## Numeric comparison drafts
 
 Agents can compute a deliberately limited measurement comparison locally:
@@ -84,6 +89,12 @@ Start the local service:
 scanview-agent serve '/safe/local/DICOM/root'
 ```
 
+Or launch the bundled human and agent workspace on the same origin:
+
+```bash
+scanview-agent launch '/safe/local/DICOM/root'
+```
+
 It binds only to `127.0.0.1`, prints a random bearer token, and exposes:
 
 ```text
@@ -93,8 +104,10 @@ GET /v1/comparison-candidates
 GET /v1/instances/{opaque_id}
 ```
 
-There is no source write, overwrite, or delete endpoint. Non-health requests require
-`Authorization: Bearer <token>`.
+There is no source write, overwrite, or delete endpoint. Non-health agent requests
+require `Authorization: Bearer <token>`. The browser receives a SameSite, HttpOnly
+session cookie after a one-time loopback redirect; the token is not exposed to
+viewer JavaScript or retained in the visible URL.
 
 ## Required agent output shape
 

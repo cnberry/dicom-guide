@@ -9,6 +9,7 @@ python -m pip install -e '.[test]'
 scanview-agent manifest '/path/to/copied/DICOM' --output manifest.json
 scanview-agent candidates manifest.json
 scanview-agent serve '/path/to/copied/DICOM'
+scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
@@ -16,8 +17,12 @@ scanview-agent compare-measurements baseline.json followup.json \
   --output comparison.json
 ```
 
-The server prints a random bearer token and only binds to `127.0.0.1`. It has no
-write or delete endpoint. Measurement validation returns only validity, schema,
+Use `scripts/build_release.py` from the repository root to produce a self-contained
+wheel with the built UI under `scanview_agent/ui`. A regular agent-only wheel stays
+lightweight. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
+and the API from one loopback origin. It establishes an
+HttpOnly browser session, while agents continue to use the printed bearer token.
+The server has no write or delete endpoint. Measurement validation returns only validity, schema,
 review state, count, and errors; it does not echo source identifiers, coordinates,
 or values. Comparison requires explicit tracking IDs from distinct source series and
 trusted millimeter results. It emits source-linked numeric change, missing context,

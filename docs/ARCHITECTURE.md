@@ -13,15 +13,19 @@ while preserving a standards-based migration path.
 ```text
 Immutable copied DICOM
         |
-        +--> Browser folder picker --> Cornerstone3D --> human side-by-side view
-        |                                      |
-        |                                      +--> measurement packet --> table / save/reopen
-        |                                                                   |
-        |                                                                   +--> local numeric comparison
-        |
-        +--> scanview-agent catalog --> manifest v1 --> agents / automation
-                                  |
-                                  +--> token-protected instance bytes
+        +--> scanview-agent launch (loopback only)
+                         |
+                         +--> manifest v1 ------------------> agents / automation
+                         |
+                         +--> protected native instances --> Cornerstone3D human view
+                         |                                      |
+                         |                                      +--> measurement packet
+                         |                                                   |
+                         +--> static bundled UI                              +--> table / reopen
+                                                                             |
+                                                                             +--> local numeric comparison
+
+Alternate local input: browser folder picker --> Cornerstone3D
 
 Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
                                 --> Slicer registration/segmentation jobs
@@ -33,14 +37,17 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
 1. **Source:** copied originals are immutable; their hashes are evidence anchors.
 2. **Catalog:** direct patient name/ID tags are excluded, but all output remains
    sensitive and is explicitly not claimed to be de-identified.
-3. **Viewer:** local files are added to Cornerstone's in-browser file manager.
+3. **Viewer:** local files are added to Cornerstone's in-browser file manager, or
+   protected native instances are streamed from the same loopback process.
    There are no runtime third-party requests or analytics. A Content Security
    Policy limits code, workers, codecs, images, and connections to the local origin
    (plus in-memory `blob:`/`data:` assets where required).
    Loading a different folder clears annotations, decoded-image cache, and file
    registry before the new imaging session begins.
-4. **Agent API:** binds to loopback only, uses an ephemeral bearer token, returns
-   only opaque IDs and an allowlisted metadata contract, and has no write/delete API.
+4. **Agent API:** binds to loopback only, uses an ephemeral bearer token for agents
+   and an HttpOnly same-origin session for the browser, returns only opaque IDs and
+   an allowlisted metadata contract, and has no write/delete API. Service-backed
+   measurement IDs join directly to that manifest; legacy folder IDs remain accepted.
 5. **Derivatives:** future transforms, resampled images, masks, additional
    measurements, and reports go to a separate store with source references and
    review status. Manual length/bidirectional drafts already use this contract as
@@ -79,6 +86,7 @@ is not an MVP feature and is never allowed between CT and MRI.
 
 ## Packaging path
 
-- Today: Vite static app and Python 3.11+ package.
-- Next: same-origin instance streaming from the local service; optional Orthanc.
+- Today: Vite static app plus a Python 3.11+ same-origin local launcher; a staged
+  release builder embeds both into a self-contained wheel without modifying source.
+- Next: signed/notarized macOS and Linux release artifacts; optional Orthanc.
 - Later: Tauri/Electron or a packaged runtime after macOS and Linux smoke tests.

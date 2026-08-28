@@ -23,6 +23,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 ## Current capabilities
 
 - Local folder import; no upload, analytics, fonts, or telemetry.
+- One loopback launcher for the bundled UI, privacy-minimized catalog, protected
+  native DICOM bytes, and agent endpoints.
 - No external processing API: decoding, metadata, and comparisons stay on-device.
 - Extension-independent DICOM Part 10 parsing.
 - MRI/CT stack rendering through Cornerstone3D's maintained codecs.
@@ -42,7 +44,35 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Versioned catalog and measurement JSON Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
-## Run the viewer
+## Launch the unified local workspace
+
+Requirements: Python 3.11+, plus Node.js 22+ and pnpm 11+ for the initial build.
+
+```bash
+python3 -m venv .venv
+pnpm install
+pnpm build
+.venv/bin/python -m pip install -e 'packages/agent[test]'
+.venv/bin/scanview-agent launch '/Users/chris/Desktop/Mila Scan CD'
+```
+
+The launcher indexes the selected directory, binds only to loopback, opens the local
+viewer, and serves the same opaque manifest and native instances to people and
+agents. A one-time URL establishes an HttpOnly local browser session and then
+redirects to a clean URL. DICOM bytes never leave this computer.
+
+To create a self-contained installable wheel without modifying the source tree:
+
+```bash
+pnpm build
+.venv/bin/python scripts/build_release.py --output-dir release
+```
+
+The release builder stages the viewer, workers, and codecs inside the wheel. A
+regular agent-only wheel remains lightweight and can still run `manifest`,
+`candidates`, and `serve`; pass `--ui-dist` to `launch` when using that form.
+
+## Run the folder-picker viewer
 
 Requirements: Node.js 22+ and pnpm 11+.
 
@@ -75,6 +105,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e 'packages/agent[test]'
 .venv/bin/scanview-agent manifest '/path/to/copied/DICOM' --output /safe/local/manifest.json
 .venv/bin/scanview-agent serve '/path/to/copied/DICOM'
+.venv/bin/scanview-agent launch '/path/to/copied/DICOM'
 .venv/bin/scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 .venv/bin/scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
@@ -89,8 +120,10 @@ The server exposes:
 - `GET /v1/comparison-candidates`
 - `GET /v1/instances/{opaque_id}`
 
-All endpoints except health require the bearer token printed at startup. There is
-no mutation or deletion endpoint. The server refuses non-loopback bind addresses.
+All endpoints except health require the bearer token printed at startup. The unified
+browser uses a same-origin HttpOnly session cookie instead of exposing that token to
+application JavaScript. There is no mutation or deletion endpoint. The server
+refuses non-loopback bind addresses.
 
 ## Save and reopen a measurement draft
 

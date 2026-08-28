@@ -18,7 +18,8 @@ quality-system, and regulatory review.
 - Originals are immutable and hashed.
 - The app makes no runtime network request by default.
 - DICOM processing never depends on an external API; the CSP blocks external origins.
-- The API binds to loopback and requires a random bearer token.
+- The API binds to loopback and requires a random bearer token; the unified browser
+  uses a SameSite, HttpOnly session cookie established by a one-time local redirect.
 - Paths, patient names/IDs, DICOM headers, and response bodies are absent from logs.
 - Manifests and derivatives stay outside Git and are treated as sensitive.
 - Source delete and overwrite operations do not exist.

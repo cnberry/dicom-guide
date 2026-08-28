@@ -34,6 +34,9 @@
 4. Added a local agent comparison command that requires explicit tracking IDs from
    distinct series and emits numeric change, limitations, missing context, and no
    response interpretation.
+5. Unified the bundled UI, privacy-minimized manifest, protected native instances,
+   and agent API behind one loopback launcher. Service-backed evidence IDs now join
+   directly to manifest records.
 
 ## Immediate
 
@@ -43,8 +46,8 @@
    metadata or screenshots.
 3. Add ROI measurements, orientation labels, and key-image export using the existing
    evidence packet contract.
-4. Serve instance bytes and static UI from one loopback process for a consistent
-   macOS/Linux launcher and agent/viewer deep links.
+4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
+   links around the self-contained Python wheel.
 5. Define the clinician-reviewed evidence packet and sign-off workflow.
 
 ## Next milestone

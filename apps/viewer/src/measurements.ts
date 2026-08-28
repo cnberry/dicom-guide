@@ -192,8 +192,12 @@ export const buildMeasurementEvidencePacket = (
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
-const isOpaqueId = (value: unknown): value is string =>
-  typeof value === 'string' && /^[0-9a-f]{16}$/.test(value);
+const isOpaqueId = (
+  value: unknown,
+  kind: 'series' | 'instance' | 'frame',
+): value is string =>
+  typeof value === 'string' &&
+  (/^[0-9a-f]{16}$/.test(value) || new RegExp(`^${kind}_[0-9a-f]{20}$`).test(value));
 
 const hasOnlyKeys = (value: Record<string, unknown>, allowed: string[]): boolean =>
   Object.keys(value).every((key) => allowed.includes(key));
@@ -278,9 +282,10 @@ export const readMeasurementEvidencePacket = (
       const source = item.source;
       if (
         !isRecord(source) ||
-        !isOpaqueId(source.series_id) ||
-        !isOpaqueId(source.instance_id) ||
-        (source.frame_of_reference_id !== undefined && !isOpaqueId(source.frame_of_reference_id))
+        !isOpaqueId(source.series_id, 'series') ||
+        !isOpaqueId(source.instance_id, 'instance') ||
+        (source.frame_of_reference_id !== undefined &&
+          !isOpaqueId(source.frame_of_reference_id, 'frame'))
       ) {
         errors.push(`Measurement ${index + 1} has invalid source provenance.`);
       } else if (!hasOnlyKeys(source, ['series_id', 'instance_id', 'frame_of_reference_id'])) {

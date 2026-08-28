@@ -10,7 +10,8 @@ export type Geometry = {
 
 export type DicomInstance = {
   instanceId: string;
-  file: File;
+  file?: File;
+  imageUrl?: string;
   instanceNumber: number;
   imagePosition?: number[];
 };
@@ -25,6 +26,7 @@ export type DicomSeries = {
   bodyPart?: string;
   imageType: string[];
   frameOfReferenceId?: string;
+  sourceKind: 'browser-folder' | 'loopback-service';
   geometry: Geometry;
   instances: DicomInstance[];
 };
@@ -106,6 +108,7 @@ const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
     frameOfReferenceId: frameOfReferenceUid
       ? await safeId('frame-of-reference', frameOfReferenceUid)
       : undefined,
+    sourceKind: 'browser-folder',
     acquisitionDate:
       textTag(dataset, 'x00080022') ??
       textTag(dataset, 'x00080021') ??
@@ -142,7 +145,7 @@ const sortInstances = (instances: DicomInstance[], orientation?: number[]): Dico
       if (positionDifference !== 0) return positionDifference;
     }
     if (a.instanceNumber !== b.instanceNumber) return a.instanceNumber - b.instanceNumber;
-    return a.file.name.localeCompare(b.file.name);
+    return (a.file?.name ?? a.instanceId).localeCompare(b.file?.name ?? b.instanceId);
   });
 };
 

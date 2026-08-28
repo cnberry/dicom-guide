@@ -235,8 +235,8 @@ def test_bidirectional_measurement_packet_validation() -> None:
                 "type": "bidirectional",
                 "review_status": "unreviewed",
                 "source": {
-                    "series_id": "0123456789abcdef",
-                    "instance_id": "fedcba9876543210",
+                    "series_id": "series_0123456789abcdef0123",
+                    "instance_id": "instance_0123456789abcdef0123",
                 },
                 "geometry": {
                     "coordinate_system": "DICOM patient LPS",

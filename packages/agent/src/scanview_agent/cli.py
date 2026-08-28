@@ -27,6 +27,17 @@ def _write_json(value: object, output: Path | None) -> None:
         print(payload, end="")
 
 
+def _viewer_dist(explicit: Path | None) -> Path:
+    candidates = [explicit] if explicit else [
+        Path(__file__).resolve().parents[4] / "apps" / "viewer" / "dist",
+        Path(__file__).resolve().parent / "ui",
+    ]
+    for candidate in candidates:
+        if candidate and (candidate.expanduser() / "index.html").is_file():
+            return candidate.expanduser()
+    raise ValueError("viewer bundle is missing; run `pnpm build` or pass --ui-dist")
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="scanview-agent")
     commands = root.add_subparsers(dest="command", required=True)
@@ -47,6 +58,17 @@ def parser() -> argparse.ArgumentParser:
     api.add_argument("--token")
     api.add_argument("--no-hashes", action="store_true")
 
+    launch = commands.add_parser(
+        "launch",
+        help="Open one loopback-only workspace for the local UI and agent interface",
+    )
+    launch.add_argument("root", type=Path)
+    launch.add_argument("--port", type=int, default=8765)
+    launch.add_argument("--token")
+    launch.add_argument("--no-hashes", action="store_true")
+    launch.add_argument("--no-open", action="store_true")
+    launch.add_argument("--ui-dist", type=Path)
+
     validate_measurements = commands.add_parser(
         "validate-measurements",
         help="Validate and summarize a local ScanView measurement evidence packet",
@@ -66,7 +88,8 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    args = parser().parse_args()
+    argument_parser = parser()
+    args = argument_parser.parse_args()
     if args.command == "manifest":
         catalog, _ = build_catalog(
             args.root,
@@ -81,6 +104,25 @@ def main() -> None:
     elif args.command == "serve":
         catalog, registry = build_catalog(args.root, include_hashes=not args.no_hashes)
         serve(catalog, registry, port=args.port, token=args.token)
+    elif args.command == "launch":
+        try:
+            ui_dist = _viewer_dist(args.ui_dist)
+        except ValueError as error:
+            argument_parser.error(str(error))
+        catalog, registry = build_catalog(
+            args.root,
+            include_hashes=not args.no_hashes,
+            progress=lambda count: count % 1000 == 0
+            and print(f"Indexed {count} files…", file=sys.stderr, flush=True),
+        )
+        serve(
+            catalog,
+            registry,
+            port=args.port,
+            token=args.token,
+            ui_dist=ui_dist,
+            open_browser=not args.no_open,
+        )
     elif args.command == "validate-measurements":
         packet = json.loads(args.packet.read_text())
         summary = measurement_packet_summary(packet)
@@ -98,7 +140,7 @@ def main() -> None:
                 followup_tracking_id=args.followup_id,
             )
         except ValueError as error:
-            parser().error(str(error))
+            argument_parser.error(str(error))
         _write_json(comparison, args.output)
 
 

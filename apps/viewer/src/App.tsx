@@ -19,6 +19,7 @@ import {
   type MeasurementEvidence,
   type MeasurementEvidencePacket,
 } from './measurements';
+import { loadLocalServiceCatalog } from './localService';
 
 type ImportState = { processed: number; total: number } | undefined;
 
@@ -65,6 +66,11 @@ const formatMeasurementResult = (measurement: MeasurementEvidence): string => {
   return `${measurement.result.long_axis.toFixed(1)} × ${measurement.result.short_axis.toFixed(1)} mm · ${measurement.result.product.toFixed(1)} mm²`;
 };
 
+const formatOpaqueSource = (value: string, kind: 'series' | 'instance'): string =>
+  value.startsWith(`${kind}_`)
+    ? `${kind}_${value.slice(kind.length + 1, kind.length + 9)}…`
+    : `${kind} ${value.slice(0, 8)}…`;
+
 const MeasurementTable = ({ measurements }: { measurements: MeasurementEvidence[] }) => (
   <section className="measurement-panel" aria-label="Measurement evidence">
     <div className="measurement-heading">
@@ -91,8 +97,8 @@ const MeasurementTable = ({ measurements }: { measurements: MeasurementEvidence[
                 <td>{measurement.type === 'bidirectional' ? 'Bidirectional' : 'Length'}</td>
                 <td>{formatMeasurementResult(measurement)}</td>
                 <td>
-                  series {measurement.source.series_id.slice(0, 8)}… · instance{' '}
-                  {measurement.source.instance_id.slice(0, 8)}…
+                  {formatOpaqueSource(measurement.source.series_id, 'series')} ·{' '}
+                  {formatOpaqueSource(measurement.source.instance_id, 'instance')}
                 </td>
                 <td>
                   <code>{measurement.tracking_id}</code>
@@ -117,6 +123,7 @@ const MeasurementTable = ({ measurements }: { measurements: MeasurementEvidence[
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const measurementInputRef = useRef<HTMLInputElement>(null);
+  const sourceGenerationRef = useRef(0);
   const [series, setSeries] = useState<DicomSeries[]>([]);
   const [baselineId, setBaselineId] = useState<string>();
   const [followupId, setFollowupId] = useState<string>();
@@ -151,6 +158,26 @@ export default function App() {
       }),
     [],
   );
+  useEffect(() => {
+    const controller = new AbortController();
+    const generation = sourceGenerationRef.current;
+    void loadLocalServiceCatalog(controller.signal).then((catalog) => {
+      if (!catalog || controller.signal.aborted || generation !== sourceGenerationRef.current) {
+        return;
+      }
+      setSeries(catalog.series);
+      setBaselineId(catalog.series[0]?.id);
+      setFollowupId(undefined);
+      setBaselineIndex(0);
+      setFollowupIndex(0);
+      setImportMessage(
+        catalog.series.length
+          ? `${catalog.studyCount} studies · ${catalog.series.length} renderable series · ${catalog.instanceCount.toLocaleString()} indexed instances · local loopback service · no upload`
+          : `${catalog.studyCount} studies · no renderable MR/CT pixel series · local loopback service`,
+      );
+    });
+    return () => controller.abort();
+  }, []);
   const openFolder = () => {
     if (!inputRef.current) return;
     inputRef.current.value = '';
@@ -159,6 +186,7 @@ export default function App() {
 
   const chooseFiles = async (fileList: FileList | null) => {
     if (!fileList?.length) return;
+    sourceGenerationRef.current += 1;
     const files = Array.from(fileList).filter((file) => !file.name.startsWith('.'));
     setSeries([]);
     setBaselineId(undefined);
