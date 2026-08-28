@@ -119,6 +119,21 @@
 5. Repeated movement and reset against a copied 62-slice JPEG 2000 MR series through
    bundled OpenJPEG without retaining or displaying a patient screenshot.
 
+## Completed in the tenth milestone
+
+1. Added a human/agent measurement workspace that can strictly validate bounded
+   pasted JSON without an operating-system file picker or external API.
+2. Added session-only annotation deletion using stable tracking-ID mapping; source
+   DICOM and previously exported drafts remain unchanged.
+3. Added explicit baseline/follow-up measurement selection, a normalized working
+   lesion label, and local numeric preview/export with no response category.
+4. Extended the v1 comparison schema and Python builder for optional bounded labels,
+   then added a privacy-minimized validator that rechecks arithmetic, metric sets,
+   sources, review state, and the empty-interpretation invariant.
+5. Verified a two-study synthetic MR workflow end to end: strict paste, overlay
+   hydration, 20→16 mm selection, −4 mm/−20% preview, schema/agent validation,
+   deletion, and loopback-only resource access.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
@@ -129,8 +144,8 @@
    around the implemented unreviewed visit packet.
 4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
    links around the self-contained Python wheel.
-5. Add safe measurement-table editing for labels, deletion, and explicit lesion
-   pairing without changing immutable geometry or source provenance.
+5. Carry explicitly selected comparison drafts into a future clinician review and
+   amendment workflow without treating labels as same-lesion confirmation.
 
 ## Next milestone
 

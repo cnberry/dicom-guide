@@ -19,7 +19,9 @@ scanview-agent validate-visit-packet scanview-visit-packet.zip
 scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
+  --lesion-label 'Target lesion A' \
   --output comparison.json
+scanview-agent validate-comparison comparison.json
 ```
 
 Use `scripts/build_release.py` from the repository root to produce a self-contained
@@ -35,6 +37,9 @@ review state, count, and errors; it does not echo source identifiers, coordinate
 or values. Comparison requires explicit tracking IDs from distinct source series and
 trusted millimeter results. It emits source-linked numeric change, missing context,
 and clinician questions with an empty interpretation list and `unreviewed` state.
+An optional working lesion label is normalized and bounded but never treated as proof
+of lesion identity. Comparison validation omits that label, IDs, coordinates, and
+numeric values from its privacy-minimized summary.
 Visit-packet assembly also stays local. It accepts only validated key-image v2
 archives with one matching opaque patient context, distinct dated studies/series,
 explicit ordering, and one modality. It creates a static review page plus an

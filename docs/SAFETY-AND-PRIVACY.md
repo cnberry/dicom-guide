@@ -93,3 +93,10 @@ The current `compare-measurements` command goes further: it always leaves
 `candidate_interpretations` empty. It reports only source-linked numeric differences,
 requires distinct source series and trusted physical units, and lists the clinical
 context still needed before anyone applies response criteria.
+
+The browser pairing editor uses the same constraints and requires strictly ordered
+acquisition dates, a human-selected measurement at each timepoint, and a bounded
+working label. The label is not proof of
+same-lesion identity. Deletion is session-only, pasted JSON uses the strict measurement
+validator and a 2 MB cap, and comparison validation rejects arithmetic tampering or
+any non-empty interpretation list while withholding labels, identifiers, and values.

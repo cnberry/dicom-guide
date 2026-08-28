@@ -293,12 +293,24 @@ def _percent_change(baseline: float, followup: float) -> float | None:
     return None if baseline == 0 else ((followup - baseline) / baseline) * 100
 
 
+def _normalize_lesion_label(value: str) -> str:
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise ValueError("lesion label must not contain control characters")
+    normalized = " ".join(value.split())
+    if not normalized:
+        raise ValueError("lesion label must not be empty")
+    if len(normalized) > 80:
+        raise ValueError("lesion label must not exceed 80 characters")
+    return normalized
+
+
 def build_measurement_comparison(
     baseline_packet: dict[str, Any],
     followup_packet: dict[str, Any],
     *,
     baseline_tracking_id: str,
     followup_tracking_id: str,
+    lesion_label: str | None = None,
 ) -> dict[str, Any]:
     baseline_errors = validate_measurement_packet(baseline_packet)
     followup_errors = validate_measurement_packet(followup_packet)
@@ -352,15 +364,31 @@ def build_measurement_comparison(
             limitations.append(f"Percent change for {metric} is undefined because baseline is zero.")
         computed_results.append(computed)
 
+    pairing = {
+        "method": "explicit_tracking_id_selection",
+        "baseline_measurement_id": baseline_tracking_id,
+        "followup_measurement_id": followup_tracking_id,
+    }
+    label = _normalize_lesion_label(lesion_label) if lesion_label is not None else None
+    if label is not None:
+        pairing["lesion_label"] = label
+        questions = [
+            f"Does {label!r} identify the same lesion and tumor component at both timepoints?",
+            "Are these source series suitable for longitudinal response measurement?",
+            "Which response criteria and baseline or nadir convention should apply?",
+        ]
+    else:
+        questions = [
+            "Do these measurements represent the same lesion and tumor component?",
+            "Are these source series suitable for longitudinal response measurement?",
+            "Which response criteria and baseline or nadir convention should apply?",
+        ]
+
     return {
         "schema_version": "1.0.0",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "review_status": "unreviewed",
-        "pairing": {
-            "method": "explicit_tracking_id_selection",
-            "baseline_measurement_id": baseline_tracking_id,
-            "followup_measurement_id": followup_tracking_id,
-        },
+        "pairing": pairing,
         "observations": [
             {
                 "timepoint": "baseline",
@@ -384,9 +412,227 @@ def build_measurement_comparison(
             "diagnosis-specific response criteria",
             "clinical status, steroid context, and treatment timing",
         ],
-        "questions_for_clinician": [
-            "Do these measurements represent the same lesion and tumor component?",
-            "Are these source series suitable for longitudinal response measurement?",
-            "Which response criteria and baseline or nadir convention should apply?",
-        ],
+        "questions_for_clinician": questions,
+    }
+
+
+def validate_measurement_comparison(comparison: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(comparison, dict):
+        return ["comparison must be a JSON object"]
+    allowed_root = {
+        "schema_version",
+        "created_at",
+        "review_status",
+        "pairing",
+        "observations",
+        "computed_results",
+        "candidate_interpretations",
+        "limitations",
+        "missing_context",
+        "questions_for_clinician",
+    }
+    if not _has_only_keys(comparison, allowed_root):
+        errors.append("comparison contains unsupported fields")
+    if comparison.get("schema_version") != "1.0.0":
+        errors.append("schema_version must be 1.0.0")
+    if comparison.get("review_status") != "unreviewed":
+        errors.append("review_status must be unreviewed")
+    created_at = comparison.get("created_at")
+    if not isinstance(created_at, str) or not created_at:
+        errors.append("created_at must be a non-empty string")
+    else:
+        try:
+            datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError:
+            errors.append("created_at must be an ISO 8601 date-time")
+
+    pairing = comparison.get("pairing")
+    baseline_id = followup_id = None
+    if not isinstance(pairing, dict):
+        errors.append("pairing must be an object")
+    else:
+        if not _has_only_keys(
+            pairing,
+            {
+                "method",
+                "lesion_label",
+                "baseline_measurement_id",
+                "followup_measurement_id",
+            },
+        ):
+            errors.append("pairing contains unsupported fields")
+        if pairing.get("method") != "explicit_tracking_id_selection":
+            errors.append("pairing method must be explicit_tracking_id_selection")
+        baseline_id = pairing.get("baseline_measurement_id")
+        followup_id = pairing.get("followup_measurement_id")
+        if not isinstance(baseline_id, str) or not baseline_id:
+            errors.append("baseline_measurement_id must be a non-empty string")
+        if not isinstance(followup_id, str) or not followup_id:
+            errors.append("followup_measurement_id must be a non-empty string")
+        if baseline_id == followup_id and baseline_id is not None:
+            errors.append("baseline and follow-up measurement IDs must differ")
+        label = pairing.get("lesion_label")
+        if label is not None:
+            if not isinstance(label, str):
+                errors.append("lesion_label must be a string")
+            else:
+                try:
+                    if _normalize_lesion_label(label) != label:
+                        errors.append("lesion_label must already be normalized")
+                except ValueError as error:
+                    errors.append(str(error))
+
+    observations = comparison.get("observations")
+    measurement_type = None
+    if not isinstance(observations, list) or len(observations) != 2:
+        errors.append("observations must contain baseline and follow-up entries")
+    else:
+        observed_types = []
+        observed_series = []
+        for index, expected_timepoint in enumerate(("baseline", "followup")):
+            observation = observations[index]
+            prefix = f"observations[{index}]"
+            if not isinstance(observation, dict):
+                errors.append(f"{prefix} must be an object")
+                continue
+            if not _has_only_keys(
+                observation,
+                {"timepoint", "measurement_type", "source", "review_status"},
+            ):
+                errors.append(f"{prefix} contains unsupported fields")
+            if observation.get("timepoint") != expected_timepoint:
+                errors.append(f"{prefix}.timepoint must be {expected_timepoint}")
+            current_type = observation.get("measurement_type")
+            if current_type not in {"length", "bidirectional", "elliptical_roi"}:
+                errors.append(f"{prefix}.measurement_type is unsupported")
+            else:
+                observed_types.append(current_type)
+            if observation.get("review_status") != "unreviewed":
+                errors.append(f"{prefix}.review_status must be unreviewed")
+            source = observation.get("source")
+            if not isinstance(source, dict) or not _has_only_keys(
+                source, {"series_id", "instance_id", "frame_of_reference_id"}
+            ):
+                errors.append(f"{prefix}.source is invalid")
+                continue
+            for key, kind in (("series_id", "series"), ("instance_id", "instance")):
+                if not _valid_opaque_id(source.get(key), kind):
+                    errors.append(f"{prefix}.source.{key} must be a supported opaque ID")
+            frame = source.get("frame_of_reference_id")
+            if frame is not None and not _valid_opaque_id(frame, "frame"):
+                errors.append(f"{prefix}.source.frame_of_reference_id is invalid")
+            observed_series.append(source.get("series_id"))
+        if len(observed_types) == 2:
+            if observed_types[0] != observed_types[1]:
+                errors.append("observation measurement types must match")
+            else:
+                measurement_type = observed_types[0]
+        if len(observed_series) == 2 and observed_series[0] == observed_series[1]:
+            errors.append("observation source series must differ")
+
+    expected_metrics = {
+        "length": {"length": "mm"},
+        "bidirectional": {
+            "long_axis": "mm",
+            "short_axis": "mm",
+            "bidimensional_product": "mm2",
+        },
+        "elliptical_roi": {
+            "major_axis": "mm",
+            "minor_axis": "mm",
+            "elliptical_area": "mm2",
+        },
+    }.get(measurement_type, {})
+    computed_results = comparison.get("computed_results")
+    seen_metrics: set[str] = set()
+    if not isinstance(computed_results, list) or not computed_results:
+        errors.append("computed_results must be a non-empty array")
+    else:
+        for index, result in enumerate(computed_results):
+            prefix = f"computed_results[{index}]"
+            if not isinstance(result, dict):
+                errors.append(f"{prefix} must be an object")
+                continue
+            if not _has_only_keys(
+                result,
+                {
+                    "metric",
+                    "baseline",
+                    "followup",
+                    "absolute_change",
+                    "percent_change",
+                    "unit",
+                    "source_measurement_ids",
+                    "review_status",
+                },
+            ):
+                errors.append(f"{prefix} contains unsupported fields")
+            metric = result.get("metric")
+            if metric not in expected_metrics or metric in seen_metrics:
+                errors.append(f"{prefix}.metric is unexpected or duplicated")
+            elif result.get("unit") != expected_metrics[metric]:
+                errors.append(f"{prefix}.unit disagrees with metric")
+            else:
+                seen_metrics.add(metric)
+            baseline_value = result.get("baseline")
+            followup_value = result.get("followup")
+            absolute_change = result.get("absolute_change")
+            if not _finite_nonnegative(baseline_value) or not _finite_nonnegative(followup_value):
+                errors.append(f"{prefix} baseline/follow-up values must be finite and nonnegative")
+            elif (
+                not isinstance(absolute_change, (int, float))
+                or isinstance(absolute_change, bool)
+                or not math.isfinite(absolute_change)
+            ):
+                errors.append(f"{prefix}.absolute_change must be finite")
+            elif not _approximately_equal(absolute_change, followup_value - baseline_value):
+                errors.append(f"{prefix}.absolute_change disagrees with source values")
+            percent = result.get("percent_change")
+            if _finite_nonnegative(baseline_value) and baseline_value == 0:
+                if percent is not None:
+                    errors.append(f"{prefix}.percent_change must be omitted when baseline is zero")
+            elif _finite_nonnegative(baseline_value) and _finite_nonnegative(followup_value):
+                expected_percent = ((followup_value - baseline_value) / baseline_value) * 100
+                if (
+                    not isinstance(percent, (int, float))
+                    or isinstance(percent, bool)
+                    or not math.isfinite(percent)
+                    or not _approximately_equal(percent, expected_percent)
+                ):
+                    errors.append(f"{prefix}.percent_change disagrees with source values")
+            if result.get("source_measurement_ids") != [baseline_id, followup_id]:
+                errors.append(f"{prefix}.source_measurement_ids disagree with pairing")
+            if result.get("review_status") != "unreviewed":
+                errors.append(f"{prefix}.review_status must be unreviewed")
+        if expected_metrics and seen_metrics != set(expected_metrics):
+            errors.append("computed_results do not contain the complete metric set")
+
+    if comparison.get("candidate_interpretations") != []:
+        errors.append("candidate_interpretations must remain empty")
+    for key in ("limitations", "missing_context", "questions_for_clinician"):
+        value = comparison.get(key)
+        if not isinstance(value, list) or not value or not all(
+            isinstance(item, str) and item for item in value
+        ):
+            errors.append(f"{key} must be a non-empty string array")
+    return errors
+
+
+def measurement_comparison_summary(comparison: Any) -> dict[str, Any]:
+    errors = validate_measurement_comparison(comparison)
+    observations = comparison.get("observations") if isinstance(comparison, dict) else None
+    measurement_type = None
+    if isinstance(observations, list) and observations and isinstance(observations[0], dict):
+        measurement_type = observations[0].get("measurement_type")
+    computed = comparison.get("computed_results") if isinstance(comparison, dict) else None
+    pairing = comparison.get("pairing") if isinstance(comparison, dict) else None
+    return {
+        "valid": not errors,
+        "schema_version": comparison.get("schema_version") if isinstance(comparison, dict) else None,
+        "review_status": comparison.get("review_status") if isinstance(comparison, dict) else None,
+        "measurement_type": measurement_type,
+        "metric_count": len(computed) if isinstance(computed, list) else 0,
+        "lesion_label_present": isinstance(pairing, dict) and "lesion_label" in pairing,
+        "errors": errors,
     }

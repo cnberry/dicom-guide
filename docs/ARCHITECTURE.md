@@ -83,8 +83,11 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    strict longitudinal gates. The viewer and CLI share that Python assembler; the
    viewer transport does not persist an intermediate server-side file. None modifies
    native instances. Agent comparisons accept only explicit, distinct-series
-   measurement selections and emit no response label; visit packets emit neither
-   numeric results nor candidate interpretations.
+   measurement selections and emit no response label. The browser can feed that path
+   through a bounded strict JSON paste, session-only deletion, and a transient working
+   lesion label; the label lives only in the exported comparison draft and never
+   rewrites measurement geometry. Visit packets emit neither numeric results nor
+   candidate interpretations.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

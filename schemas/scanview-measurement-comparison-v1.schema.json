@@ -30,6 +30,12 @@
       ],
       "properties": {
         "method": { "const": "explicit_tracking_id_selection" },
+        "lesion_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?!.*[\\u0000-\\u001F\\u007F]).*$"
+        },
         "baseline_measurement_id": { "type": "string", "minLength": 1 },
         "followup_measurement_id": { "type": "string", "minLength": 1 }
       }

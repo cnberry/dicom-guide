@@ -18,7 +18,11 @@ from scanview_agent.catalog import build_catalog
 from scanview_agent.cli import main
 from scanview_agent.comparison import suggest_pairs
 from scanview_agent.key_images import key_image_archive_summary
-from scanview_agent.measurements import build_measurement_comparison, measurement_packet_summary
+from scanview_agent.measurements import (
+    build_measurement_comparison,
+    measurement_comparison_summary,
+    measurement_packet_summary,
+)
 from scanview_agent.server import serve
 
 
@@ -619,11 +623,22 @@ def test_explicit_bidirectional_comparison_is_numeric_and_unreviewed() -> None:
         ),
         baseline_tracking_id="bidirectional:baseline",
         followup_tracking_id="bidirectional:followup",
+        lesion_label="  Target lesion A  ",
     )
 
     assert comparison["review_status"] == "unreviewed"
     assert comparison["pairing"]["method"] == "explicit_tracking_id_selection"
+    assert comparison["pairing"]["lesion_label"] == "Target lesion A"
     assert comparison["candidate_interpretations"] == []
+    assert measurement_comparison_summary(comparison) == {
+        "valid": True,
+        "schema_version": "1.0.0",
+        "review_status": "unreviewed",
+        "measurement_type": "bidirectional",
+        "metric_count": 3,
+        "lesion_label_present": True,
+        "errors": [],
+    }
     assert comparison["computed_results"] == [
         {
             "metric": "long_axis",
@@ -666,6 +681,30 @@ def test_explicit_bidirectional_comparison_is_numeric_and_unreviewed() -> None:
         },
     ]
     assert "diagnosis-specific response criteria" in comparison["missing_context"]
+
+
+def test_comparison_validator_rejects_arithmetic_and_interpretation_tampering() -> None:
+    comparison = build_measurement_comparison(
+        bidirectional_packet(
+            "bidirectional:baseline", 10, 4, series_id="0123456789abcdef"
+        ),
+        bidirectional_packet(
+            "bidirectional:followup", 8, 3, series_id="1123456789abcdef"
+        ),
+        baseline_tracking_id="bidirectional:baseline",
+        followup_tracking_id="bidirectional:followup",
+        lesion_label="Target lesion A",
+    )
+    comparison["computed_results"][0]["absolute_change"] = True
+    comparison["computed_results"][0]["percent_change"] = 99
+    comparison["candidate_interpretations"] = ["response"]
+
+    summary = measurement_comparison_summary(comparison)
+
+    assert summary["valid"] is False
+    assert "absolute_change must be finite" in " ".join(summary["errors"])
+    assert "percent_change disagrees" in " ".join(summary["errors"])
+    assert "must remain empty" in " ".join(summary["errors"])
 
 
 def test_comparison_refuses_unknown_units_and_inconsistent_results() -> None:
@@ -751,6 +790,8 @@ def test_comparison_cli_writes_owner_only_unreviewed_output(
             "bidirectional:baseline",
             "--followup-id",
             "bidirectional:followup",
+            "--lesion-label",
+            "Target lesion A",
             "--output",
             str(output_path),
         ],
@@ -761,4 +802,5 @@ def test_comparison_cli_writes_owner_only_unreviewed_output(
     comparison = json.loads(output_path.read_text())
     assert comparison["candidate_interpretations"] == []
     assert comparison["review_status"] == "unreviewed"
+    assert comparison["pairing"]["lesion_label"] == "Target lesion A"
     assert stat.S_IMODE(output_path.stat().st_mode) == 0o600

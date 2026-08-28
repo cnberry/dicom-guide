@@ -149,7 +149,9 @@ Agents can compute a deliberately limited measurement comparison locally:
 scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
+  --lesion-label 'Target lesion A' \
   --output comparison.json
+scanview-agent validate-comparison comparison.json
 ```
 
 The command requires two valid packets, explicit tracking IDs, matching measurement
@@ -161,6 +163,13 @@ empty. The command does not establish same-lesion identity, scan compatibility, 
 the response criteria needed for a medical conclusion. Elliptical ROI comparisons
 report only major/minor diameter and mathematical 2D ellipse-area change; they do not
 establish tumor segmentation, volume, burden, or response.
+
+The unified viewer exposes the same strict path without filesystem automation: an
+agent may paste a bounded versioned measurement packet, select the two tracking IDs,
+enter a working lesion label, preview the arithmetic, and export the v1 comparison.
+Deletion affects only a hydrated annotation in the current memory session. The local
+validator reports validity, schema/review state, measurement type, metric count, and
+whether a label exists; it never echoes the label, IDs, coordinates, or values.
 
 ## Source-read-only HTTP surface
 

@@ -40,6 +40,9 @@ result into a medical conclusion.
   authenticated same-origin loopback request; assembly and validation remain local
   and in memory.
 - Explicit, numeric-only local measurement comparison for agents.
+- Human/agent measurement workspace with strict pasted-JSON import, session-only
+  deletion, explicit labeled lesion pairing, local numeric preview/export, and a
+  privacy-minimized comparison validator.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
 ### Phase 2 — robust local archive and tools

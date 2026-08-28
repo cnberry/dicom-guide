@@ -40,14 +40,16 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   approximate normalized fallback everywhere else.
 - Human-readable measurement table plus versioned draft export/reopen with opaque
   series/instance references, patient-space geometry, tracking IDs, limitations,
-  and `unreviewed` state.
+  and `unreviewed` state. Validated JSON can also be pasted locally for agent-driven
+  workflows; annotations can be removed from the in-memory session without touching DICOM.
 - Per-viewport local key-image export: one ZIP containing a watermarked PNG, exact
   source/presentation provenance, and the visible source-scoped measurement packet.
 - One-click local clinician visit-packet export from the two live unified-viewer
   panes, plus the equivalent CLI workflow. Both use the same Python validation gates
   and produce a static side-by-side review page with an agent-verifiable manifest.
 - Local agent comparison of explicitly selected, distinct-series measurements;
-  numeric changes remain source-linked and never become a response verdict.
+  a bounded working lesion label and numeric changes remain source-linked and never
+  become a response verdict. The same workflow is available in the human viewer.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
@@ -126,7 +128,9 @@ python3 -m venv .venv
 .venv/bin/scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
+  --lesion-label 'Target lesion A' \
   --output comparison.json
+.venv/bin/scanview-agent validate-comparison comparison.json
 ```
 
 The server exposes:
@@ -155,11 +159,25 @@ direct patient name/ID or source path. To reopen it, load the source DICOM folde
 select the matching series, and choose **Open measurement draft**. Matching overlays
 and table rows are restored locally and remain `unreviewed`.
 
+For agent-operated sessions, choose **Paste measurement JSON**, paste the same
+versioned draft, and validate it in the browser. Input is capped at 2 MB and follows
+the identical strict parser. The measurement table can delete a hydrated annotation
+from memory; it never alters the imported packet on disk or the source DICOM.
+
+After selecting an eligible, strictly chronological baseline/follow-up pair, enter a
+working lesion label and explicitly choose one measurement from each source series. **Build numeric preview**
+shows only the baseline value, follow-up value, arithmetic difference, and percentage
+change. Exported comparison JSON remains `unreviewed` and has an empty
+`candidate_interpretations` array.
+
 `compare-measurements` requires explicit baseline and follow-up tracking IDs from
 different source series. It refuses unknown physical units, mismatched tool types,
 and geometry/result disagreements. Its output contains deltas, limitations, missing
 clinical context, and questions—not a treatment-response category. An ellipse is a
 2D area draft only; it is not tumor segmentation, volume, or a response verdict.
+`validate-comparison` rechecks source linkage, metric completeness, units, arithmetic,
+label bounds, review state, and the empty-interpretation invariant without printing
+the label, source IDs, coordinates, or numeric values.
 
 ## Save and validate a key image
 

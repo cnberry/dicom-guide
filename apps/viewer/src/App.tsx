@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
+import { MeasurementWorkspace } from './components/MeasurementWorkspace';
 import { MprPanel } from './components/MprPanel';
 import {
   createMeasurementEvidencePacket,
+  removeMeasurementAnnotation,
   resetLocalImagingSession,
   subscribeToMeasurementChanges,
   type ViewerTool,
@@ -17,13 +19,13 @@ import {
 } from './dicom';
 import {
   readMeasurementEvidencePacket,
-  type MeasurementEvidence,
   type MeasurementEvidencePacket,
 } from './measurements';
 import { loadLocalServiceCatalog } from './localService';
 import { saveVisitPacket as saveLocalVisitPacket } from './visitPacketService';
 
 type ImportState = { processed: number; total: number } | undefined;
+const maxPastedMeasurementBytes = 2_000_000;
 
 const SeriesSelect = ({
   label,
@@ -52,92 +54,6 @@ const SeriesSelect = ({
   </label>
 );
 
-const formatMeasurementResult = (measurement: MeasurementEvidence): string => {
-  if (measurement.type === 'length') {
-    return measurement.result.value === undefined
-      ? 'Physical units unavailable'
-      : `${measurement.result.value.toFixed(1)} mm`;
-  }
-  if (measurement.type === 'elliptical_roi') {
-    if (
-      measurement.result.major_axis === undefined ||
-      measurement.result.minor_axis === undefined ||
-      measurement.result.area === undefined
-    ) {
-      return 'Physical units unavailable';
-    }
-    return `${measurement.result.major_axis.toFixed(1)} × ${measurement.result.minor_axis.toFixed(1)} mm · ${measurement.result.area.toFixed(1)} mm²`;
-  }
-  if (
-    measurement.result.long_axis === undefined ||
-    measurement.result.short_axis === undefined ||
-    measurement.result.product === undefined
-  ) {
-    return 'Physical units unavailable';
-  }
-  return `${measurement.result.long_axis.toFixed(1)} × ${measurement.result.short_axis.toFixed(1)} mm · ${measurement.result.product.toFixed(1)} mm²`;
-};
-
-const formatOpaqueSource = (value: string, kind: 'series' | 'instance'): string =>
-  value.startsWith(`${kind}_`)
-    ? `${kind}_${value.slice(kind.length + 1, kind.length + 9)}…`
-    : `${kind} ${value.slice(0, 8)}…`;
-
-const MeasurementTable = ({ measurements }: { measurements: MeasurementEvidence[] }) => (
-  <section className="measurement-panel" aria-label="Measurement evidence">
-    <div className="measurement-heading">
-      <div>
-        <span className="eyebrow">Source-linked evidence · never a response verdict</span>
-        <h2>Manual measurements</h2>
-      </div>
-      <span className="unreviewed-badge">{measurements.length} unreviewed</span>
-    </div>
-    <div className="measurement-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Result</th>
-            <th>Opaque source</th>
-            <th>Tracking ID</th>
-          </tr>
-        </thead>
-        <tbody>
-          {measurements.length ? (
-            measurements.map((measurement) => (
-              <tr key={measurement.tracking_id}>
-                <td>
-                  {measurement.type === 'bidirectional'
-                    ? 'Bidirectional'
-                    : measurement.type === 'elliptical_roi'
-                      ? 'Ellipse ROI'
-                      : 'Length'}
-                </td>
-                <td>{formatMeasurementResult(measurement)}</td>
-                <td>
-                  {formatOpaqueSource(measurement.source.series_id, 'series')} ·{' '}
-                  {formatOpaqueSource(measurement.source.instance_id, 'instance')}
-                </td>
-                <td>
-                  <code>{measurement.tracking_id}</code>
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={4}>No manual measurements. Draw on a selected native source image.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-    <p>
-      Numeric changes require deliberately paired lesions, compatible acquisitions, and the
-      diagnosis-specific clinical criteria. ScanView does not infer those inputs.
-    </p>
-  </section>
-);
-
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const measurementInputRef = useRef<HTMLInputElement>(null);
@@ -160,6 +76,8 @@ export default function App() {
   );
   const [measurementPacket, setMeasurementPacket] = useState<MeasurementEvidencePacket>();
   const [liveMeasurementPacket, setLiveMeasurementPacket] = useState<MeasurementEvidencePacket>();
+  const [measurementPasteOpen, setMeasurementPasteOpen] = useState(false);
+  const [measurementPasteValue, setMeasurementPasteValue] = useState('');
   const [visitPacketState, setVisitPacketState] = useState<
     'idle' | 'working' | 'saved' | 'error'
   >('idle');
@@ -235,6 +153,8 @@ export default function App() {
     setMprSeriesId(undefined);
     setMeasurementPacket(undefined);
     setLiveMeasurementPacket(undefined);
+    setMeasurementPasteOpen(false);
+    setMeasurementPasteValue('');
     setMeasurementMessage('Measurement drafts stay local and require clinician review.');
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     resetLocalImagingSession();
@@ -302,21 +222,41 @@ export default function App() {
     const file = fileList?.[0];
     if (!file) return;
     try {
-      const parsed = readMeasurementEvidencePacket(JSON.parse(await file.text()));
-      if (!parsed.packet) {
-        setMeasurementPacket(undefined);
-        setLiveMeasurementPacket(undefined);
-        setMeasurementMessage(`Measurement draft rejected: ${parsed.errors.join(' ')}`);
-        return;
-      }
-      setLiveMeasurementPacket(undefined);
-      setMeasurementPacket(parsed.packet);
-      setMeasurementMessage(
-        `Loaded ${parsed.packet.measurements.length} unreviewed source-linked measurement${parsed.packet.measurements.length === 1 ? '' : 's'}; matching selected series are restored.`,
-      );
+      acceptMeasurementDraft(JSON.parse(await file.text()));
     } catch {
       setMeasurementPacket(undefined);
       setMeasurementMessage('Measurement draft rejected: file is not valid JSON.');
+    }
+  };
+
+  const acceptMeasurementDraft = (value: unknown): boolean => {
+    const parsed = readMeasurementEvidencePacket(value);
+    if (!parsed.packet) {
+      setMeasurementPacket(undefined);
+      setLiveMeasurementPacket(undefined);
+      setMeasurementMessage(`Measurement draft rejected: ${parsed.errors.join(' ')}`);
+      return false;
+    }
+    setLiveMeasurementPacket(undefined);
+    setMeasurementPacket(parsed.packet);
+    setMeasurementMessage(
+      `Loaded ${parsed.packet.measurements.length} unreviewed source-linked measurement${parsed.packet.measurements.length === 1 ? '' : 's'}; matching selected series are restored.`,
+    );
+    return true;
+  };
+
+  const importPastedMeasurementDraft = () => {
+    if (new TextEncoder().encode(measurementPasteValue).byteLength > maxPastedMeasurementBytes) {
+      setMeasurementMessage('Measurement draft rejected: pasted JSON exceeds the 2 MB limit.');
+      return;
+    }
+    try {
+      if (acceptMeasurementDraft(JSON.parse(measurementPasteValue))) {
+        setMeasurementPasteOpen(false);
+        setMeasurementPasteValue('');
+      }
+    } catch {
+      setMeasurementMessage('Measurement draft rejected: pasted text is not valid JSON.');
     }
   };
 
@@ -494,6 +434,12 @@ export default function App() {
               <button onClick={exportMeasurementDraft}>Export measurement draft</button>
               <button onClick={openMeasurementDraft}>Open measurement draft</button>
               <button
+                aria-expanded={measurementPasteOpen}
+                onClick={() => setMeasurementPasteOpen((value) => !value)}
+              >
+                Paste measurement JSON
+              </button>
+              <button
                 className={`visit-packet-button ${visitPacketState}`}
                 disabled={!visitPacketReady || visitPacketState === 'working'}
                 title={
@@ -530,6 +476,33 @@ export default function App() {
               {visitPacketMessage}
             </p>
           </section>
+
+          {measurementPasteOpen && (
+            <section className="measurement-paste-panel" aria-label="Paste local measurement JSON">
+              <div>
+                <span className="eyebrow">Agent-friendly local import · strict validation</span>
+                <h2>Paste a ScanView measurement draft</h2>
+                <p>
+                  The text stays in this browser session. Unsupported fields, altered arithmetic,
+                  reviewed state, and invalid source provenance are rejected.
+                </p>
+              </div>
+              <textarea
+                aria-label="Measurement draft JSON"
+                value={measurementPasteValue}
+                maxLength={maxPastedMeasurementBytes}
+                spellCheck={false}
+                placeholder="Paste versioned ScanView measurement JSON"
+                onChange={(event) => setMeasurementPasteValue(event.target.value)}
+              />
+              <div className="measurement-paste-actions">
+                <button className="primary-action" onClick={importPastedMeasurementDraft}>
+                  Validate and load locally
+                </button>
+                <button onClick={() => setMeasurementPasteOpen(false)}>Cancel</button>
+              </div>
+            </section>
+          )}
 
           <section className="viewport-grid">
             <DicomViewport
@@ -589,7 +562,13 @@ export default function App() {
               </div>
             </article>
           </section>
-          <MeasurementTable measurements={visibleMeasurements} />
+          <MeasurementWorkspace
+            measurements={visibleMeasurements}
+            baseline={baseline}
+            followup={followup}
+            compatibilityLevel={compatibility.level}
+            onDeleteMeasurement={removeMeasurementAnnotation}
+          />
         </>
       )}
 

@@ -9,7 +9,11 @@ from pathlib import Path
 from .catalog import build_catalog
 from .comparison import suggest_pairs
 from .key_images import key_image_archive_summary
-from .measurements import build_measurement_comparison, measurement_packet_summary
+from .measurements import (
+    build_measurement_comparison,
+    measurement_comparison_summary,
+    measurement_packet_summary,
+)
 from .server import serve
 from .visit_packets import visit_packet_summary, write_visit_packet
 
@@ -105,7 +109,16 @@ def parser() -> argparse.ArgumentParser:
     compare_measurements.add_argument("followup_packet", type=Path)
     compare_measurements.add_argument("--baseline-id", required=True)
     compare_measurements.add_argument("--followup-id", required=True)
+    compare_measurements.add_argument(
+        "--lesion-label",
+        help="Optional human-entered working label; does not prove lesion identity",
+    )
     compare_measurements.add_argument("--output", "-o", type=Path)
+    validate_comparison = commands.add_parser(
+        "validate-comparison",
+        help="Validate and privacy-minimize a local unreviewed comparison draft",
+    )
+    validate_comparison.add_argument("comparison", type=Path)
     return root
 
 
@@ -183,10 +196,17 @@ def main() -> None:
                 followup_packet,
                 baseline_tracking_id=args.baseline_id,
                 followup_tracking_id=args.followup_id,
+                lesion_label=args.lesion_label,
             )
         except ValueError as error:
             argument_parser.error(str(error))
         _write_json(comparison, args.output)
+    elif args.command == "validate-comparison":
+        comparison = json.loads(args.comparison.read_text())
+        summary = measurement_comparison_summary(comparison)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

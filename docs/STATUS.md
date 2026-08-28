@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 12:35 PDT
+Last updated: 2026-08-28 12:59 PDT
 
 ## Data transfer
 
@@ -58,6 +58,14 @@ Last updated: 2026-08-28 12:35 PDT
   limitations, and review state.
 - Human-readable source evidence table implemented; imported values are rejected when
   they disagree with their geometry.
+- Human/agent measurement workspace implemented with strict bounded JSON paste,
+  in-memory annotation deletion, explicit baseline/follow-up tracking-ID selection,
+  normalized working lesion labels, strict acquisition-date ordering, and numeric
+  preview/export that never assigns a response category.
+- Comparison schema/builder now accepts an optional bounded label. The local agent
+  validator independently checks source separation, type/unit agreement, complete
+  metric sets, arithmetic, review state, and an empty interpretation list while its
+  summary withholds labels, IDs, coordinates, and values.
 - Each native viewport can export one local key-image v2 ZIP with a watermarked PNG,
   exact opaque patient/study/series/instance and presentation provenance, and only
   the v3 measurements visible on that source instance. A privacy-minimized agent
@@ -91,10 +99,10 @@ Last updated: 2026-08-28 12:35 PDT
 
 ## Verification
 
-- Python agent tests: 29 passing, including cross-patient and legacy-context
+- Python agent tests: 30 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, and ROI comparison checks.
-- Viewer tests: 35 passing, including patient-context and local-only enforcement,
+- Viewer tests: 38 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, and complete/regular MPR geometry gating.
@@ -163,6 +171,15 @@ Last updated: 2026-08-28 12:35 PDT
   and 3 center markers; point movement and reset succeeded through bundled OpenJPEG
   and only opaque loopback routes. No copied-study screenshot or derivative was
   created or retained; the synthetic source was moved to recoverable Trash.
+- Explicit-pairing production smoke test: two synthetic dated same-patient MR studies
+  scored as plausibly comparable. A bounded pasted v3 packet restored 20 mm and 16 mm
+  source measurements, and the human-selected “Target lesion A” pair previewed −4 mm
+  and −20% with no interpretation. The downloaded v1 JSON passed both JSON Schema and
+  the privacy-minimized agent validator; session deletion removed one annotation and
+  cleared the preview while leaving DICOM unchanged. Only bundled UI/worker and opaque
+  loopback instance routes were requested. The final rebuilt bundle repeated the
+  preview and then blocked a deliberately reversed baseline/follow-up selection with
+  no stale preview. All synthetic inputs and output were moved to recoverable Trash.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -175,8 +192,9 @@ Last updated: 2026-08-28 12:35 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- Measurement table editing and clinician sign-off state remain. Elliptical ROI is a
-  2D manual draft, not segmentation or volume measurement.
+- Clinician identity/sign-off, comparison amendment history, and reviewed lesion-pair
+  acceptance remain. Elliptical ROI is a 2D manual draft, not segmentation or volume
+  measurement.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

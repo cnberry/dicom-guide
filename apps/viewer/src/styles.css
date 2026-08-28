@@ -192,6 +192,12 @@ main { min-height: 100vh; }
 .tool-buttons .visit-packet-button.saved { color: var(--accent); border-color: rgba(110, 231, 194, 0.48); background: var(--accent-dark); }
 .tool-buttons .visit-packet-button.error { color: #ffb5ae; border-color: rgba(255, 141, 132, 0.42); }
 .viewer-toolbar p { margin: 0; color: var(--muted); font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: right; }
+.measurement-paste-panel { margin: 12px clamp(24px, 4vw, 64px) 0; display: grid; grid-template-columns: minmax(220px, 0.7fr) minmax(320px, 1.3fr) auto; align-items: end; gap: 14px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: #0a1715; }
+.measurement-paste-panel h2 { margin: 5px 0 7px; font-size: 15px; }
+.measurement-paste-panel p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.measurement-paste-panel textarea { width: 100%; min-height: 100px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: #040b09; color: var(--text); padding: 9px; font: 9px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.measurement-paste-actions { display: grid; gap: 7px; }
+.measurement-paste-actions > button:not(.primary-action) { border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); padding: 7px 9px; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; cursor: pointer; }
 
 .viewport-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 clamp(24px, 4vw, 64px); }
 .viewport-shell { min-width: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #030706; box-shadow: 0 22px 60px rgba(0, 0, 0, 0.23); }
@@ -295,13 +301,21 @@ main { min-height: 100vh; }
 }
 .measurement-panel td { color: #c3d2ce; }
 .measurement-panel code { color: var(--accent); font-size: 9px; overflow-wrap: anywhere; }
-.measurement-panel > p {
-  margin: 0;
-  padding: 12px 19px;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.6;
-}
+.table-action { border: 1px solid rgba(239, 179, 101, 0.35); border-radius: 5px; background: transparent; color: var(--warn); padding: 5px 7px; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; cursor: pointer; white-space: nowrap; }
+.pairing-editor { padding: 18px 19px; background: #081310; }
+.pairing-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.pairing-heading h3 { margin: 5px 0 0; font-size: 15px; }
+.pairing-fields { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(190px, 1fr) minmax(190px, 1fr) auto; align-items: end; gap: 10px; margin-top: 15px; }
+.pairing-fields label { display: grid; gap: 6px; color: var(--muted); font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.pairing-fields input, .pairing-fields select { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: #06100e; color: var(--text); padding: 8px 9px; font: 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.pairing-fields input:disabled, .pairing-fields select:disabled { opacity: 0.5; }
+.pairing-fields .primary-action { min-height: 34px; }
+.pairing-message { margin: 10px 0 0; color: var(--muted); font: 10px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.comparison-preview { margin-top: 14px; border: 1px solid rgba(110, 231, 194, 0.28); border-radius: 8px; overflow: hidden; background: #06100e; }
+.comparison-preview > div { display: flex; justify-content: space-between; gap: 14px; padding: 11px 13px; border-bottom: 1px solid var(--line); }
+.comparison-preview > div span { color: var(--warn); font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.comparison-preview p { margin: 0; padding: 11px 13px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.comparison-preview > button { margin: 0 13px 13px; border: 1px solid rgba(110, 231, 194, 0.42); border-radius: 6px; background: var(--accent-dark); color: var(--accent); padding: 7px 9px; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; cursor: pointer; }
 
 footer { display: flex; justify-content: space-between; gap: 24px; padding: 18px clamp(24px, 4vw, 64px); border-top: 1px solid var(--line); color: #657a75; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
@@ -311,6 +325,7 @@ footer { display: flex; justify-content: space-between; gap: 24px; padding: 18px
   .selection-panel { grid-template-columns: 1fr; }
   .viewer-toolbar { align-items: flex-start; flex-direction: column; }
   .viewer-toolbar p { text-align: left; }
+  .measurement-paste-panel { grid-template-columns: 1fr; }
   .sync-button { justify-self: start; }
   .viewport-grid, .review-grid { grid-template-columns: 1fr; }
   .mpr-heading { align-items: flex-start; flex-direction: column; }
@@ -318,12 +333,15 @@ footer { display: flex; justify-content: space-between; gap: 24px; padding: 18px
   .mpr-grid { grid-template-columns: 1fr; }
   .mpr-host { height: min(90vw, 480px); }
   .dicom-viewport { height: 72vw; }
+  .pairing-fields { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 620px) {
   .app-header, .workspace-summary, .selection-panel, .viewer-toolbar, .viewport-grid, .review-grid, footer { padding-left: 16px; padding-right: 16px; }
   .mpr-panel { margin-left: 16px; margin-right: 16px; }
+  .measurement-paste-panel { margin-left: 16px; margin-right: 16px; }
   .measurement-panel { margin-left: 16px; margin-right: 16px; }
+  .pairing-fields { grid-template-columns: 1fr; }
   .privacy-note, .safety-banner { display: none; }
   .empty-steps { flex-direction: column; align-items: flex-start; }
   footer { flex-direction: column; }

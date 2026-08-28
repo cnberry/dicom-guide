@@ -82,6 +82,23 @@ export const initializeCornerstone = (): Promise<void> => {
   return initialization;
 };
 
+const measurementTypeForToolName = (
+  toolName?: string,
+): RawMeasurementAnnotation['type'] | undefined =>
+  toolName === BidirectionalTool.toolName
+    ? 'bidirectional'
+    : toolName === EllipticalROITool.toolName
+      ? 'elliptical_roi'
+      : toolName === LengthTool.toolName
+        ? 'length'
+        : undefined;
+
+const annotationTrackingId = (toolName?: string, annotationId?: string): string | undefined => {
+  const type = measurementTypeForToolName(toolName);
+  if (!type || !annotationId) return undefined;
+  return annotationId.startsWith(`${type}:`) ? annotationId : `${type}:${annotationId}`;
+};
+
 const imageIdsForSeries = (series: DicomSeries): string[] =>
   series.instances.map((instance) => {
     const existing = instanceImageIds.get(instance.instanceId);
@@ -116,19 +133,28 @@ export const createMeasurementEvidencePacket = (): MeasurementEvidencePacket => 
     )
     .map((item) => {
       const toolName = item.metadata?.toolName;
+      const type = measurementTypeForToolName(toolName);
+      if (!type) throw new Error('Unsupported measurement annotation type.');
       return {
         annotationId: item.annotationUID,
-        type:
-          toolName === BidirectionalTool.toolName
-            ? 'bidirectional'
-            : toolName === EllipticalROITool.toolName
-              ? 'elliptical_roi'
-              : 'length',
+        type,
         referencedImageId: item.metadata?.referencedImageId,
         worldPoints: item.data.handles?.points?.map((point) => Array.from(point)),
       };
     });
   return buildMeasurementEvidencePacket(measurements, imageReferences);
+};
+
+export const removeMeasurementAnnotation = (trackingId: string): boolean => {
+  const target = annotation.state
+    .getAllAnnotations()
+    .find(
+      (item) =>
+        annotationTrackingId(item.metadata?.toolName, item.annotationUID) === trackingId,
+    );
+  if (!target?.annotationUID) return false;
+  annotation.state.removeAnnotation(target.annotationUID);
+  return true;
 };
 
 export const resetLocalImagingSession = (): void => {
