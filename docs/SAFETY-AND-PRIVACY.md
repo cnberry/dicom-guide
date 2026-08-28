@@ -20,6 +20,10 @@ quality-system, and regulatory review.
 - DICOM processing never depends on an external API; the CSP blocks external origins.
 - The API binds to loopback and requires a random bearer token; the unified browser
   uses a SameSite, HttpOnly session cookie established by a one-time local redirect.
+- The one local POST is not an external DICOM-processing dependency. It accepts only
+  two derived key-image ZIPs from the exact loopback origin, enforces compressed and
+  uncompressed size limits, assembles and recursively validates in memory, returns
+  `no-store`, and creates no server-side patient file.
 - Paths, patient names/IDs, DICOM headers, and response bodies are absent from logs.
 - Patient identity tags are used only in local memory to derive an opaque patient-
   context digest. The raw values are never written to manifests, evidence packets,

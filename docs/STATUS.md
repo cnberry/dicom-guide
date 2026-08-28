@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 11:44 PDT
+Last updated: 2026-08-28 12:01 PDT
 
 ## Data transfer
 
@@ -57,11 +57,15 @@ Last updated: 2026-08-28 11:44 PDT
   the v3 measurements visible on that source instance. A privacy-minimized agent
   validator checks archive shape, PNG structure/dimensions, SHA-256 cross-links, and
   source linkage while retaining v1 validation compatibility.
-- Two explicitly selected key images can be assembled locally into an owner-only
+- Two explicitly selected key images can be assembled locally into a sensitive
   clinician visit-packet ZIP. Same-modality, distinct-series, chronological, and
   viewport-role gates are mandatory; the script-free review page says unregistered,
   unreviewed, and no response conclusion, while the agent manifest cross-hashes all
   eight payload files.
+- The unified viewer can now create that visit packet directly from the two live
+  panes with one button. Both key-image captures remain in browser memory, an
+  authenticated exact-origin loopback POST invokes the same Python assembler, and
+  the validated ZIP is returned with `no-store` without a server-side patient file.
 - Versioned measurement, key-image, numeric-comparison, and visit-packet JSON Schemas
   plus local validation are implemented. Same-series pairs, unknown units, and
   mismatched measurement types are refused; no response label is emitted.
@@ -81,12 +85,13 @@ Last updated: 2026-08-28 11:44 PDT
 
 ## Verification
 
-- Python agent tests: 26 passing, including cross-patient and legacy-context rejection, visit-packet
-  safety/integrity, key-image
-  archive integrity, v3 JSON Schema conformance, and ROI comparison checks.
-- Viewer tests: 26 passing, including patient-context and local-only enforcement,
+- Python agent tests: 29 passing, including cross-patient and legacy-context
+  rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
+  Schema conformance, and ROI comparison checks.
+- Viewer tests: 29 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
-  validation.
+  validation, plus the exact two-file visit-packet transport and relative same-origin
+  endpoint contract.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
@@ -131,6 +136,13 @@ Last updated: 2026-08-28 11:44 PDT
   area with prominent unreviewed/no-diagnosis/no-response warnings. It contained no
   scripts or external links and requested only the page and two PNGs from loopback;
   the synthetic archive and images were moved to Trash after inspection.
+- One-click visit-packet production smoke test: two synthetic dated MR studies
+  rendered in the live unified viewer, scored as plausibly comparable, and exported
+  from the two displayed source slices through `POST /v1/visit-packets`. The 337 KB
+  archive contained exactly nine files and passed file, nested-component, and static-
+  presentation validation with a 73-day interval and no computed result or response
+  conclusion. The server log contained only opaque local resource paths and one
+  successful loopback POST. The synthetic studies and export were moved to Trash.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -143,7 +155,7 @@ Last updated: 2026-08-28 11:44 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- Measurement table editing, direct viewer assembly, clinician sign-off state, and
+- Measurement table editing, clinician sign-off state, and
   MPR remain. Elliptical ROI is a 2D manual draft, not segmentation or volume measurement.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.

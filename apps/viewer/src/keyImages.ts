@@ -68,7 +68,7 @@ type BuildPacketInput = {
   measurementBytes: Uint8Array;
 };
 
-type ExportInput = {
+export type KeyImageArchiveInput = {
   viewportCanvas: HTMLCanvasElement;
   annotationSvg?: SVGSVGElement;
   orientationLabels?: PatientOrientationLabels;
@@ -80,6 +80,12 @@ type ExportInput = {
   >;
   measurementPacket: MeasurementEvidencePacket;
   createdAt?: string;
+};
+
+export type KeyImageArchive = {
+  filename: string;
+  packet: KeyImageEvidencePacket;
+  bytes: Uint8Array;
 };
 
 const sha256Hex = async (bytes: Uint8Array): Promise<string> => {
@@ -280,7 +286,7 @@ export const buildKeyImageEvidencePacket = async ({
   ],
 });
 
-export const exportKeyImageArchive = async ({
+export const createKeyImageArchive = async ({
   viewportCanvas,
   annotationSvg,
   orientationLabels,
@@ -289,7 +295,7 @@ export const exportKeyImageArchive = async ({
   display,
   measurementPacket,
   createdAt = new Date().toISOString(),
-}: ExportInput): Promise<{ filename: string; packet: KeyImageEvidencePacket }> => {
+}: KeyImageArchiveInput): Promise<KeyImageArchive> => {
   const scopedMeasurements = scopeMeasurementPacketToInstance(
     measurementPacket,
     source.series_id,
@@ -333,9 +339,13 @@ export const exportKeyImageArchive = async ({
   );
   const timestamp = createdAt.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const filename = `scanview-key-image-${timestamp}-${viewportRole}.zip`;
-  const archiveBuffer = archive.buffer.slice(
-    archive.byteOffset,
-    archive.byteOffset + archive.byteLength,
+  return { filename, packet, bytes: archive };
+};
+
+export const downloadArchive = (bytes: Uint8Array, filename: string): void => {
+  const archiveBuffer = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
   ) as ArrayBuffer;
   const url = URL.createObjectURL(new Blob([archiveBuffer], { type: 'application/zip' }));
   const link = document.createElement('a');
@@ -346,5 +356,12 @@ export const exportKeyImageArchive = async ({
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
-  return { filename, packet };
+};
+
+export const exportKeyImageArchive = async (
+  input: KeyImageArchiveInput,
+): Promise<KeyImageArchive> => {
+  const result = await createKeyImageArchive(input);
+  downloadArchive(result.bytes, result.filename);
+  return result;
 };

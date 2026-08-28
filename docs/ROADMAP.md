@@ -79,6 +79,19 @@
    cross-patient viewer/agent suggestions, and verified the complete copied dataset
    resolves to one context without emitting raw identifiers.
 
+## Completed in the seventh milestone
+
+1. Added one-click clinician visit-packet export from the two live viewer panes while
+   retaining the Python assembler as the sole authoritative longitudinal gate.
+2. Added a bounded two-member ZIP transport and authenticated exact-origin loopback
+   POST that assembles and recursively validates the result entirely in memory.
+3. Refactored each viewport to expose its current source-linked key-image archive
+   without forcing a separate download; the existing individual export remains.
+4. Added transport, safety-gate, same-origin, and successful HTTP round-trip tests.
+5. Verified the production viewer end to end on two synthetic dated MR studies: the
+   downloaded nine-file packet passed every local integrity check and the service
+   created no patient-data output file.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
@@ -89,14 +102,14 @@
    around the implemented unreviewed visit packet.
 4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
    links around the self-contained Python wheel.
-5. Add direct viewer assembly, measurement-table editing, and MPR.
+5. Add measurement-table editing and MPR.
 
 ## Next milestone
 
 1. Add Orthanc as an optional DICOMweb archive and pin/test its local configuration.
 2. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-3. Add one-click viewer assembly and explicit compatibility/QA badges to the local
-   clinician visit packet, followed by a reviewed sign-off workflow.
+3. Add explicit compatibility/QA badges to the local clinician visit packet,
+   followed by a reviewed sign-off workflow.
 4. Add append-only audit records for access, comparison drafts, and review decisions.
 5. Package and smoke-test on macOS Apple Silicon and Linux x86_64.
 

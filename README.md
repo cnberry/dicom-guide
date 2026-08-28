@@ -40,14 +40,15 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   and `unreviewed` state.
 - Per-viewport local key-image export: one ZIP containing a watermarked PNG, exact
   source/presentation provenance, and the visible source-scoped measurement packet.
-- Local clinician visit-packet assembly from two explicitly chosen, validated key
-  images, with a static side-by-side review page and agent-verifiable file manifest.
+- One-click local clinician visit-packet export from the two live unified-viewer
+  panes, plus the equivalent CLI workflow. Both use the same Python validation gates
+  and produce a static side-by-side review page with an agent-verifiable manifest.
 - Local agent comparison of explicitly selected, distinct-series measurements;
   numeric changes remain source-linked and never become a response verdict.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
-- Bearer-token-protected, loopback-only, read-only agent API.
+- Bearer-token-protected, loopback-only, source-read-only local API.
 - Versioned measurement, key-image, comparison, and visit-packet JSON Schemas;
   committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
@@ -131,11 +132,16 @@ The server exposes:
 - `GET /v1/manifest`
 - `GET /v1/comparison-candidates`
 - `GET /v1/instances/{opaque_id}`
+- `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
 
 All endpoints except health require the bearer token printed at startup. The unified
 browser uses a same-origin HttpOnly session cookie instead of exposing that token to
-application JavaScript. There is no mutation or deletion endpoint. The server
-refuses non-loopback bind addresses.
+application JavaScript. The visit-packet POST additionally requires the exact local
+origin and accepts a bounded ZIP containing only the two derived key-image archives;
+it returns the validated result from memory and creates no server-side file. There is
+no source mutation or deletion endpoint. The server refuses non-loopback bind
+addresses. This loopback interface is part of the offline local application, not an
+external processing API.
 
 ## Save and reopen a measurement draft
 
@@ -175,8 +181,13 @@ the same safeguards used for the scans.
 
 ## Assemble a clinician visit packet
 
-Save one key image from the baseline viewport and one from the follow-up viewport,
-then assemble them locally:
+In the unified local workspace, choose a dated same-patient MR↔MR or CT↔CT pair,
+place the desired source slice in each pane, then choose **Save visit packet**. The
+viewer captures both displayed panes in memory and sends only those two derived
+key-image bundles to the same-origin loopback assembler. The returned ZIP downloads
+directly; neither the input bundles nor the visit packet is written by the server.
+
+The standalone local CLI uses the same assembler and validation rules:
 
 ```bash
 .venv/bin/scanview-agent assemble-visit-packet \

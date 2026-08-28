@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import io
 import json
 import mimetypes
 import secrets
 import webbrowser
+from datetime import datetime, timezone
 from http.cookies import SimpleCookie
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,6 +14,11 @@ from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
 from .comparison import suggest_pairs
+from .visit_packets import (
+    MAX_VISIT_PACKET_TRANSPORT_BYTES,
+    visit_packet_from_transport,
+    visit_packet_summary,
+)
 
 
 class ScanViewServer(ThreadingHTTPServer):
@@ -48,6 +55,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+
+    def _same_origin(self) -> bool:
+        host = self.headers.get("Host", "")
+        allowed_hosts = {
+            f"127.0.0.1:{self.server.server_port}",
+            f"localhost:{self.server.server_port}",
+            f"[::1]:{self.server.server_port}",
+        }
+        return host in allowed_hosts and self.headers.get("Origin") == f"http://{host}"
 
     def _send_json(self, value: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         payload = json.dumps(value, separators=(",", ":")).encode()
@@ -164,6 +180,57 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
 
+    def do_POST(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path
+        if path != "/v1/visit-packets":
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        if not self._authorized():
+            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
+            return
+        if not self._same_origin():
+            self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
+            return
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != "application/vnd.scanview.visit-input+zip":
+            self._send_json(
+                {"error": "unsupported_media_type"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+            )
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send_json({"error": "content_length_required"}, HTTPStatus.LENGTH_REQUIRED)
+            return
+        if content_length <= 0 or content_length > MAX_VISIT_PACKET_TRANSPORT_BYTES:
+            self._send_json({"error": "request_too_large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+            return
+        body = self.rfile.read(content_length)
+        if len(body) != content_length:
+            self._send_json({"error": "incomplete_request"}, HTTPStatus.BAD_REQUEST)
+            return
+        created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        try:
+            payload = visit_packet_from_transport(body, created_at=created_at)
+            summary = visit_packet_summary(io.BytesIO(payload))
+            if not summary["valid"]:
+                raise ValueError("assembled visit packet failed local integrity validation")
+        except ValueError as error:
+            self._send_json(
+                {"error": "invalid_visit_packet_input", "detail": str(error)},
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+            return
+        timestamp = created_at.replace("-", "").replace(":", "").split(".", 1)[0] + "Z"
+        filename = f"scanview-visit-packet-{timestamp}.zip"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(payload)))
+        self._security_headers()
+        self.end_headers()
+        self.wfile.write(payload)
+
 
 def create_server(
     catalog: dict[str, Any],
@@ -206,14 +273,17 @@ def serve(
         ui_dist=ui_dist,
     )
     base_url = f"http://{host}:{server.server_port}"
-    print(f"ScanView read-only API: {base_url}")
+    print(f"ScanView local source-read-only API: {base_url}")
     print(f"Bearer token: {server.token}")
     if server.ui_dist:
         session_url = f"{base_url}/?session={quote(server.token, safe='')}"
         print(f"ScanView local workspace: {session_url}")
         if open_browser:
             webbrowser.open(session_url)
-    print("No write or delete endpoints are enabled. Press Ctrl-C to stop.")
+    print(
+        "Source mutation and deletion are disabled; visit-packet derivatives are returned "
+        "from memory only. Press Ctrl-C to stop."
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

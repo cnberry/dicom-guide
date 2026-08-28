@@ -10,7 +10,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from .key_images import key_image_archive_summary
 
@@ -37,6 +37,9 @@ PAYLOAD_MEDIA_TYPES = {
     "followup/measurements.json": "application/json",
 }
 MAX_ARCHIVE_MEMBER_BYTES = 64 * 1024 * 1024
+VISIT_PACKET_TRANSPORT_FILES = {"baseline.zip", "followup.zip"}
+MAX_VISIT_PACKET_TRANSPORT_BYTES = 128 * 1024 * 1024
+MAX_TRANSPORT_KEY_IMAGE_BYTES = 96 * 1024 * 1024
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -75,12 +78,22 @@ def _parse_dicom_date(value: Any) -> date | None:
         return None
 
 
-def _read_key_image(path: Path, role: str) -> KeyImageBundle:
-    summary = key_image_archive_summary(path)
+ArchiveSource = Path | BinaryIO
+
+
+def _rewind(source: ArchiveSource) -> None:
+    if not isinstance(source, Path):
+        source.seek(0)
+
+
+def _read_key_image(source: ArchiveSource, role: str) -> KeyImageBundle:
+    _rewind(source)
+    summary = key_image_archive_summary(source)
     if not summary["valid"]:
         details = "; ".join(summary["errors"])
         raise ValueError(f"{role} key image is invalid: {details}")
-    with zipfile.ZipFile(path) as archive:
+    _rewind(source)
+    with zipfile.ZipFile(source) as archive:
         packet_bytes = archive.read("key-image.json")
         png_bytes = archive.read("key-image.png")
         measurement_bytes = archive.read("measurements.json")
@@ -275,8 +288,8 @@ def _file_manifest(payloads: dict[str, bytes]) -> dict[str, dict[str, Any]]:
 
 
 def build_visit_packet(
-    baseline_path: Path,
-    followup_path: Path,
+    baseline_path: ArchiveSource,
+    followup_path: ArchiveSource,
     *,
     created_at: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, bytes]]:
@@ -328,6 +341,57 @@ def build_visit_packet(
     return packet, payloads
 
 
+def visit_packet_archive_bytes(
+    baseline_path: ArchiveSource,
+    followup_path: ArchiveSource,
+    *,
+    created_at: str | None = None,
+) -> bytes:
+    packet, payloads = build_visit_packet(
+        baseline_path, followup_path, created_at=created_at
+    )
+    output = io.BytesIO()
+    with zipfile.ZipFile(
+        output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
+    ) as archive:
+        archive.writestr("visit-packet.json", _json_bytes(packet))
+        for path, content in sorted(payloads.items()):
+            archive.writestr(path, content)
+    return output.getvalue()
+
+
+def visit_packet_from_transport(
+    transport_bytes: bytes, *, created_at: str | None = None
+) -> bytes:
+    if not transport_bytes or len(transport_bytes) > MAX_VISIT_PACKET_TRANSPORT_BYTES:
+        raise ValueError("visit-packet request exceeds the local safety limit")
+    try:
+        with zipfile.ZipFile(io.BytesIO(transport_bytes)) as archive:
+            infos = archive.infolist()
+            names = {info.filename for info in infos}
+            if names != VISIT_PACKET_TRANSPORT_FILES or len(infos) != 2:
+                raise ValueError(
+                    "visit-packet request must contain exactly baseline.zip and followup.zip"
+                )
+            if any(info.flag_bits & 0x1 for info in infos):
+                raise ValueError("encrypted visit-packet request members are unsupported")
+            if any(info.file_size > MAX_TRANSPORT_KEY_IMAGE_BYTES for info in infos) or sum(
+                info.file_size for info in infos
+            ) > MAX_VISIT_PACKET_TRANSPORT_BYTES:
+                raise ValueError("visit-packet request member exceeds the local safety limit")
+            baseline_bytes = archive.read("baseline.zip")
+            followup_bytes = archive.read("followup.zip")
+    except (OSError, zipfile.BadZipFile, KeyError) as error:
+        raise ValueError(
+            f"visit-packet request could not be read: {type(error).__name__}"
+        ) from error
+    return visit_packet_archive_bytes(
+        io.BytesIO(baseline_bytes),
+        io.BytesIO(followup_bytes),
+        created_at=created_at,
+    )
+
+
 def write_visit_packet(
     baseline_path: Path,
     followup_path: Path,
@@ -335,23 +399,19 @@ def write_visit_packet(
     *,
     created_at: str | None = None,
 ) -> dict[str, Any]:
-    packet, payloads = build_visit_packet(
+    archive_bytes = visit_packet_archive_bytes(
         baseline_path, followup_path, created_at=created_at
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.{os.getpid()}.tmp")
     try:
-        with zipfile.ZipFile(
-            temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
-        ) as archive:
-            archive.writestr("visit-packet.json", _json_bytes(packet))
-            for path, content in sorted(payloads.items()):
-                archive.writestr(path, content)
+        temporary.write_bytes(archive_bytes)
         temporary.chmod(0o600)
         temporary.replace(output)
     finally:
         temporary.unlink(missing_ok=True)
-    return packet
+    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+        return json.loads(archive.read("visit-packet.json"))
 
 
 def _validate_packet_shape(packet: Any) -> list[str]:
@@ -509,11 +569,12 @@ def _validate_packet_shape(packet: Any) -> list[str]:
     return errors
 
 
-def visit_packet_summary(path: Path) -> dict[str, Any]:
+def visit_packet_summary(path: ArchiveSource) -> dict[str, Any]:
     errors: list[str] = []
     packet: Any = None
     payloads: dict[str, bytes] = {}
     try:
+        _rewind(path)
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
             names = {info.filename for info in infos}

@@ -188,6 +188,9 @@ main { min-height: 100vh; }
 }
 .tool-buttons button:hover { border-color: rgba(110, 231, 194, 0.32); color: var(--ink); }
 .tool-buttons button.active { color: var(--accent); border-color: rgba(110, 231, 194, 0.48); background: var(--accent-dark); }
+.tool-buttons button:disabled { cursor: not-allowed; opacity: 0.52; }
+.tool-buttons .visit-packet-button.saved { color: var(--accent); border-color: rgba(110, 231, 194, 0.48); background: var(--accent-dark); }
+.tool-buttons .visit-packet-button.error { color: #ffb5ae; border-color: rgba(255, 141, 132, 0.42); }
 .viewer-toolbar p { margin: 0; color: var(--muted); font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: right; }
 
 .viewport-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 clamp(24px, 4vw, 64px); }

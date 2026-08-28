@@ -32,6 +32,9 @@ result into a medical conclusion.
   labeling, measurement evidence, and agent-verifiable integrity.
 - Local clinician visit-packet assembly with hard longitudinal gates, a static
   side-by-side human review page, and a versioned agent-verifiable file manifest.
+- One-click visit-packet export from the two live viewer panes through a bounded,
+  authenticated same-origin loopback request; assembly and validation remain local
+  and in memory.
 - Explicit, numeric-only local measurement comparison for agents.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
@@ -40,8 +43,8 @@ result into a medical conclusion.
 - Orthanc/DICOMweb import with localhost-only configuration.
 - OHIF longitudinal mode or ScanView mode extension.
 - Physical-coordinate linked crosshair and MPR.
-- Direct viewer visit-packet assembly and explicit clinician review/sign-off workflow
-  built around the implemented key-image, measurement, and visit-packet contracts.
+- Explicit clinician review/sign-off workflow built around the implemented key-image,
+  measurement, and visit-packet contracts.
 
 ### Phase 3 — reviewed derivatives
 

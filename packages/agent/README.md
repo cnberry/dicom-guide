@@ -1,6 +1,7 @@
 # ScanView Agent
 
-Read-only catalog, compatibility scoring, and loopback API for local DICOM studies.
+Source-read-only catalog, compatibility scoring, and loopback API for local DICOM
+studies.
 It excludes direct patient-name/ID tags from its output by design, but its manifests
 remain sensitive medical information and are **not de-identified**.
 
@@ -26,7 +27,10 @@ wheel with the built UI under `scanview_agent/ui`. A regular agent-only wheel st
 lightweight. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
 and the API from one loopback origin. It establishes an
 HttpOnly browser session, while agents continue to use the printed bearer token.
-The server has no write or delete endpoint. Measurement validation returns only validity, schema,
+The server has no source-write or delete endpoint. The unified viewer's one local
+POST accepts only the two derived key-image bundles, assembles and revalidates the
+visit packet in memory, returns it with `no-store`, and creates no server-side
+patient file. Measurement validation returns only validity, schema,
 review state, count, and errors; it does not echo source identifiers, coordinates,
 or values. Comparison requires explicit tracking IDs from distinct source series and
 trusted millimeter results. It emits source-linked numeric change, missing context,

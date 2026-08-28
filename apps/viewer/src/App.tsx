@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DicomViewport } from './components/DicomViewport';
+import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
 import {
   createMeasurementEvidencePacket,
   resetLocalImagingSession,
@@ -20,6 +20,7 @@ import {
   type MeasurementEvidencePacket,
 } from './measurements';
 import { loadLocalServiceCatalog } from './localService';
+import { saveVisitPacket as saveLocalVisitPacket } from './visitPacketService';
 
 type ImportState = { processed: number; total: number } | undefined;
 
@@ -139,6 +140,8 @@ const MeasurementTable = ({ measurements }: { measurements: MeasurementEvidence[
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const measurementInputRef = useRef<HTMLInputElement>(null);
+  const baselineViewportRef = useRef<DicomViewportHandle>(null);
+  const followupViewportRef = useRef<DicomViewportHandle>(null);
   const sourceGenerationRef = useRef(0);
   const [series, setSeries] = useState<DicomSeries[]>([]);
   const [baselineId, setBaselineId] = useState<string>();
@@ -155,6 +158,12 @@ export default function App() {
   );
   const [measurementPacket, setMeasurementPacket] = useState<MeasurementEvidencePacket>();
   const [liveMeasurementPacket, setLiveMeasurementPacket] = useState<MeasurementEvidencePacket>();
+  const [visitPacketState, setVisitPacketState] = useState<
+    'idle' | 'working' | 'saved' | 'error'
+  >('idle');
+  const [visitPacketMessage, setVisitPacketMessage] = useState(
+    'Visit packets require two dated, same-patient MR or CT studies in the unified local workspace.',
+  );
 
   const baseline = series.find((item) => item.id === baselineId);
   const followup = series.find((item) => item.id === followupId);
@@ -166,6 +175,19 @@ export default function App() {
   const visibleMeasurements = liveMeasurementPacket
     ? liveMeasurementPacket.measurements
     : (measurementPacket?.measurements ?? []);
+  const visitPacketUsesLoopback = Boolean(
+    baseline?.sourceKind === 'loopback-service' && followup?.sourceKind === 'loopback-service',
+  );
+  const visitPacketReady = Boolean(
+    baseline && followup && visitPacketUsesLoopback && compatibility.level !== 'incompatible',
+  );
+
+  useEffect(() => {
+    setVisitPacketState('idle');
+    setVisitPacketMessage(
+      'Visit packets require two dated, same-patient MR or CT studies in the unified local workspace.',
+    );
+  }, [baselineId, baselineIndex, followupId, followupIndex]);
 
   useEffect(
     () =>
@@ -291,6 +313,53 @@ export default function App() {
     } catch {
       setMeasurementPacket(undefined);
       setMeasurementMessage('Measurement draft rejected: file is not valid JSON.');
+    }
+  };
+
+  const exportVisitPacket = async () => {
+    if (!baseline || !followup) {
+      setVisitPacketState('error');
+      setVisitPacketMessage('Choose both a baseline and follow-up series first.');
+      return;
+    }
+    if (!visitPacketUsesLoopback) {
+      setVisitPacketState('error');
+      setVisitPacketMessage('Use the unified local launcher for one-click visit-packet assembly.');
+      return;
+    }
+    if (compatibility.level === 'incompatible') {
+      setVisitPacketState('error');
+      setVisitPacketMessage('This pair fails the local longitudinal safety gates.');
+      return;
+    }
+    const baselineViewport = baselineViewportRef.current;
+    const followupViewport = followupViewportRef.current;
+    if (!baselineViewport || !followupViewport) {
+      setVisitPacketState('error');
+      setVisitPacketMessage('Both displayed images must finish rendering before export.');
+      return;
+    }
+    setVisitPacketState('working');
+    setVisitPacketMessage('Capturing both displayed source images and validating locally…');
+    try {
+      const createdAt = new Date().toISOString();
+      const [baselineArchive, followupArchive] = await Promise.all([
+        baselineViewport.createKeyImageArchive(createdAt),
+        followupViewport.createKeyImageArchive(createdAt),
+      ]);
+      const result = await saveLocalVisitPacket(
+        baselineArchive.bytes,
+        followupArchive.bytes,
+      );
+      setVisitPacketState('saved');
+      setVisitPacketMessage(
+        `Saved ${result.filename}: unreviewed side-by-side evidence, no response conclusion.`,
+      );
+    } catch (error) {
+      setVisitPacketState('error');
+      setVisitPacketMessage(
+        error instanceof Error ? error.message : 'Local visit-packet export failed.',
+      );
     }
   };
 
@@ -420,6 +489,28 @@ export default function App() {
               <button onClick={() => setResetNonce((value) => value + 1)}>Reset views</button>
               <button onClick={exportMeasurementDraft}>Export measurement draft</button>
               <button onClick={openMeasurementDraft}>Open measurement draft</button>
+              <button
+                className={`visit-packet-button ${visitPacketState}`}
+                disabled={!visitPacketReady || visitPacketState === 'working'}
+                title={
+                  !baseline || !followup
+                    ? 'Choose a baseline and follow-up series'
+                    : !visitPacketUsesLoopback
+                      ? 'Available through the unified local launcher'
+                      : compatibility.level === 'incompatible'
+                        ? 'The selected pair fails longitudinal safety gates'
+                        : 'Capture both displayed images and save one locally validated visit packet'
+                }
+                onClick={() => void exportVisitPacket()}
+              >
+                {visitPacketState === 'working'
+                  ? 'Building visit packet…'
+                  : visitPacketState === 'saved'
+                    ? 'Saved visit packet'
+                    : visitPacketState === 'error'
+                      ? 'Visit packet failed'
+                      : 'Save visit packet'}
+              </button>
             </div>
             <p>
               Primary drag:{' '}
@@ -431,12 +522,14 @@ export default function App() {
                 : linkStrategy === 'patient-position'
                   ? 'shared-frame physical linking'
                   : 'index linking is approximate'}<br />
-              {measurementMessage}
+              {measurementMessage}<br />
+              {visitPacketMessage}
             </p>
           </section>
 
           <section className="viewport-grid">
             <DicomViewport
+              ref={baselineViewportRef}
               id="baseline"
               label="Baseline"
               series={baseline}
@@ -447,6 +540,7 @@ export default function App() {
               measurementPacket={measurementPacket}
             />
             <DicomViewport
+              ref={followupViewportRef}
               id="followup"
               label="Follow-up"
               series={followup}

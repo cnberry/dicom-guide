@@ -7,4 +7,5 @@ declare module 'fflate' {
     data: Record<string, ZipEntry>,
     options?: ZipOptions,
   ) => Uint8Array;
+  export const unzipSync: (data: Uint8Array) => Record<string, Uint8Array>;
 }

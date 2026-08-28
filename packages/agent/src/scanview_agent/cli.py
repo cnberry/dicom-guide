@@ -54,7 +54,7 @@ def parser() -> argparse.ArgumentParser:
     candidates.add_argument("manifest", type=Path)
     candidates.add_argument("--output", "-o", type=Path)
 
-    api = commands.add_parser("serve", help="Run the read-only loopback agent API")
+    api = commands.add_parser("serve", help="Run the source-read-only loopback agent API")
     api.add_argument("root", type=Path)
     api.add_argument("--port", type=int, default=8765)
     api.add_argument("--token")

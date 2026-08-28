@@ -115,6 +115,12 @@ matching opaque patient context, distinct source studies and series, MR↔MR or 
 valid acquisition dates with baseline before follow-up, and matching viewport roles.
 It refuses unsafe input instead of producing a partial packet.
 
+The unified viewer invokes this exact assembler from **Save visit packet**. It wraps
+the two current in-memory key-image archives as `baseline.zip` and `followup.zip`
+inside a bounded transport ZIP and sends it only to its same-origin loopback process.
+The response is the validated archive; no intermediate or output patient file is
+created by the server.
+
 The output contains exactly nine files: `visit-packet.json`, `review.html`,
 `README.txt`, and the three original evidence files under each of `baseline/` and
 `followup/`. The v1 manifest records the pairing gate, two full source/presentation
@@ -149,7 +155,7 @@ the response criteria needed for a medical conclusion. Elliptical ROI comparison
 report only major/minor diameter and mathematical 2D ellipse-area change; they do not
 establish tumor segmentation, volume, burden, or response.
 
-## Read-only HTTP surface
+## Source-read-only HTTP surface
 
 Start the local service:
 
@@ -170,9 +176,13 @@ GET /v1/health
 GET /v1/manifest
 GET /v1/comparison-candidates
 GET /v1/instances/{opaque_id}
+POST /v1/visit-packets
 ```
 
-There is no source write, overwrite, or delete endpoint. Non-health agent requests
+There is no source write, overwrite, or delete endpoint. The POST is a stateless
+derivative response: it requires the private browser session, exact loopback Origin,
+the visit-input media type, a declared bounded length, and exactly two supported ZIP
+members; it returns `application/zip` with `no-store`. Non-health agent requests
 require `Authorization: Bearer <token>`. The browser receives a SameSite, HttpOnly
 session cookie after a one-time loopback redirect; the token is not exposed to
 viewer JavaScript or retained in the visible URL.

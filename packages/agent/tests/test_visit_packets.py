@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import stat
 import struct
+import threading
 import zipfile
 import zlib
+from http import HTTPStatus
+from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
@@ -14,9 +18,11 @@ from jsonschema import Draft202012Validator, FormatChecker
 from scanview_agent.visit_packets import (
     EXPECTED_FILES,
     build_visit_packet,
+    visit_packet_from_transport,
     visit_packet_summary,
     write_visit_packet,
 )
+from scanview_agent.server import create_server
 
 
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
@@ -145,6 +151,14 @@ def _pair(tmp_path: Path, **followup_overrides: str) -> tuple[Path, Path]:
     return baseline, followup
 
 
+def _transport(baseline: Path, followup: Path) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("baseline.zip", baseline.read_bytes())
+        archive.writestr("followup.zip", followup.read_bytes())
+    return output.getvalue()
+
+
 def test_visit_packet_round_trip_is_static_source_linked_and_schema_valid(
     tmp_path: Path,
 ) -> None:
@@ -201,6 +215,88 @@ def test_visit_packet_round_trip_is_static_source_linked_and_schema_valid(
     Draft202012Validator(
         key_image_schema, format_checker=FormatChecker()
     ).validate(baseline_packet)
+
+
+def test_visit_packet_transport_assembles_and_validates_without_filesystem_output(
+    tmp_path: Path,
+) -> None:
+    baseline, followup = _pair(tmp_path)
+
+    archive_bytes = visit_packet_from_transport(
+        _transport(baseline, followup), created_at="2026-08-28T01:02:03Z"
+    )
+    summary = visit_packet_summary(io.BytesIO(archive_bytes))
+
+    assert summary["valid"] is True
+    assert summary["elapsed_days"] == 31
+    assert {path.name for path in tmp_path.iterdir()} == {"baseline.zip", "followup.zip"}
+
+
+def test_authenticated_same_origin_loopback_endpoint_returns_valid_packet_in_memory(
+    tmp_path: Path,
+) -> None:
+    baseline, followup = _pair(tmp_path)
+    transport = _transport(baseline, followup)
+    server = create_server(
+        {"schema_version": "1.0.0", "studies": []},
+        {},
+        port=0,
+        token="test-session-token",
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_port
+    headers = {
+        "Authorization": "Bearer test-session-token",
+        "Origin": f"http://127.0.0.1:{port}",
+        "Content-Type": "application/vnd.scanview.visit-input+zip",
+        "Accept": "application/zip",
+    }
+    try:
+        connection = HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request("POST", "/v1/visit-packets", body=transport, headers=headers)
+        response = connection.getresponse()
+        body = response.read()
+        response_headers = dict(response.getheaders())
+        connection.close()
+
+        assert response.status == HTTPStatus.OK
+        assert response_headers["Content-Type"] == "application/zip"
+        assert response_headers["Cache-Control"] == "no-store"
+        assert response_headers["Content-Disposition"].endswith('.zip"')
+        assert visit_packet_summary(io.BytesIO(body))["valid"] is True
+        assert {path.name for path in tmp_path.iterdir()} == {"baseline.zip", "followup.zip"}
+
+        connection = HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request(
+            "POST",
+            "/v1/visit-packets",
+            body=transport,
+            headers={**headers, "Origin": "http://example.invalid"},
+        )
+        forbidden = connection.getresponse()
+        forbidden.read()
+        connection.close()
+        assert forbidden.status == HTTPStatus.FORBIDDEN
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_visit_packet_transport_rejects_extra_or_malformed_members(tmp_path: Path) -> None:
+    baseline, followup = _pair(tmp_path)
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("baseline.zip", baseline.read_bytes())
+        archive.writestr("followup.zip", followup.read_bytes())
+        archive.writestr("unexpected.txt", b"not allowed")
+
+    with pytest.raises(ValueError, match="exactly baseline.zip and followup.zip"):
+        visit_packet_from_transport(output.getvalue())
+
+    with pytest.raises(ValueError, match="could not be read"):
+        visit_packet_from_transport(b"not a ZIP archive")
 
 
 @pytest.mark.parametrize(

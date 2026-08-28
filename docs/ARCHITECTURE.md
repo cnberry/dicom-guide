@@ -28,11 +28,13 @@ Immutable copied DICOM
                          |                                                   |
                          +---------------------------------------------------+--> local agent validation
                                                                              +--> local numeric comparison
-                                                                             |
-                                  two validated dated key images -------------+--> visit-packet ZIP
-                                                                                     |
-                                                                                     +--> static human review
-                                                                                     +--> agent manifest
+
+two validated dated key images -- CLI or in-memory local POST --> Python gates
+                                                                       |
+                                                                       +--> visit-packet ZIP
+                                                                               |
+                                                                               +--> static human review
+                                                                               +--> agent manifest
 
 Alternate local input: browser folder picker --> Cornerstone3D
 
@@ -55,10 +57,13 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    (plus in-memory `blob:`/`data:` assets where required).
    Loading a different folder clears annotations, decoded-image cache, and file
    registry before the new imaging session begins.
-4. **Agent API:** binds to loopback only, uses an ephemeral bearer token for agents
+4. **Local API:** binds to loopback only, uses an ephemeral bearer token for agents
    and an HttpOnly same-origin session for the browser, returns only opaque IDs and
-   an allowlisted metadata contract, and has no write/delete API. Service-backed
-   measurement IDs join directly to that manifest; legacy folder IDs remain accepted.
+   an allowlisted metadata contract, and has no source write/delete API. The single
+   POST accepts only a bounded outer ZIP with `baseline.zip` and `followup.zip`,
+   requires an exact local Origin, assembles/revalidates the derivative in memory,
+   and returns it with `no-store`. Service-backed measurement IDs join directly to
+   the manifest; legacy folder IDs remain accepted.
 5. **Derivatives:** future transforms, resampled images, masks, additional
    measurements, and reports go to a separate store with source references and
    review status. Manual length/bidirectional/elliptical ROI drafts use versioned
@@ -66,9 +71,11 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    visible measurements with local SHA-256 digests. Key-image v2 adds opaque
    patient/study context. Visit-packet ZIPs preserve both evidence bundles, add a
    static human review page, and cross-hash every payload after same-patient and
-   strict longitudinal gates. None modifies native instances. Agent comparisons
-   accept only explicit, distinct-series measurement selections and emit no response
-   label; visit packets emit neither numeric results nor candidate interpretations.
+   strict longitudinal gates. The viewer and CLI share that Python assembler; the
+   viewer transport does not persist an intermediate server-side file. None modifies
+   native instances. Agent comparisons accept only explicit, distinct-series
+   measurement selections and emit no response label; visit packets emit neither
+   numeric results nor candidate interpretations.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

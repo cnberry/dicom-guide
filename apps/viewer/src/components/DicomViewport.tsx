@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { RenderingEngine, Types } from '@cornerstonejs/core';
 import {
   createMeasurementEvidencePacket,
@@ -8,7 +8,12 @@ import {
   type ViewportToolController,
 } from '../cornerstone';
 import { getPatientOrientationLabels, type DicomSeries } from '../dicom';
-import { exportKeyImageArchive, type KeyImagePresentation } from '../keyImages';
+import {
+  createKeyImageArchive,
+  downloadArchive,
+  type KeyImageArchive,
+  type KeyImagePresentation,
+} from '../keyImages';
 import type { MeasurementEvidencePacket } from '../measurements';
 
 type Props = {
@@ -22,16 +27,14 @@ type Props = {
   measurementPacket?: MeasurementEvidencePacket;
 };
 
-export function DicomViewport({
-  id,
-  label,
-  series,
-  index,
-  onIndexChange,
-  activeTool,
-  resetNonce,
-  measurementPacket,
-}: Props) {
+export type DicomViewportHandle = {
+  createKeyImageArchive: (createdAt?: string) => Promise<KeyImageArchive>;
+};
+
+export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function DicomViewport(
+  { id, label, series, index, onIndexChange, activeTool, resetNonce, measurementPacket }: Props,
+  ref,
+) {
   const elementRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<RenderingEngine | undefined>(undefined);
   const viewportRef = useRef<Types.IStackViewport | undefined>(undefined);
@@ -131,64 +134,79 @@ export function DicomViewport({
 
   const maxIndex = Math.max(0, (series?.instances.length ?? 1) - 1);
   const orientationLabels = getPatientOrientationLabels(series?.geometry.orientation);
-  const saveKeyImage = async () => {
+  const buildKeyImage = async (createdAt?: string): Promise<KeyImageArchive> => {
     const viewport = viewportRef.current;
     const element = elementRef.current;
-    if (!viewport || !element || !series) return;
+    if (!viewport || !element || !series) {
+      throw new Error(`${label} image is not ready for evidence export.`);
+    }
     const actualIndex = viewport.getCurrentImageIdIndex();
     const instance = series.instances[actualIndex];
-    if (!instance) return;
+    if (!instance) throw new Error(`${label} source image is unavailable.`);
     const patientContextId = series.patientContextId;
     if (!patientContextId) {
-      setKeyImageError('Patient context is unavailable; evidence export is disabled.');
-      setKeyImageState('error');
-      return;
+      throw new Error('Patient context is unavailable; evidence export is disabled.');
     }
+    const properties = viewport.getProperties();
+    const presentation: KeyImagePresentation = {
+      invert: properties.invert,
+      zoom: viewport.getZoom(),
+      pan: viewport.getPan(),
+    };
+    if (
+      properties.voiRange &&
+      Number.isFinite(properties.voiRange.lower) &&
+      Number.isFinite(properties.voiRange.upper) &&
+      properties.voiRange.upper > properties.voiRange.lower
+    ) {
+      presentation.voi_range = {
+        lower: properties.voiRange.lower,
+        upper: properties.voiRange.upper,
+      };
+    }
+    return createKeyImageArchive({
+      viewportCanvas: viewport.getCanvas(),
+      annotationSvg: element.querySelector<SVGSVGElement>('svg.svg-layer') ?? undefined,
+      orientationLabels,
+      viewportRole: id,
+      source: {
+        study_id: series.studyId,
+        series_id: series.id,
+        instance_id: instance.instanceId,
+        patient_context_id: patientContextId,
+        frame_of_reference_id: series.frameOfReferenceId,
+        modality: series.modality,
+        acquisition_date: series.acquisitionDate,
+        series_description: series.description,
+        instance_number: instance.instanceNumber,
+      },
+      display: {
+        stack_position: actualIndex + 1,
+        stack_count: series.instances.length,
+        source_kind: series.sourceKind,
+        presentation,
+      },
+      measurementPacket: createMeasurementEvidencePacket(),
+      createdAt,
+    });
+  };
+
+  useImperativeHandle(ref, () => ({ createKeyImageArchive: buildKeyImage }));
+
+  const saveKeyImage = async () => {
     setKeyImageState('working');
     setKeyImageError('');
     try {
-      const properties = viewport.getProperties();
-      const presentation: KeyImagePresentation = {
-        invert: properties.invert,
-        zoom: viewport.getZoom(),
-        pan: viewport.getPan(),
-      };
-      if (
-        properties.voiRange &&
-        Number.isFinite(properties.voiRange.lower) &&
-        Number.isFinite(properties.voiRange.upper) &&
-        properties.voiRange.upper > properties.voiRange.lower
-      ) {
-        presentation.voi_range = {
-          lower: properties.voiRange.lower,
-          upper: properties.voiRange.upper,
-        };
-      }
-      await exportKeyImageArchive({
-        viewportCanvas: viewport.getCanvas(),
-        annotationSvg: element.querySelector<SVGSVGElement>('svg.svg-layer') ?? undefined,
-        orientationLabels,
-        viewportRole: id,
-        source: {
-          study_id: series.studyId,
-          series_id: series.id,
-          instance_id: instance.instanceId,
-          patient_context_id: patientContextId,
-          frame_of_reference_id: series.frameOfReferenceId,
-          modality: series.modality,
-          acquisition_date: series.acquisitionDate,
-          series_description: series.description,
-          instance_number: instance.instanceNumber,
-        },
-        display: {
-          stack_position: actualIndex + 1,
-          stack_count: series.instances.length,
-          source_kind: series.sourceKind,
-          presentation,
-        },
-        measurementPacket: createMeasurementEvidencePacket(),
-      });
-      setKeyImageState(viewport.getCurrentImageIdIndex() === actualIndex ? 'saved' : 'idle');
+      const result = await buildKeyImage();
+      downloadArchive(result.bytes, result.filename);
+      const viewport = viewportRef.current;
+      setKeyImageState(
+        viewport &&
+          result.packet.source.instance_id ===
+            series?.instances[viewport.getCurrentImageIdIndex()]?.instanceId
+          ? 'saved'
+          : 'idle',
+      );
     } catch (error) {
       setKeyImageError(error instanceof Error ? error.message : 'Key-image export failed.');
       setKeyImageState('error');
@@ -277,4 +295,4 @@ export function DicomViewport({
       </div>
     </section>
   );
-}
+});
