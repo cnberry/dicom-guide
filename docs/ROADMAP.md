@@ -61,24 +61,42 @@
 4. Verified the production browser export and agent validation round-trip on a
    synthetic native MR stack with an ROI, no browser errors, and no external calls.
 
+## Completed in the sixth milestone
+
+1. Added local clinician visit-packet assembly from two explicitly selected,
+   validated key-image archives with no external service or patient-data mutation.
+2. Added hard gates for one matching opaque patient context, distinct source studies
+   and series, MR↔MR or CT↔CT, valid chronological acquisition dates, and correct
+   baseline/follow-up display roles.
+3. Added a versioned agent schema, SHA-256/byte-count manifest, nested evidence
+   validation, static-template validation, and privacy-minimized CLI summary.
+4. Added a script-free responsive/printable review page with both images, dates,
+   sequences, source slices, clinician questions/checklist, and permanent safety
+   labeling; numeric results and candidate interpretations remain empty.
+5. Verified assemble/validate and human rendering end to end with synthetic MR key
+   images, no scripts or external links, and only loopback page/PNG requests.
+6. Added locally derived opaque patient context to both catalog paths, blocked
+   cross-patient viewer/agent suggestions, and verified the complete copied dataset
+   resolves to one context without emitting raw identifiers.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
 2. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Define the clinician-reviewed visit packet and sign-off workflow around the
-   source-traceable key-image archive.
+3. Define explicit clinician identity, attestation, amendment, and sign-off states
+   around the implemented unreviewed visit packet.
 4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
    links around the self-contained Python wheel.
-5. Add measurement-table editing, MPR, and a paired key-image review sheet.
+5. Add direct viewer assembly, measurement-table editing, and MPR.
 
 ## Next milestone
 
 1. Add Orthanc as an optional DICOMweb archive and pin/test its local configuration.
 2. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-3. Extend key-image evidence into a clinician visit packet with exact sequences/dates,
-   compatibility and QA badges, measurements, limitations, questions, and sign-off.
+3. Add one-click viewer assembly and explicit compatibility/QA badges to the local
+   clinician visit packet, followed by a reviewed sign-off workflow.
 4. Add append-only audit records for access, comparison drafts, and review decisions.
 5. Package and smoke-test on macOS Apple Silicon and Linux x86_64.
 

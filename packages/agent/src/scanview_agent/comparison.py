@@ -139,6 +139,10 @@ def suggest_pairs(catalog: dict[str, Any]) -> dict[str, Any]:
     for (left_date, left), (right_date, right) in combinations(dated_series, 2):
         if left_date == right_date:
             continue
+        if not left.get("patient_context_id") or (
+            left.get("patient_context_id") != right.get("patient_context_id")
+        ):
+            continue
         if left.get("modality") != right.get("modality"):
             continue
         baseline, followup = (left, right) if left_date <= right_date else (right, left)
@@ -151,6 +155,7 @@ def suggest_pairs(catalog: dict[str, Any]) -> dict[str, Any]:
         "excluded_series": excluded_series,
         "limitations": [
             "These are metadata-based suggestions, not accepted clinical pairings.",
+            "Pairs without one matching opaque patient context are excluded.",
             "A person must confirm sequence, contrast, coverage, artifact, and acquisition compatibility.",
         ],
     }

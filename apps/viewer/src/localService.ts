@@ -9,7 +9,10 @@ type LocalServiceCatalog = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
-const isOpaqueId = (value: unknown, kind: 'study' | 'series' | 'instance' | 'frame'): value is string =>
+const isOpaqueId = (
+  value: unknown,
+  kind: 'study' | 'series' | 'instance' | 'frame' | 'patient',
+): value is string =>
   typeof value === 'string' && new RegExp(`^${kind}_[0-9a-f]{20}$`).test(value);
 
 const finiteNumber = (value: unknown): number | undefined =>
@@ -71,6 +74,9 @@ const readSeries = (studyId: string, value: unknown): DicomSeries | undefined =>
   return {
     id: value.id,
     studyId,
+    patientContextId: isOpaqueId(value.patient_context_id, 'patient')
+      ? value.patient_context_id
+      : undefined,
     acquisitionDate:
       typeof value.acquisition_date === 'string' ? value.acquisition_date : undefined,
     modality: String(value.modality),

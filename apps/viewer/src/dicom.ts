@@ -26,6 +26,7 @@ export type DicomInstance = {
 export type DicomSeries = {
   id: string;
   studyId: string;
+  patientContextId?: string;
   acquisitionDate?: string;
   modality: string;
   description: string;
@@ -150,12 +151,24 @@ const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
   const orientation = numberListTag(dataset, 'x00200037');
   const position = numberListTag(dataset, 'x00200032');
   const frameOfReferenceUid = textTag(dataset, 'x00200052');
+  const patientId = textTag(dataset, 'x00100020');
+  const patientIssuer = textTag(dataset, 'x00100021');
+  const patientName = textTag(dataset, 'x00100010');
+  const patientBirthDate = textTag(dataset, 'x00100030');
+  const patientIdentity = patientId
+    ? patientName || patientBirthDate
+      ? `id-demographics:${patientId}:${patientName ?? ''}:${patientBirthDate ?? ''}`
+      : `id-issuer:${patientIssuer ?? ''}:${patientId}`
+    : patientName || patientBirthDate
+      ? `demographics:${patientName ?? ''}:${patientBirthDate ?? ''}`
+      : `study-only:${studyUid}`;
 
   return {
     file,
     instanceId: await safeId('instance', sopInstanceUid),
     id: await safeId('series', seriesUid),
     studyId: await safeId('study', studyUid),
+    patientContextId: await safeId('patient-context', patientIdentity),
     frameOfReferenceId: frameOfReferenceUid
       ? await safeId('frame-of-reference', frameOfReferenceUid)
       : undefined,
@@ -310,6 +323,9 @@ export const assessCompatibility = (left?: DicomSeries, right?: DicomSeries): Co
   const reasons: string[] = [];
   const identicalSeries = left.id === right.id;
   const sameStudy = left.studyId === right.studyId;
+  const samePatientContext = Boolean(
+    left.patientContextId && left.patientContextId === right.patientContextId,
+  );
   const sameDate = Boolean(
     left.acquisitionDate && right.acquisitionDate && left.acquisitionDate === right.acquisitionDate,
   );
@@ -323,6 +339,14 @@ export const assessCompatibility = (left?: DicomSeries, right?: DicomSeries): Co
     score -= 50;
     reasons.push(
       'Both exams have the same acquisition date; treatment-response timing is not established.',
+    );
+  }
+  if (!samePatientContext) {
+    score = 0;
+    reasons.push(
+      left.patientContextId && right.patientContextId
+        ? 'The series have different opaque patient contexts and cannot be paired.'
+        : 'Patient context is unavailable; cross-exam pairing is disabled.',
     );
   }
   const modalityMismatch = left.modality !== right.modality;
@@ -359,7 +383,7 @@ export const assessCompatibility = (left?: DicomSeries, right?: DicomSeries): Co
   const boundedScore = Math.max(0, score);
   return {
     score: boundedScore,
-    level: identicalSeries || sameStudy || modalityMismatch
+    level: identicalSeries || sameStudy || !samePatientContext || modalityMismatch
       ? 'incompatible'
       : boundedScore >= 80
         ? 'compatible'

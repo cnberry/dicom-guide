@@ -30,6 +30,8 @@ result into a medical conclusion.
   evidence.
 - Source-linked local key-image archives with display provenance, permanent review
   labeling, measurement evidence, and agent-verifiable integrity.
+- Local clinician visit-packet assembly with hard longitudinal gates, a static
+  side-by-side human review page, and a versioned agent-verifiable file manifest.
 - Explicit, numeric-only local measurement comparison for agents.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
@@ -38,8 +40,8 @@ result into a medical conclusion.
 - Orthanc/DICOMweb import with localhost-only configuration.
 - OHIF longitudinal mode or ScanView mode extension.
 - Physical-coordinate linked crosshair and MPR.
-- Clinician visit-packet export and explicit review/sign-off workflow built around
-  the implemented key-image and measurement contracts.
+- Direct viewer visit-packet assembly and explicit clinician review/sign-off workflow
+  built around the implemented key-image, measurement, and visit-packet contracts.
 
 ### Phase 3 — reviewed derivatives
 
@@ -60,7 +62,8 @@ result into a medical conclusion.
 1. **Source immutability:** cataloging/viewing does not change a source SHA-256;
    every derivative eventually resolves to exact source instances and hashes.
 2. **Pairing transparency:** no candidate is auto-approved; results include score,
-   warnings, reasons, and `review_status`.
+   warnings, reasons, and `review_status`; missing or different opaque patient
+   contexts cannot produce a longitudinal candidate.
 3. **Geometry honesty:** approximate index synchronization is labeled; clinical-looking
    overlay requires patient-space geometry or an accepted registration transform.
 4. **Registration gating:** reject/accept state is explicit and auditable; rejected or
@@ -76,6 +79,6 @@ result into a medical conclusion.
    logs; header removal is never represented as de-identification.
 9. **Offline core:** all DICOM decoding, metadata indexing, comparison, registration,
    segmentation, and evidence generation must remain usable without an external API.
-10. **Communication:** future exported evidence shows dates, sequence/contrast,
+10. **Communication:** exported evidence shows dates, sequence/contrast,
    native/derived state, registration QA, measurement method, sources, limitations,
    and an unreviewed watermark until sign-off.

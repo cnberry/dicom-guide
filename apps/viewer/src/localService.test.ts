@@ -10,6 +10,7 @@ const manifest = {
       series: [
         {
           id: 'series_0123456789abcdef0123',
+          patient_context_id: 'patient_0123456789abcdef0123',
           acquisition_date: '20260828',
           modality: 'MR',
           series_description: 'T1 POST',
@@ -48,6 +49,7 @@ describe('loopback service manifest', () => {
     expect(result?.series[0]).toMatchObject({
       id: 'series_0123456789abcdef0123',
       studyId: 'study_0123456789abcdef0123',
+      patientContextId: 'patient_0123456789abcdef0123',
       sourceKind: 'loopback-service',
       geometry: { pixelSpacing: [0.5, 0.5] },
     });

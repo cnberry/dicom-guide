@@ -30,6 +30,7 @@ def write_dicom(
     date: str,
     instance: int,
     description: str = "T1 POST",
+    patient_id: str = "SECRET-123",
 ) -> None:
     sop_uid = generate_uid()
     meta = FileMetaDataset()
@@ -43,7 +44,7 @@ def write_dicom(
     dataset.SeriesInstanceUID = series_uid
     dataset.FrameOfReferenceUID = generate_uid()
     dataset.PatientName = "TEST^PRIVATE"
-    dataset.PatientID = "SECRET-123"
+    dataset.PatientID = patient_id
     dataset.StudyDate = date
     dataset.SeriesDate = date
     dataset.Modality = "MR"
@@ -89,6 +90,54 @@ def test_catalog_is_read_only_and_excludes_direct_identifiers(tmp_path: Path) ->
     assert str(tmp_path) not in serialized
     assert len(registry) == 1
     assert all(path == source for path in registry.values())
+    patient_context_id = catalog["studies"][0]["series"][0]["patient_context_id"]
+    assert patient_context_id.startswith("patient_")
+
+
+def test_pair_suggestions_never_cross_patient_contexts(tmp_path: Path) -> None:
+    patient_a_study = generate_uid()
+    patient_a_series = generate_uid()
+    patient_b_study = generate_uid()
+    patient_b_series = generate_uid()
+    write_dicom(
+        tmp_path / "patient-a",
+        study_uid=patient_a_study,
+        series_uid=patient_a_series,
+        date="20260101",
+        instance=1,
+        patient_id="PATIENT-A",
+    )
+    write_dicom(
+        tmp_path / "patient-a-2",
+        study_uid=patient_a_study,
+        series_uid=patient_a_series,
+        date="20260101",
+        instance=2,
+        patient_id="PATIENT-A",
+    )
+    write_dicom(
+        tmp_path / "patient-b",
+        study_uid=patient_b_study,
+        series_uid=patient_b_series,
+        date="20260201",
+        instance=1,
+        patient_id="PATIENT-B",
+    )
+    write_dicom(
+        tmp_path / "patient-b-2",
+        study_uid=patient_b_study,
+        series_uid=patient_b_series,
+        date="20260201",
+        instance=2,
+        patient_id="PATIENT-B",
+    )
+    catalog, _ = build_catalog(tmp_path, include_hashes=False)
+
+    suggestions = suggest_pairs(catalog)
+
+    assert suggestions["candidates"] == []
+    assert "PATIENT-A" not in str(catalog)
+    assert "PATIENT-B" not in str(catalog)
 
 
 def test_pair_suggestions_are_unreviewed_and_registration_gated(tmp_path: Path) -> None:

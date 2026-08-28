@@ -31,6 +31,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Window/level, pan, zoom, reset, DICOM patient-orientation labels, and manual
   length/bidirectional/elliptical ROI measurement tools.
 - Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
+- Longitudinal suggestions require one matching opaque patient-context digest; raw
+  patient identifiers are read only to derive it locally and are never emitted.
 - Patient-position slice linking for shared compatible DICOM frames, with an explicitly
   approximate normalized fallback everywhere else.
 - Human-readable measurement table plus versioned draft export/reopen with opaque
@@ -38,13 +40,16 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   and `unreviewed` state.
 - Per-viewport local key-image export: one ZIP containing a watermarked PNG, exact
   source/presentation provenance, and the visible source-scoped measurement packet.
+- Local clinician visit-packet assembly from two explicitly chosen, validated key
+  images, with a static side-by-side review page and agent-verifiable file manifest.
 - Local agent comparison of explicitly selected, distinct-series measurements;
   numeric changes remain source-linked and never become a response verdict.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, read-only agent API.
-- Versioned catalog and measurement JSON Schemas; committed tests use synthetic data only.
+- Versioned measurement, key-image, comparison, and visit-packet JSON Schemas;
+  committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
 ## Launch the unified local workspace
@@ -111,6 +116,9 @@ python3 -m venv .venv
 .venv/bin/scanview-agent launch '/path/to/copied/DICOM'
 .venv/bin/scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 .venv/bin/scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
+.venv/bin/scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
+  --output scanview-visit-packet.zip
+.venv/bin/scanview-agent validate-visit-packet scanview-visit-packet.zip
 .venv/bin/scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
@@ -150,8 +158,9 @@ After a native image renders, choose **Save key image** in that viewport. ScanVi
 creates one local ZIP containing `key-image.png`, `key-image.json`, and
 `measurements.json`. The PNG includes the visible overlays, R/L/A/P labels when
 available, and a permanent **unreviewed derived display key image—not for
-diagnosis** footer. The sidecars record the exact opaque source instance, stack
-position, display settings, implementation versions, limitations, and SHA-256
+diagnosis** footer. Key-image v2 sidecars record the opaque patient/study/series and
+exact source instance, stack position, display settings, implementation versions,
+limitations, and SHA-256
 digests that bind the image to its source-scoped measurement evidence.
 
 Validate an archive locally without printing identifiers or measurement values:
@@ -163,6 +172,27 @@ Validate an archive locally without printing identifiers or measurement values:
 The ZIP is sensitive derived medical data, not a de-identified or diagnostic
 artifact. Keep the original DICOM as the authority and share the archive only with
 the same safeguards used for the scans.
+
+## Assemble a clinician visit packet
+
+Save one key image from the baseline viewport and one from the follow-up viewport,
+then assemble them locally:
+
+```bash
+.venv/bin/scanview-agent assemble-visit-packet \
+  baseline-key-image.zip followup-key-image.zip \
+  --output scanview-visit-packet.zip
+.venv/bin/scanview-agent validate-visit-packet scanview-visit-packet.zip
+```
+
+The assembler refuses invalid inputs, mismatched patient contexts, repeated source
+studies/series, CT↔MRI, missing or non-chronological dates, and viewport-role
+mismatches. The output contains both complete evidence bundles, a versioned
+`visit-packet.json`, instructions, and a
+script-free `review.html` for side-by-side viewing or printing. Extract the whole ZIP
+before opening the review page. It states that the images are unregistered and
+unreviewed, generates no numeric comparison or response conclusion, and keeps the
+questions that require clinician review visible.
 
 ## Preserve and verify removable media
 

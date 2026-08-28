@@ -10,13 +10,15 @@ export type KeyImagePresentation = {
 };
 
 export type KeyImageEvidencePacket = {
-  schema_version: '1.0.0';
+  schema_version: '2.0.0';
   created_at: string;
   review_status: 'unreviewed';
   artifact_type: 'derived_display_key_image';
   source: {
+    study_id: string;
     series_id: string;
     instance_id: string;
+    patient_context_id: string;
     frame_of_reference_id?: string;
     modality: string;
     acquisition_date?: string;
@@ -49,7 +51,7 @@ export type KeyImageEvidencePacket = {
   };
   implementation: {
     name: 'ScanView key-image exporter';
-    version: '0.1.0';
+    version: '0.2.0';
     renderer: 'Cornerstone3D 5.8.2';
   };
   limitations: string[];
@@ -245,7 +247,7 @@ export const buildKeyImageEvidencePacket = async ({
   measurementPacket,
   measurementBytes,
 }: BuildPacketInput): Promise<KeyImageEvidencePacket> => ({
-  schema_version: '1.0.0',
+  schema_version: '2.0.0',
   created_at: createdAt,
   review_status: 'unreviewed',
   artifact_type: 'derived_display_key_image',
@@ -267,7 +269,7 @@ export const buildKeyImageEvidencePacket = async ({
   },
   implementation: {
     name: 'ScanView key-image exporter',
-    version: '0.1.0',
+    version: '0.2.0',
     renderer: 'Cornerstone3D 5.8.2',
   },
   limitations: [

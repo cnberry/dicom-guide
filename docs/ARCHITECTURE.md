@@ -28,6 +28,11 @@ Immutable copied DICOM
                          |                                                   |
                          +---------------------------------------------------+--> local agent validation
                                                                              +--> local numeric comparison
+                                                                             |
+                                  two validated dated key images -------------+--> visit-packet ZIP
+                                                                                     |
+                                                                                     +--> static human review
+                                                                                     +--> agent manifest
 
 Alternate local input: browser folder picker --> Cornerstone3D
 
@@ -40,7 +45,9 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
 
 1. **Source:** copied originals are immutable; their hashes are evidence anchors.
 2. **Catalog:** direct patient name/ID tags are excluded, but all output remains
-   sensitive and is explicitly not claimed to be de-identified.
+   sensitive and is explicitly not claimed to be de-identified. An opaque patient-
+   context digest is derived locally and gates all cross-exam suggestions; raw
+   identity values are never emitted.
 3. **Viewer:** local files are added to Cornerstone's in-browser file manager, or
    protected native instances are streamed from the same loopback process.
    There are no runtime third-party requests or analytics. A Content Security
@@ -56,9 +63,12 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    measurements, and reports go to a separate store with source references and
    review status. Manual length/bidirectional/elliptical ROI drafts use versioned
    local JSON; key-image ZIPs bind a watermarked display PNG to its exact source and
-   visible measurements with local SHA-256 digests. Neither modifies native instances.
-   Agent comparisons accept only explicit, distinct-series measurement selections
-   and emit no response label.
+   visible measurements with local SHA-256 digests. Key-image v2 adds opaque
+   patient/study context. Visit-packet ZIPs preserve both evidence bundles, add a
+   static human review page, and cross-hash every payload after same-patient and
+   strict longitudinal gates. None modifies native instances. Agent comparisons
+   accept only explicit, distinct-series measurement selections and emit no response
+   label; visit packets emit neither numeric results nor candidate interpretations.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

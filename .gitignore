@@ -21,6 +21,7 @@ data/*
 *.dicom
 DICOMDIR
 scanview-key-image-*.zip
+scanview-visit-packet*.zip
 manifests/
 derivatives/
 audit/

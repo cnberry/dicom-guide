@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 11:15 PDT
+Last updated: 2026-08-28 11:44 PDT
 
 ## Data transfer
 
@@ -27,6 +27,10 @@ Last updated: 2026-08-28 11:15 PDT
   2 studies and all 57 renderable MR/CT series, matching the catalog's 49 MR + 8 CT.
 - Catalog and candidate files are owner-only, outside Git, and marked sensitive and
   `deidentified: false` despite direct patient name/ID and paths being omitted.
+- A full no-hash reindex derives one matching opaque patient context across both
+  studies and all 65 series, with no missing context. Raw PatientID/PatientName values
+  remain absent from catalog output. Candidate generation still returns zero because
+  the only exams are different modalities.
 
 ## Repository
 
@@ -39,6 +43,8 @@ Last updated: 2026-08-28 11:15 PDT
   than guessed when Image Orientation (Patient) is missing or malformed.
 - Follow-up auto-selection removed; same-exam pairings are explicitly incompatible
   for longitudinal response.
+- Catalog and browser imports derive an opaque patient-context digest locally;
+  viewer and agent pairing now reject missing or different patient contexts.
 - Physical patient-position slice mapping implemented for shared compatible Frames
   of Reference; normalized fallback is labeled approximate.
 - Manual length/bidirectional/ellipse drafts now save/reopen with tracking ID, opaque
@@ -46,12 +52,18 @@ Last updated: 2026-08-28 11:15 PDT
   limitations, and review state.
 - Human-readable source evidence table implemented; imported values are rejected when
   they disagree with their geometry.
-- Each native viewport can export one local key-image ZIP with a watermarked PNG,
-  exact opaque source/presentation provenance, and only the v3 measurements visible
-  on that source instance. A privacy-minimized agent validator checks archive shape,
-  PNG structure/dimensions, SHA-256 cross-links, and source linkage.
-- Versioned measurement/comparison JSON Schemas, local validation, and explicit
-  numeric-only agent comparison implemented. Same-series pairs, unknown units, and
+- Each native viewport can export one local key-image v2 ZIP with a watermarked PNG,
+  exact opaque patient/study/series/instance and presentation provenance, and only
+  the v3 measurements visible on that source instance. A privacy-minimized agent
+  validator checks archive shape, PNG structure/dimensions, SHA-256 cross-links, and
+  source linkage while retaining v1 validation compatibility.
+- Two explicitly selected key images can be assembled locally into an owner-only
+  clinician visit-packet ZIP. Same-modality, distinct-series, chronological, and
+  viewport-role gates are mandatory; the script-free review page says unregistered,
+  unreviewed, and no response conclusion, while the agent manifest cross-hashes all
+  eight payload files.
+- Versioned measurement, key-image, numeric-comparison, and visit-packet JSON Schemas
+  plus local validation are implemented. Same-series pairs, unknown units, and
   mismatched measurement types are refused; no response label is emitted.
 - Unified `scanview-agent launch` path implemented: one loopback process serves the
   bundled UI, manifest, pairing candidates, and protected native DICOM instances.
@@ -69,10 +81,12 @@ Last updated: 2026-08-28 11:15 PDT
 
 ## Verification
 
-- Python agent tests: 16 passing, including key-image archive integrity, v3 JSON
-  Schema conformance, and elliptical ROI geometry/area comparison checks.
-- Viewer tests: 25 passing, including local-only endpoint enforcement, pairing safety,
-  physical-position mapping, key-image cross-linking, and measurement validation.
+- Python agent tests: 26 passing, including cross-patient and legacy-context rejection, visit-packet
+  safety/integrity, key-image
+  archive integrity, v3 JSON Schema conformance, and ROI comparison checks.
+- Viewer tests: 26 passing, including patient-context and local-only enforcement,
+  pairing safety, physical-position mapping, key-image cross-linking, and measurement
+  validation.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
@@ -105,6 +119,18 @@ Last updated: 2026-08-28 11:15 PDT
   dimensions, embedded v3 measurement, and exact source-instance linkage. The browser
   reported no errors or non-loopback requests; all synthetic artifacts were moved to
   Trash after inspection.
+- Key-image v2 production smoke test: the unified viewer indexed and rendered the
+  synthetic native MR stack, then exported a 127 KB archive. The agent and v2 JSON
+  Schema accepted it; opaque study, series, and patient-context fields joined exactly
+  to the local catalog without exposing their values, and only loopback resources were
+  requested. The exported archive was moved to Trash after verification.
+- Clinician visit-packet smoke test: two synthetic dated key-image v2 MR archives with
+  one matching opaque patient context and distinct studies assembled and independently
+  revalidated through the CLI. The responsive static review page showed
+  both images, dates, sequence labels, source slices, questions, checklist, and notes
+  area with prominent unreviewed/no-diagnosis/no-response warnings. It contained no
+  scripts or external links and requested only the page and two PNGs from loopback;
+  the synthetic archive and images were moved to Trash after inspection.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -117,8 +143,8 @@ Last updated: 2026-08-28 11:15 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- Measurement table editing, a clinician-reviewed visit packet, and MPR remain.
-  Elliptical ROI is a 2D manual draft, not segmentation or volume measurement.
+- Measurement table editing, direct viewer assembly, clinician sign-off state, and
+  MPR remain. Elliptical ROI is a 2D manual draft, not segmentation or volume measurement.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

@@ -9,6 +9,7 @@ an external API and never grants source mutation.
 `scanview-agent manifest` creates a sensitive JSON catalog containing:
 
 - opaque study, series, frame-of-reference, and instance IDs;
+- an opaque patient-context digest used only to prevent cross-patient pairing;
 - modality, acquisition date, sequence/protocol descriptors, and image type;
 - dimensions, spacing, orientation, slice position, and stack order;
 - MR sequence parameters and contrast metadata where present;
@@ -19,9 +20,16 @@ Direct patient-name/ID tags and absolute paths are omitted. The output is still
 medical data and explicitly says `deidentified: false`. Catalogs are atomically
 written with owner-only permissions and must remain outside Git.
 
+The patient-context digest is derived locally from available patient identity tags;
+those raw values are not emitted. The digest remains sensitive and potentially
+linkable: it is a pairing safety boundary, not proof of de-identification. If reliable
+identity context is unavailable, the fallback is study-scoped so different exams
+cannot be joined automatically.
+
 `scanview-agent candidates` creates metadata-based pairing suggestions. It:
 
 - considers only multi-instance MR↔MR or CT↔CT stacks from different exams;
+- requires one matching opaque patient context and excludes missing/mismatched ones;
 - excludes PR/SR, localizers/scouts, and very short series;
 - checks sequence terms, contrast, body part, matrix, orientation, TR/TE/TI/flip,
   and frame-of-reference metadata;
@@ -65,13 +73,16 @@ folder IDs for backward compatibility.
 
 ## Key-image evidence archives
 
-Each viewport can save a source-traceable local ZIP with exactly three members:
+Each viewport can save a source-traceable local ZIP with exactly three members.
+New exports use key-image schema v2; the validator retains v1 compatibility, but
+v1 lacks patient/study context and cannot enter a longitudinal visit packet:
 
 - `key-image.png`: the displayed native slice plus visible annotation overlay,
   orientation labels, and a permanent unreviewed/derived/not-for-diagnosis footer;
-- `key-image.json`: exact opaque series/instance/frame references, modality/date,
-  stack location, display role, patient orientation, viewport dimensions, window,
-  invert, zoom, pan, implementation versions, limitations, and integrity digests;
+- `key-image.json`: exact opaque patient/study/series/instance/frame references,
+  modality/date, stack location, display role, patient orientation, viewport
+  dimensions, window, invert, zoom, pan, implementation versions, limitations, and
+  integrity digests;
 - `measurements.json`: a v3 packet containing only measurements on that displayed
   source series and instance.
 
@@ -87,6 +98,35 @@ The validator returns only versions, review/artifact state, measurement count,
 integrity booleans, and errors; it does not print source identifiers or values. A
 valid archive remains sensitive, `unreviewed`, and a display derivative. The native
 DICOM is authoritative, and validation is not clinical approval.
+
+## Clinician visit-packet archives
+
+Agents can assemble two explicitly ordered key-image archives into one local
+communication packet:
+
+```bash
+scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
+  --output scanview-visit-packet.zip
+scanview-agent validate-visit-packet scanview-visit-packet.zip
+```
+
+Assembly first validates both complete v2 key-image bundles, then requires one
+matching opaque patient context, distinct source studies and series, MR↔MR or CT↔CT,
+valid acquisition dates with baseline before follow-up, and matching viewport roles.
+It refuses unsafe input instead of producing a partial packet.
+
+The output contains exactly nine files: `visit-packet.json`, `review.html`,
+`README.txt`, and the three original evidence files under each of `baseline/` and
+`followup/`. The v1 manifest records the pairing gate, two full source/presentation
+observations, payload SHA-256 digests and byte counts, limitations, missing context,
+and clinician questions. `computed_results` and `candidate_interpretations` are
+required to be empty.
+
+Validation recursively validates both key-image bundles, source linkage, every file
+digest/count, the longitudinal gates, and the exact script-free human-review
+template. Its summary omits source identifiers, descriptions, dates, measurements,
+and paths. A valid packet remains sensitive and unreviewed; it is not registration,
+same-lesion confirmation, clinical interpretation, or sign-off.
 
 ## Numeric comparison drafts
 

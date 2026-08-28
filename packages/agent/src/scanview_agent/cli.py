@@ -11,6 +11,7 @@ from .comparison import suggest_pairs
 from .key_images import key_image_archive_summary
 from .measurements import build_measurement_comparison, measurement_packet_summary
 from .server import serve
+from .visit_packets import visit_packet_summary, write_visit_packet
 
 
 def _write_json(value: object, output: Path | None) -> None:
@@ -82,6 +83,20 @@ def parser() -> argparse.ArgumentParser:
     )
     validate_key_image.add_argument("archive", type=Path)
 
+    assemble_visit_packet = commands.add_parser(
+        "assemble-visit-packet",
+        help="Assemble two validated same-modality key images for a clinical conversation",
+    )
+    assemble_visit_packet.add_argument("baseline_archive", type=Path)
+    assemble_visit_packet.add_argument("followup_archive", type=Path)
+    assemble_visit_packet.add_argument("--output", "-o", type=Path, required=True)
+
+    validate_visit_packet = commands.add_parser(
+        "validate-visit-packet",
+        help="Validate a local ScanView clinician visit packet and all integrity links",
+    )
+    validate_visit_packet.add_argument("archive", type=Path)
+
     compare_measurements = commands.add_parser(
         "compare-measurements",
         help="Compare two explicitly selected manual measurements without assigning response",
@@ -138,6 +153,24 @@ def main() -> None:
             raise SystemExit(1)
     elif args.command == "validate-key-image":
         summary = key_image_archive_summary(args.archive)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "assemble-visit-packet":
+        try:
+            write_visit_packet(
+                args.baseline_archive,
+                args.followup_archive,
+                args.output,
+            )
+        except ValueError as error:
+            argument_parser.error(str(error))
+        summary = visit_packet_summary(args.output)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-visit-packet":
+        summary = visit_packet_summary(args.archive)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

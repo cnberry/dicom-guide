@@ -11,6 +11,10 @@ scanview-agent candidates manifest.json
 scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent validate-measurements '/path/to/scanview-measurements.json'
+scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
+scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
+  --output scanview-visit-packet.zip
+scanview-agent validate-visit-packet scanview-visit-packet.zip
 scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
@@ -27,3 +31,8 @@ review state, count, and errors; it does not echo source identifiers, coordinate
 or values. Comparison requires explicit tracking IDs from distinct source series and
 trusted millimeter results. It emits source-linked numeric change, missing context,
 and clinician questions with an empty interpretation list and `unreviewed` state.
+Visit-packet assembly also stays local. It accepts only validated key-image v2
+archives with one matching opaque patient context, distinct dated studies/series,
+explicit ordering, and one modality. It creates a static review page plus an
+integrity-linked agent manifest and does not perform lesion matching, registration,
+response scoring, or interpretation.

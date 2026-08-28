@@ -13,6 +13,10 @@ from pydicom.errors import InvalidDicomError
 SCHEMA_VERSION = "1.0.0"
 
 HEADER_TAGS = [
+    "PatientID",
+    "IssuerOfPatientID",
+    "PatientName",
+    "PatientBirthDate",
     "SOPClassUID",
     "SOPInstanceUID",
     "StudyInstanceUID",
@@ -103,6 +107,25 @@ def hash_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return digest.hexdigest()
 
 
+def _patient_context_id(dataset: Any, study_uid: str, salt: str) -> str:
+    patient_id = _text(getattr(dataset, "PatientID", None))
+    issuer = _text(getattr(dataset, "IssuerOfPatientID", None))
+    patient_name = _text(getattr(dataset, "PatientName", None))
+    birth_date = _text(getattr(dataset, "PatientBirthDate", None))
+    if patient_id:
+        identity = (
+            f"id-demographics:{patient_id}:{patient_name or ''}:{birth_date or ''}"
+            if patient_name or birth_date
+            else f"id-issuer:{issuer or ''}:{patient_id}"
+        )
+    elif patient_name or birth_date:
+        identity = f"demographics:{patient_name or ''}:{birth_date or ''}"
+    else:
+        # A study-scoped fallback deliberately cannot join different exams.
+        identity = f"study-only:{study_uid}"
+    return opaque_id("patient", identity, salt)
+
+
 def iter_files(root: Path) -> Iterable[Path]:
     for directory, names, files in os.walk(root):
         names.sort()
@@ -160,6 +183,7 @@ def _read_instance(path: Path, root: Path, *, include_hashes: bool, salt: str) -
         "instance_number": _int(getattr(dataset, "InstanceNumber", None)),
         "image_position_patient": _float_list(getattr(dataset, "ImagePositionPatient", None)),
         "header": {
+            "patient_context_id": _patient_context_id(dataset, study_uid, salt),
             "acquisition_date": acquisition_date,
             "modality": _text(getattr(dataset, "Modality", None)) or "Unknown",
             "series_description": _text(getattr(dataset, "SeriesDescription", None)) or "Unnamed series",

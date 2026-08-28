@@ -138,6 +138,12 @@ export function DicomViewport({
     const actualIndex = viewport.getCurrentImageIdIndex();
     const instance = series.instances[actualIndex];
     if (!instance) return;
+    const patientContextId = series.patientContextId;
+    if (!patientContextId) {
+      setKeyImageError('Patient context is unavailable; evidence export is disabled.');
+      setKeyImageState('error');
+      return;
+    }
     setKeyImageState('working');
     setKeyImageError('');
     try {
@@ -164,8 +170,10 @@ export function DicomViewport({
         orientationLabels,
         viewportRole: id,
         source: {
+          study_id: series.studyId,
           series_id: series.id,
           instance_id: instance.instanceId,
+          patient_context_id: patientContextId,
           frame_of_reference_id: series.frameOfReferenceId,
           modality: series.modality,
           acquisition_date: series.acquisitionDate,

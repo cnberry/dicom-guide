@@ -20,6 +20,7 @@ const instance = (position: number, instanceNumber = position): DicomInstance =>
 const series = (overrides: Partial<DicomSeries> = {}): DicomSeries => ({
   id: 'series-a',
   studyId: 'study-a',
+  patientContextId: 'patient-a',
   acquisitionDate: '20260101',
   modality: 'MR',
   description: 'T1 POST CONTRAST',
@@ -47,6 +48,31 @@ describe('comparison safety', () => {
     const result = assessCompatibility(series(), series({ id: 'series-b' }));
     expect(result.level).toBe('incompatible');
     expect(result.reasons.join(' ')).toContain('same exam');
+  });
+
+  it('rejects cross-patient or unprovable patient contexts', () => {
+    const baseline = series();
+    const otherPatient = series({
+      id: 'series-b',
+      studyId: 'study-b',
+      acquisitionDate: '20260201',
+      patientContextId: 'patient-b',
+    });
+    const unavailable = series({
+      id: 'series-c',
+      studyId: 'study-c',
+      acquisitionDate: '20260201',
+      patientContextId: undefined,
+    });
+
+    expect(assessCompatibility(baseline, otherPatient).level).toBe('incompatible');
+    expect(assessCompatibility(baseline, otherPatient).reasons.join(' ')).toContain(
+      'different opaque patient contexts',
+    );
+    expect(assessCompatibility(baseline, unavailable).level).toBe('incompatible');
+    expect(assessCompatibility(baseline, unavailable).reasons.join(' ')).toContain(
+      'Patient context is unavailable',
+    );
   });
 });
 

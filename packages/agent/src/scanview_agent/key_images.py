@@ -9,7 +9,7 @@ import zipfile
 import zlib
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from .measurements import validate_measurement_packet
 
@@ -45,13 +45,13 @@ def _positive_integer(value: Any) -> bool:
 
 
 def _valid_datetime(value: Any) -> bool:
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or "T" not in value:
         return False
     try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return False
-    return True
+    return parsed.tzinfo is not None
 
 
 def validate_key_image_packet(packet: Any) -> list[str]:
@@ -74,8 +74,9 @@ def validate_key_image_packet(packet: Any) -> list[str]:
         },
     ):
         errors.append("key-image packet contains unsupported fields")
-    if packet.get("schema_version") != "1.0.0":
-        errors.append("schema_version must be 1.0.0")
+    schema_version = packet.get("schema_version")
+    if schema_version not in {"1.0.0", "2.0.0"}:
+        errors.append("schema_version must be 1.0.0 or 2.0.0")
     if not _valid_datetime(packet.get("created_at")):
         errors.append("created_at must be an ISO 8601 date-time")
     if packet.get("review_status") != "unreviewed":
@@ -90,8 +91,10 @@ def validate_key_image_packet(packet: Any) -> list[str]:
         if not _has_only_keys(
             source,
             {
+                "study_id",
                 "series_id",
                 "instance_id",
+                "patient_context_id",
                 "frame_of_reference_id",
                 "modality",
                 "acquisition_date",
@@ -100,6 +103,15 @@ def validate_key_image_packet(packet: Any) -> list[str]:
             },
         ):
             errors.append("source contains unsupported fields")
+        study = source.get("study_id")
+        patient_context = source.get("patient_context_id")
+        if schema_version == "2.0.0":
+            if not _valid_opaque_id(study, "study"):
+                errors.append("source.study_id must be a supported opaque ID")
+            if not _valid_opaque_id(patient_context, "patient"):
+                errors.append("source.patient_context_id must be a supported opaque ID")
+        elif study is not None or patient_context is not None:
+            errors.append("key-image v1 source cannot contain v2 context fields")
         if not _valid_opaque_id(source.get("series_id"), "series"):
             errors.append("source.series_id must be a supported opaque ID")
         if not _valid_opaque_id(source.get("instance_id"), "instance"):
@@ -251,12 +263,14 @@ def validate_key_image_packet(packet: Any) -> list[str]:
         implementation, {"name", "version", "renderer"}
     ):
         errors.append("implementation must be a supported object")
-    elif (
-        implementation.get("name") != "ScanView key-image exporter"
-        or implementation.get("version") != "0.1.0"
-        or implementation.get("renderer") != "Cornerstone3D 5.8.2"
-    ):
-        errors.append("implementation is unsupported")
+    else:
+        expected_exporter_version = "0.2.0" if schema_version == "2.0.0" else "0.1.0"
+        if (
+            implementation.get("name") != "ScanView key-image exporter"
+            or implementation.get("version") != expected_exporter_version
+            or implementation.get("renderer") != "Cornerstone3D 5.8.2"
+        ):
+            errors.append("implementation is unsupported")
 
     limitations = packet.get("limitations")
     if not isinstance(limitations, list) or not limitations or not all(
@@ -301,7 +315,7 @@ def _png_dimensions(data: bytes) -> tuple[int, int] | None:
     return dimensions if dimensions and saw_idat and saw_iend else None
 
 
-def key_image_archive_summary(path: Path) -> dict[str, Any]:
+def key_image_archive_summary(path: Path | BinaryIO) -> dict[str, Any]:
     errors: list[str] = []
     packet: Any = None
     measurements: Any = None

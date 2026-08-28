@@ -21,6 +21,10 @@ quality-system, and regulatory review.
 - The API binds to loopback and requires a random bearer token; the unified browser
   uses a SameSite, HttpOnly session cookie established by a one-time local redirect.
 - Paths, patient names/IDs, DICOM headers, and response bodies are absent from logs.
+- Patient identity tags are used only in local memory to derive an opaque patient-
+  context digest. The raw values are never written to manifests, evidence packets,
+  logs, or Git; the digest remains sensitive, potentially linkable, and is not
+  de-identification.
 - Manifests and derivatives stay outside Git and are treated as sensitive.
 - Source delete and overwrite operations do not exist.
 - Generated content is `derived` and `unreviewed` until explicitly accepted.
@@ -28,6 +32,12 @@ quality-system, and regulatory review.
   identifiers or recognizable anatomy inherited from the displayed pixels, so it
   requires the same sharing safeguards as the original DICOM even though its JSON
   uses opaque IDs and omits direct names and paths.
+- A clinician visit packet inherits the sensitivity of both key images. Its local
+  assembler requires one matching opaque patient context and refuses cross-modality,
+  same-study/series, non-chronological, or mislabeled input. The packet is side-by-side
+  only, not registered, and contains empty numeric
+  result and interpretation arrays. Successful integrity validation is not clinical
+  review or sign-off.
 
 ## De-identification warning
 

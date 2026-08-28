@@ -86,8 +86,10 @@ describe('key-image evidence', () => {
     const packet = await buildKeyImageEvidencePacket({
       createdAt: '2026-08-28T01:02:03.000Z',
       source: {
+        study_id: 'abcdef0123456789',
         series_id: '0123456789abcdef',
         instance_id: 'fedcba9876543210',
+        patient_context_id: '1234567890abcdef',
         modality: 'MR',
         acquisition_date: '20260828',
         series_description: 'Synthetic axial',
@@ -111,7 +113,7 @@ describe('key-image evidence', () => {
     });
 
     expect(packet).toMatchObject({
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       review_status: 'unreviewed',
       artifact_type: 'derived_display_key_image',
       measurement_evidence: {
