@@ -1,14 +1,27 @@
 # Roadmap and next steps
 
+## Completed in the first milestone
+
+1. Preserved the Finder transfer and verified all 10,321 source files byte-for-byte
+   without modifying the disc or deleting destination extras.
+2. Cataloged the local copy into opaque, hashed study/series/instance records without
+   committing patient data.
+3. Built local MRI/CT rendering, two-up comparison, compatibility explanations,
+   window/level, pan, zoom, reset, and in-memory length tools.
+4. Built the loopback-only, token-protected, read-only agent interface.
+5. Confirmed the current media contains one MRI exam and one CT exam, and therefore
+   no valid same-modality longitudinal comparison candidate.
+
 ## Immediate
 
-1. Let the active Finder copy finish; do not run another source reader meanwhile.
-2. Run `scripts/copy_and_verify.py` and retain the manifest with the local copy.
-3. Smoke-test at least one copied MRI and CT series in the Cornerstone viewer without
-   printing or committing patient metadata.
-4. Add window/level, pan, zoom, reset, orientation labels, and length/ROI tools.
-5. Replace normalized stack index linking with patient-position synchronization.
-6. Serve instance bytes and static UI from one loopback process for a consistent
+1. Import a future same-modality MRI follow-up and have a person confirm the intended
+   baseline/follow-up sequences.
+2. Smoke-test copied JPEG 2000 MRI and CT pixels in the production viewer on this
+   computer, then repeat on Linux without exposing metadata or screenshots.
+3. Persist source-referenced length/ROI measurements with tracking IDs; add
+   orientation labels and annotation export.
+4. Replace normalized stack index linking with patient-position synchronization.
+5. Serve instance bytes and static UI from one loopback process for a consistent
    macOS/Linux launcher and agent/viewer deep links.
 
 ## Next milestone

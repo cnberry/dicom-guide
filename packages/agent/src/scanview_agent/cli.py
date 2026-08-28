@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -14,7 +15,13 @@ def _write_json(value: object, output: Path | None) -> None:
     payload = json.dumps(value, indent=2) + "\n"
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(payload)
+        temporary = output.with_name(f".{output.name}.{os.getpid()}.tmp")
+        try:
+            temporary.write_text(payload)
+            temporary.chmod(0o600)
+            temporary.replace(output)
+        finally:
+            temporary.unlink(missing_ok=True)
     else:
         print(payload, end="")
 

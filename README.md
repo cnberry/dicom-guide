@@ -11,6 +11,11 @@ series, renders native pixels with Cornerstone3D, and presents two series side b
 side. It suggests pair compatibility with visible reasons but never approves a
 pair or issues a medical conclusion.
 
+The first local catalog contains 2 studies, 65 series, and 10,286 DICOM instances.
+They represent one MRI exam and one CT exam, so there is not yet a valid
+same-modality longitudinal pair for measuring chemotherapy response. ScanView
+returns zero candidates instead of treating CT and MRI as interchangeable.
+
 > **Important:** ScanView is investigational software, not a medical device and
 > not validated for diagnosis. Imaging findings and treatment-response judgments
 > require qualified clinician review.
@@ -21,6 +26,7 @@ pair or issues a medical conclusion.
 - No external processing API: decoding, metadata, and comparisons stay on-device.
 - Extension-independent DICOM Part 10 parsing.
 - MRI/CT stack rendering through Cornerstone3D's maintained codecs.
+- Window/level, pan, zoom, reset, and in-memory length measurement tools.
 - Baseline/follow-up selection and linked normalized slice navigation.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
@@ -45,6 +51,13 @@ After dependencies are installed and the application is built, runtime operation
 is offline. Cornerstone codecs and WebAssembly assets are served from the local
 bundle; research-document links are references only and are never contacted by the
 application. A restrictive Content Security Policy blocks external runtime access.
+
+For a built production bundle, Node is not required at runtime:
+
+```bash
+pnpm build
+python3 scripts/run_viewer.py
+```
 
 ## Run the agent catalog/API
 
@@ -84,6 +97,7 @@ It never deletes destination extras and never writes to the source.
 ## Project record
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Agent interface](docs/AGENT-INTERFACE.md)
 - [Viewer research](docs/RESEARCH.md)
 - [Plan and acceptance criteria](docs/PLAN.md)
 - [Current status](docs/STATUS.md)

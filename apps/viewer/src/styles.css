@@ -168,6 +168,27 @@ main { min-height: 100vh; }
 }
 .sync-button.active { border-color: rgba(110, 231, 194, 0.38); color: var(--accent); background: var(--accent-dark); }
 
+.viewer-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 0 clamp(24px, 4vw, 64px) 14px;
+}
+.tool-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-buttons button {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0b1a18;
+  color: var(--muted);
+  padding: 7px 10px;
+  font: 500 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  cursor: pointer;
+}
+.tool-buttons button:hover { border-color: rgba(110, 231, 194, 0.32); color: var(--ink); }
+.tool-buttons button.active { color: var(--accent); border-color: rgba(110, 231, 194, 0.48); background: var(--accent-dark); }
+.viewer-toolbar p { margin: 0; color: var(--muted); font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: right; }
+
 .viewport-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 clamp(24px, 4vw, 64px); }
 .viewport-shell { min-width: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #030706; box-shadow: 0 22px 60px rgba(0, 0, 0, 0.23); }
 .viewport-heading { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 10px 14px; background: #0d1e1c; border-bottom: 1px solid var(--line); }
@@ -201,13 +222,15 @@ footer { display: flex; justify-content: space-between; gap: 24px; padding: 18px
   .app-header { grid-template-columns: 1fr auto; gap: 12px; }
   .safety-banner { grid-row: 2; grid-column: 1 / -1; justify-self: start; }
   .selection-panel { grid-template-columns: 1fr; }
+  .viewer-toolbar { align-items: flex-start; flex-direction: column; }
+  .viewer-toolbar p { text-align: left; }
   .sync-button { justify-self: start; }
   .viewport-grid, .review-grid { grid-template-columns: 1fr; }
   .dicom-viewport { height: 72vw; }
 }
 
 @media (max-width: 620px) {
-  .app-header, .workspace-summary, .selection-panel, .viewport-grid, .review-grid, footer { padding-left: 16px; padding-right: 16px; }
+  .app-header, .workspace-summary, .selection-panel, .viewer-toolbar, .viewport-grid, .review-grid, footer { padding-left: 16px; padding-right: 16px; }
   .privacy-note, .safety-banner { display: none; }
   .empty-steps { flex-direction: column; align-items: flex-start; }
   footer { flex-direction: column; }

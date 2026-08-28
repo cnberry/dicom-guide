@@ -86,18 +86,32 @@ def test_pair_suggestions_are_unreviewed_and_registration_gated(tmp_path: Path) 
     series_one = generate_uid()
     series_two = generate_uid()
     write_dicom(
-        tmp_path / "baseline",
+        tmp_path / "baseline-1",
         study_uid=study_one,
         series_uid=series_one,
         date="20260101",
         instance=1,
     )
     write_dicom(
-        tmp_path / "followup",
+        tmp_path / "baseline-2",
+        study_uid=study_one,
+        series_uid=series_one,
+        date="20260101",
+        instance=2,
+    )
+    write_dicom(
+        tmp_path / "followup-1",
         study_uid=study_two,
         series_uid=series_two,
         date="20260201",
         instance=1,
+    )
+    write_dicom(
+        tmp_path / "followup-2",
+        study_uid=study_two,
+        series_uid=series_two,
+        date="20260201",
+        instance=2,
     )
     catalog, _ = build_catalog(tmp_path, include_hashes=False)
 
@@ -117,3 +131,44 @@ def test_server_refuses_non_loopback_binding() -> None:
         assert "loopback" in str(error)
     else:
         raise AssertionError("A non-loopback bind must never be accepted")
+
+
+def test_presentation_states_are_excluded_from_pair_candidates() -> None:
+    catalog = {
+        "schema_version": "1.0.0",
+        "studies": [
+            {
+                "acquisition_date": "20260101",
+                "series": [
+                    {
+                        "id": "series_pr_baseline",
+                        "modality": "PR",
+                        "series_description": "Presentation state",
+                        "image_type": [],
+                        "instance_count": 3,
+                    }
+                ],
+            },
+            {
+                "acquisition_date": "20260201",
+                "series": [
+                    {
+                        "id": "series_pr_followup",
+                        "modality": "PR",
+                        "series_description": "Presentation state",
+                        "image_type": [],
+                        "instance_count": 3,
+                    }
+                ],
+            },
+        ],
+    }
+
+    suggestions = suggest_pairs(catalog)
+
+    assert suggestions["candidates"] == []
+    assert len(suggestions["excluded_series"]) == 2
+    assert all(
+        "unsupported_non_pixel_modality" in item["reasons"]
+        for item in suggestions["excluded_series"]
+    )

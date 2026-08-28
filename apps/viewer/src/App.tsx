@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { DicomViewport } from './components/DicomViewport';
+import type { ViewerTool } from './cornerstone';
 import {
   assessCompatibility,
   formatDicomDate,
@@ -45,6 +46,8 @@ export default function App() {
   const [baselineIndex, setBaselineIndex] = useState(0);
   const [followupIndex, setFollowupIndex] = useState(0);
   const [synchronized, setSynchronized] = useState(true);
+  const [activeTool, setActiveTool] = useState<ViewerTool>('window');
+  const [resetNonce, setResetNonce] = useState(0);
   const [importState, setImportState] = useState<ImportState>();
   const [importMessage, setImportMessage] = useState('No scan folder loaded');
 
@@ -179,6 +182,31 @@ export default function App() {
             />
           </section>
 
+          <section className="viewer-toolbar" aria-label="Viewer tools">
+            <div className="tool-buttons">
+              {([
+                ['window', 'Window / level'],
+                ['pan', 'Pan'],
+                ['zoom', 'Zoom'],
+                ['length', 'Length'],
+              ] as const).map(([tool, label]) => (
+                <button
+                  key={tool}
+                  className={activeTool === tool ? 'active' : ''}
+                  aria-pressed={activeTool === tool}
+                  onClick={() => setActiveTool(tool)}
+                >
+                  {label}
+                </button>
+              ))}
+              <button onClick={() => setResetNonce((value) => value + 1)}>Reset views</button>
+            </div>
+            <p>
+              Primary drag: {activeTool === 'length' ? 'unreviewed measurement' : activeTool} · wheel:
+              slices · measurements require valid pixel spacing
+            </p>
+          </section>
+
           <section className="viewport-grid">
             <DicomViewport
               id="baseline"
@@ -186,6 +214,8 @@ export default function App() {
               series={baseline}
               index={baselineIndex}
               onIndexChange={(index) => updateIndex('baseline', index)}
+              activeTool={activeTool}
+              resetNonce={resetNonce}
             />
             <DicomViewport
               id="followup"
@@ -193,6 +223,8 @@ export default function App() {
               series={followup}
               index={followupIndex}
               onIndexChange={(index) => updateIndex('followup', index)}
+              activeTool={activeTool}
+              resetNonce={resetNonce}
             />
           </section>
 

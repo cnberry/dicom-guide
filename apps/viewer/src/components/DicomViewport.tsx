@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RenderingEngine, Types } from '@cornerstonejs/core';
-import { createStackViewport } from '../cornerstone';
+import {
+  createStackViewport,
+  type ViewerTool,
+  type ViewportToolController,
+} from '../cornerstone';
 import type { DicomSeries } from '../dicom';
 
 type Props = {
@@ -9,12 +13,23 @@ type Props = {
   series?: DicomSeries;
   index: number;
   onIndexChange: (index: number) => void;
+  activeTool: ViewerTool;
+  resetNonce: number;
 };
 
-export function DicomViewport({ id, label, series, index, onIndexChange }: Props) {
+export function DicomViewport({
+  id,
+  label,
+  series,
+  index,
+  onIndexChange,
+  activeTool,
+  resetNonce,
+}: Props) {
   const elementRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<RenderingEngine | undefined>(undefined);
   const viewportRef = useRef<Types.IStackViewport | undefined>(undefined);
+  const toolsRef = useRef<ViewportToolController | undefined>(undefined);
   const [status, setStatus] = useState('Choose a series');
 
   useEffect(() => {
@@ -23,6 +38,7 @@ export function DicomViewport({ id, label, series, index, onIndexChange }: Props
 
     let cancelled = false;
     let ownedEngine: RenderingEngine | undefined;
+    let ownedTools: ViewportToolController | undefined;
     setStatus('Loading pixels locally…');
     engineRef.current?.destroy();
 
@@ -31,15 +47,19 @@ export function DicomViewport({ id, label, series, index, onIndexChange }: Props
       `viewport-${id}`,
       element,
       series,
+      activeTool,
     )
-      .then(({ engine, viewport }) => {
+      .then(({ engine, viewport, tools }) => {
         ownedEngine = engine;
+        ownedTools = tools;
         if (cancelled) {
+          tools.destroy();
           engine.destroy();
           return;
         }
         engineRef.current = engine;
         viewportRef.current = viewport;
+        toolsRef.current = tools;
         setStatus('');
         onIndexChange(Math.floor(series.instances.length / 2));
       })
@@ -52,13 +72,27 @@ export function DicomViewport({ id, label, series, index, onIndexChange }: Props
     return () => {
       cancelled = true;
       observer.disconnect();
+      ownedTools?.destroy();
       ownedEngine?.destroy();
       if (engineRef.current === ownedEngine) {
         engineRef.current = undefined;
         viewportRef.current = undefined;
+        toolsRef.current = undefined;
       }
     };
   }, [id, series?.id]);
+
+  useEffect(() => {
+    toolsRef.current?.setPrimaryTool(activeTool);
+  }, [activeTool]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || resetNonce === 0) return;
+    viewport.resetProperties();
+    viewport.resetCamera();
+    viewport.render();
+  }, [resetNonce]);
 
   useEffect(() => {
     const viewport = viewportRef.current;

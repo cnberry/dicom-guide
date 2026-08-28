@@ -128,7 +128,13 @@ def main() -> int:
         "files": entries,
     }
     manifest_path = args.manifest or destination / ".scanview-copy-manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_temporary = manifest_path.with_name(f".{manifest_path.name}.{os.getpid()}.tmp")
+    try:
+        manifest_temporary.write_text(json.dumps(manifest, indent=2) + "\n")
+        manifest_temporary.chmod(0o600)
+        manifest_temporary.replace(manifest_path)
+    finally:
+        manifest_temporary.unlink(missing_ok=True)
     print(f"Verification manifest: {manifest_path}")
     if failures:
         print(f"FAILED: {len(failures)} files do not match", file=sys.stderr)

@@ -25,7 +25,8 @@ class Handler(BaseHTTPRequestHandler):
         print(f"scanview-api {self.command} {urlparse(self.path).path} {args[1] if len(args) > 1 else ''}")
 
     def _authorized(self) -> bool:
-        return self.headers.get("Authorization") == f"Bearer {self.server.token}"
+        supplied = self.headers.get("Authorization", "")
+        return secrets.compare_digest(supplied, f"Bearer {self.server.token}")
 
     def _send_json(self, value: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         payload = json.dumps(value, separators=(",", ":")).encode()

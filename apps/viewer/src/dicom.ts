@@ -75,6 +75,11 @@ const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
   const sopClassUid = textTag(dataset, 'x00080016');
   if (!studyUid || !seriesUid || !sopClassUid) return undefined;
 
+  const modality = textTag(dataset, 'x00080060') ?? 'Unknown';
+  // PR/SR and other DICOM objects remain available to the agent catalog, but
+  // this MVP stack renderer only advertises CT/MR pixel series.
+  if (!['CT', 'MR'].includes(modality)) return undefined;
+
   const pixelSpacing = numberListTag(dataset, 'x00280030');
   const orientation = numberListTag(dataset, 'x00200037');
   const position = numberListTag(dataset, 'x00200032');
@@ -91,7 +96,7 @@ const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
       textTag(dataset, 'x00080022') ??
       textTag(dataset, 'x00080021') ??
       textTag(dataset, 'x00080020'),
-    modality: textTag(dataset, 'x00080060') ?? 'Unknown',
+    modality,
     description: textTag(dataset, 'x0008103e') ?? 'Unnamed series',
     protocol: textTag(dataset, 'x00181030'),
     bodyPart: textTag(dataset, 'x00180015'),

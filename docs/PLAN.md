@@ -30,7 +30,7 @@ result into a medical conclusion.
 
 - Orthanc/DICOMweb import with localhost-only configuration.
 - OHIF longitudinal mode or ScanView mode extension.
-- Physical-coordinate linked crosshair, pan/zoom, window/level, MPR.
+- Physical-coordinate linked crosshair, orientation overlays, and MPR.
 - Manual linear, bidirectional, and ROI measurements with tracking IDs.
 - Evidence-packet export for clinician conversations.
 
