@@ -21,10 +21,19 @@ import {
   readMeasurementEvidencePacket,
   type MeasurementEvidencePacket,
 } from './measurements';
+import {
+  saveComparisonReview as saveLocalComparisonReview,
+} from './comparisonReviewService';
+import {
+  comparisonSourcesAreVisible,
+  findComparisonSourceIndexes,
+  type MeasurementComparisonDraft,
+} from './measurementComparison';
 import { loadLocalServiceCatalog } from './localService';
 import { saveVisitPacket as saveLocalVisitPacket } from './visitPacketService';
 
 type ImportState = { processed: number; total: number } | undefined;
+type ExportState = 'idle' | 'working' | 'saved' | 'error';
 const maxPastedMeasurementBytes = 2_000_000;
 
 const SeriesSelect = ({
@@ -78,11 +87,15 @@ export default function App() {
   const [liveMeasurementPacket, setLiveMeasurementPacket] = useState<MeasurementEvidencePacket>();
   const [measurementPasteOpen, setMeasurementPasteOpen] = useState(false);
   const [measurementPasteValue, setMeasurementPasteValue] = useState('');
-  const [visitPacketState, setVisitPacketState] = useState<
-    'idle' | 'working' | 'saved' | 'error'
-  >('idle');
+  const [measurementComparisonDraft, setMeasurementComparisonDraft] =
+    useState<MeasurementComparisonDraft>();
+  const [visitPacketState, setVisitPacketState] = useState<ExportState>('idle');
   const [visitPacketMessage, setVisitPacketMessage] = useState(
     'Visit packets require two dated, same-patient MR or CT studies in the unified local workspace.',
+  );
+  const [comparisonReviewState, setComparisonReviewState] = useState<ExportState>('idle');
+  const [comparisonReviewMessage, setComparisonReviewMessage] = useState(
+    'Build an explicit numeric preview to enable one-click local review export.',
   );
 
   const baseline = series.find((item) => item.id === baselineId);
@@ -102,6 +115,19 @@ export default function App() {
   const visitPacketReady = Boolean(
     baseline && followup && visitPacketUsesLoopback && compatibility.level !== 'incompatible',
   );
+  const comparisonSourceIndexes = useMemo(() => {
+    return findComparisonSourceIndexes(measurementComparisonDraft, baseline, followup);
+  }, [baseline, followup, measurementComparisonDraft]);
+  const comparisonSourcesVisible = comparisonSourcesAreVisible(
+    comparisonSourceIndexes,
+    baselineIndex,
+    followupIndex,
+  );
+  const comparisonReviewReady = Boolean(
+    visitPacketReady && measurementComparisonDraft && comparisonSourcesVisible,
+  );
+  const evidenceExportWorking =
+    visitPacketState === 'working' || comparisonReviewState === 'working';
 
   useEffect(() => {
     setVisitPacketState('idle');
@@ -109,6 +135,45 @@ export default function App() {
       'Visit packets require two dated, same-patient MR or CT studies in the unified local workspace.',
     );
   }, [baselineId, baselineIndex, followupId, followupIndex]);
+
+  useEffect(() => {
+    setComparisonReviewState('idle');
+    if (!measurementComparisonDraft) {
+      setComparisonReviewMessage(
+        'Build an explicit numeric preview to enable one-click local review export.',
+      );
+    } else if (!visitPacketUsesLoopback) {
+      setComparisonReviewMessage(
+        'Use the unified local launcher for one-click comparison-review assembly.',
+      );
+    } else if (!comparisonSourcesVisible) {
+      setComparisonReviewMessage(
+        'Return both panes to the exact selected measurement source slices before review export.',
+      );
+    } else {
+      setComparisonReviewMessage(
+        'Ready to bind both displayed source images to this unreviewed numeric comparison locally.',
+      );
+    }
+  }, [
+    baselineId,
+    baselineIndex,
+    comparisonSourcesVisible,
+    followupId,
+    followupIndex,
+    measurementComparisonDraft,
+    visitPacketUsesLoopback,
+  ]);
+
+  useEffect(() => {
+    if (!comparisonSourceIndexes) return;
+    if (comparisonSourceIndexes.baseline >= 0) {
+      setBaselineIndex(comparisonSourceIndexes.baseline);
+    }
+    if (comparisonSourceIndexes.followup >= 0) {
+      setFollowupIndex(comparisonSourceIndexes.followup);
+    }
+  }, [comparisonSourceIndexes]);
 
   useEffect(
     () =>
@@ -155,6 +220,7 @@ export default function App() {
     setLiveMeasurementPacket(undefined);
     setMeasurementPasteOpen(false);
     setMeasurementPasteValue('');
+    setMeasurementComparisonDraft(undefined);
     setMeasurementMessage('Measurement drafts stay local and require clinician review.');
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     resetLocalImagingSession();
@@ -307,6 +373,70 @@ export default function App() {
     }
   };
 
+  const exportComparisonReview = async () => {
+    if (!measurementComparisonDraft) {
+      setComparisonReviewState('error');
+      setComparisonReviewMessage('Build an explicit numeric preview before review export.');
+      return;
+    }
+    if (!baseline || !followup) {
+      setComparisonReviewState('error');
+      setComparisonReviewMessage('Choose both a baseline and follow-up series first.');
+      return;
+    }
+    if (!visitPacketUsesLoopback) {
+      setComparisonReviewState('error');
+      setComparisonReviewMessage(
+        'Use the unified local launcher for one-click comparison-review assembly.',
+      );
+      return;
+    }
+    if (compatibility.level === 'incompatible') {
+      setComparisonReviewState('error');
+      setComparisonReviewMessage('This pair fails the local longitudinal safety gates.');
+      return;
+    }
+    if (!comparisonSourcesVisible) {
+      setComparisonReviewState('error');
+      setComparisonReviewMessage(
+        'Both panes must display the exact source slices for the selected measurements.',
+      );
+      return;
+    }
+    const baselineViewport = baselineViewportRef.current;
+    const followupViewport = followupViewportRef.current;
+    if (!baselineViewport || !followupViewport) {
+      setComparisonReviewState('error');
+      setComparisonReviewMessage('Both displayed images must finish rendering before export.');
+      return;
+    }
+    setComparisonReviewState('working');
+    setComparisonReviewMessage(
+      'Capturing the exact selected source slices and assembling the review archive locally…',
+    );
+    try {
+      const createdAt = new Date().toISOString();
+      const [baselineArchive, followupArchive] = await Promise.all([
+        baselineViewport.createKeyImageArchive(createdAt),
+        followupViewport.createKeyImageArchive(createdAt),
+      ]);
+      const result = await saveLocalComparisonReview(
+        baselineArchive.bytes,
+        followupArchive.bytes,
+        measurementComparisonDraft,
+      );
+      setComparisonReviewState('saved');
+      setComparisonReviewMessage(
+        `Saved ${result.filename}: exact local visual/numeric evidence, still unreviewed.`,
+      );
+    } catch (error) {
+      setComparisonReviewState('error');
+      setComparisonReviewMessage(
+        error instanceof Error ? error.message : 'Local comparison-review export failed.',
+      );
+    }
+  };
+
   return (
     <main>
       <header className="app-header">
@@ -384,6 +514,7 @@ export default function App() {
               onChange={(id) => {
                 setBaselineId(id);
                 setBaselineIndex(0);
+                setMeasurementComparisonDraft(undefined);
               }}
             />
             <button
@@ -407,6 +538,7 @@ export default function App() {
               onChange={(id) => {
                 setFollowupId(id);
                 setFollowupIndex(0);
+                setMeasurementComparisonDraft(undefined);
               }}
             />
           </section>
@@ -441,7 +573,7 @@ export default function App() {
               </button>
               <button
                 className={`visit-packet-button ${visitPacketState}`}
-                disabled={!visitPacketReady || visitPacketState === 'working'}
+                disabled={!visitPacketReady || evidenceExportWorking}
                 title={
                   !baseline || !followup
                     ? 'Choose a baseline and follow-up series'
@@ -461,6 +593,30 @@ export default function App() {
                       ? 'Visit packet failed'
                       : 'Save visit packet'}
               </button>
+              <button
+                className={`review-packet-button ${comparisonReviewState}`}
+                disabled={!comparisonReviewReady || evidenceExportWorking}
+                title={
+                  !measurementComparisonDraft
+                    ? 'Build an explicit numeric preview first'
+                    : !visitPacketUsesLoopback
+                      ? 'Available through the unified local launcher'
+                      : compatibility.level === 'incompatible'
+                        ? 'The selected pair fails longitudinal safety gates'
+                        : !comparisonSourcesVisible
+                          ? 'Display the exact selected measurement source slices'
+                          : 'Bind both displayed images and the numeric pair into one local review ZIP'
+                }
+                onClick={() => void exportComparisonReview()}
+              >
+                {comparisonReviewState === 'working'
+                  ? 'Building review packet…'
+                  : comparisonReviewState === 'saved'
+                    ? 'Saved review packet'
+                    : comparisonReviewState === 'error'
+                      ? 'Review packet failed'
+                      : 'Save review packet'}
+              </button>
             </div>
             <p>
               Primary drag:{' '}
@@ -473,7 +629,8 @@ export default function App() {
                   ? 'shared-frame physical linking'
                   : 'index linking is approximate'}<br />
               {measurementMessage}<br />
-              {visitPacketMessage}
+              {visitPacketMessage}<br />
+              {comparisonReviewMessage}
             </p>
           </section>
 
@@ -568,6 +725,7 @@ export default function App() {
             followup={followup}
             compatibilityLevel={compatibility.level}
             onDeleteMeasurement={removeMeasurementAnnotation}
+            onComparisonDraftChange={setMeasurementComparisonDraft}
           />
         </>
       )}

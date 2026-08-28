@@ -46,6 +46,9 @@ result into a medical conclusion.
 - Local comparison-review archives with exact visual/numeric evidence joins,
   script-free human presentation, self-attested checklist decisions, non-overwriting
   amendment history, and privacy-minimized integrity validation.
+- One-click comparison-review export from the current explicit pair and its two exact
+  live source slices through a bounded same-origin request; nested assembly and
+  validation remain local, in memory, and source-read-only.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 
 ### Phase 2 — robust local archive and tools

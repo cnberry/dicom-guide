@@ -14,6 +14,7 @@ type Props = {
   followup?: DicomSeries;
   compatibilityLevel: Compatibility['level'];
   onDeleteMeasurement: (trackingId: string) => boolean;
+  onComparisonDraftChange: (draft: MeasurementComparisonDraft | undefined) => void;
 };
 
 const formatMeasurementResult = (measurement: MeasurementEvidence): string => {
@@ -62,6 +63,7 @@ export function MeasurementWorkspace({
   followup,
   compatibilityLevel,
   onDeleteMeasurement,
+  onComparisonDraftChange,
 }: Props) {
   const [baselineMeasurementId, setBaselineMeasurementId] = useState('');
   const [followupMeasurementId, setFollowupMeasurementId] = useState('');
@@ -83,6 +85,10 @@ export function MeasurementWorkspace({
     [baseline, compatibilityLevel, followup],
   );
   const longitudinalContextReady = pairingContext.ready;
+
+  useEffect(() => {
+    onComparisonDraftChange(comparisonDraft);
+  }, [comparisonDraft, onComparisonDraftChange]);
 
   useEffect(() => {
     if (!baselineMeasurements.some((item) => item.tracking_id === baselineMeasurementId)) {

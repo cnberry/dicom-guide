@@ -32,10 +32,11 @@ wheel with the built UI under `scanview_agent/ui`. A regular agent-only wheel st
 lightweight. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
 and the API from one loopback origin. It establishes an
 HttpOnly browser session, while agents continue to use the printed bearer token.
-The server has no source-write or delete endpoint. The unified viewer's one local
-POST accepts only the two derived key-image bundles, assembles and revalidates the
-visit packet in memory, returns it with `no-store`, and creates no server-side
-patient file. Measurement validation returns only validity, schema,
+The server has no source-write or delete endpoint. The unified viewer's two local
+POSTs accept exact bounded transports: two derived key-image bundles for a visit
+packet, or those same bundles plus one normalized comparison for a comparison-review
+packet. Both recursively assemble and revalidate in memory, return `no-store`, and
+create no server-side patient file. Measurement validation returns only validity, schema,
 review state, count, and errors; it does not echo source identifiers, coordinates,
 or values. Comparison requires explicit tracking IDs from distinct source series and
 trusted millimeter results. It emits source-linked numeric change, missing context,
@@ -57,3 +58,5 @@ adds a self-attested decision to a new output archive;
 digest, and resets review state. Neither command overwrites an existing archive.
 Reviewer identity is not authenticated or digitally signed, and privacy-minimized
 validation never echoes names, roles, notes, labels, IDs, or values.
+The viewer invokes the same assembly path only when its current panes show the exact
+source instances named by the selected baseline/follow-up measurements.

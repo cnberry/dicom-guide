@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 13:20 PDT
+Last updated: 2026-08-28 13:37 PDT
 
 ## Data transfer
 
@@ -70,6 +70,11 @@ Last updated: 2026-08-28 13:20 PDT
   its exact numeric comparison and visible baseline/follow-up measurements. They
   include both images, a script-free printable page, self-attested checklist events,
   explicit identity-verification limits, and privacy-minimized validation.
+- The unified viewer can now create the complete comparison-review archive with one
+  button. It restores both panes to the exact source instances named by the explicit
+  measurement pair, keeps export disabled if either pane differs, and sends only two
+  in-memory key-image archives plus normalized comparison JSON to the exact-origin
+  loopback assembler. The server persists no source, intermediate, or output file.
 - Review and amendment commands always create a new owner-only archive. Event hashes
   bind the actor, checklist, note, source comparison, prior event, and parent archive;
   an amended comparison is rejoined to the visual evidence and reset to `unreviewed`.
@@ -107,14 +112,16 @@ Last updated: 2026-08-28 13:20 PDT
 
 ## Verification
 
-- Python agent tests: 36 passing, including cross-patient and legacy-context
+- Python agent tests: 38 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
-  non-overwriting amendments, privacy summaries, and static presentation integrity.
-- Viewer tests: 38 passing, including patient-context and local-only enforcement,
+  non-overwriting amendments, privacy summaries, comparison-review transport and
+  same-origin HTTP enforcement, and static presentation integrity.
+- Viewer tests: 42 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
-  endpoint contract, and complete/regular MPR geometry gating.
+  endpoint contract, exact three-file comparison-review transport and source-slice
+  lookup, and complete/regular MPR geometry gating.
 - Copy utility: Python bytecode compilation passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
@@ -195,6 +202,15 @@ Last updated: 2026-08-28 13:20 PDT
   and two complete review-history events in one semantic script-free page. The only
   successful requests were `review.html` and its two local PNGs; the synthetic
   archives and extracted page were moved to recoverable Trash.
+- One-click comparison-review production smoke test: two synthetic dated same-patient
+  MR studies and a validated pasted measurement packet produced a 20→16 mm explicit
+  pair. The viewer automatically restored source slices 2/6 and 5/6, enabled export,
+  and sent one successful local `POST /v1/comparison-reviews`. The downloaded 569 KB
+  seven-file archive passed recursive agent validation and its script-free page
+  visibly showed both measurement overlays, −4 mm/−20% arithmetic, and prominent
+  unreviewed/self-attested warnings. Server logs contained only bundled local assets,
+  opaque instance routes, and that one POST; all synthetic artifacts were moved to
+  recoverable Trash.
 - Unified complete-copy smoke test: 2 studies, all 57 renderable MR/CT series, and
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
@@ -207,10 +223,10 @@ Last updated: 2026-08-28 13:20 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- Clinical-organization identity authentication, digital signatures, medical-record
-  sign-off, and a one-click viewer-to-review handoff remain. The current review chain
-  is self-attested and explicitly unverified. Elliptical ROI is a 2D manual draft,
-  not segmentation or volume measurement.
+- Clinical-organization identity authentication, digital signatures, and medical-
+  record sign-off remain. The current review chain is self-attested and explicitly
+  unverified. Elliptical ROI is a 2D manual draft, not segmentation or volume
+  measurement.
 - Signed/notarized macOS/Linux release packaging remains pending; the self-contained
   wheel and source checkout launcher are working and verified on macOS.
 - No registration, segmentation, response criteria, or automated medical conclusion.

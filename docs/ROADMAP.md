@@ -152,16 +152,28 @@
    browser QA of the script-free human page using synthetic evidence and only local
    image requests.
 
+## Completed in the twelfth milestone
+
+1. Added one-click comparison-review export from the live unified viewer using the
+   current explicit measurement pair and its two exact source instances.
+2. Added deterministic source-instance lookup and automatic pane restoration; export
+   stays disabled when either displayed slice does not match the selected evidence.
+3. Added a same-origin, authenticated, bounded three-member transport and local
+   `/v1/comparison-reviews` route that builds the nested visit packet and final
+   seven-file review ZIP entirely in memory with `no-store`.
+4. Added service, source-index, transport-integrity, same-origin, and HTTP round-trip
+   tests plus production-browser QA of the complete local synthetic workflow.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up and have a person confirm the intended
    baseline/follow-up sequences.
 2. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-3. Add a one-click viewer handoff that assembles the implemented local comparison
-   review packet from the two live panes and current explicit measurement pair.
-4. Produce signed/notarized macOS/Linux release artifacts and add agent/viewer deep
-   links around the self-contained Python wheel.
+3. Add agent/viewer deep links for opening an exact opaque series and source instance
+   within the self-contained local workspace.
+4. Produce signed/notarized macOS/Linux release artifacts around the self-contained
+   Python wheel.
 5. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
 

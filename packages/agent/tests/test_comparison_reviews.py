@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import stat
 import struct
 import sys
+import threading
 import zipfile
 import zlib
+from http import HTTPStatus
+from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
@@ -17,10 +21,12 @@ from scanview_agent.comparison_reviews import (
     EXPECTED_FILES,
     amend_comparison_review,
     append_comparison_review,
+    comparison_review_from_transport,
     comparison_review_summary,
     write_comparison_review,
 )
 from scanview_agent.measurements import build_measurement_comparison
+from scanview_agent.server import create_server
 from scanview_agent.visit_packets import write_visit_packet
 
 
@@ -217,6 +223,17 @@ def _sources(tmp_path: Path) -> tuple[Path, Path, dict, dict, dict]:
     return visit_path, comparison_path, baseline_packet, followup_packet, comparison
 
 
+def _transport(tmp_path: Path, comparison_path: Path, *, extra: bool = False) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("baseline.zip", (tmp_path / "baseline.zip").read_bytes())
+        archive.writestr("followup.zip", (tmp_path / "followup.zip").read_bytes())
+        archive.writestr("comparison.json", comparison_path.read_bytes())
+        if extra:
+            archive.writestr("unexpected.txt", b"unsupported")
+    return output.getvalue()
+
+
 def test_review_packet_binds_visual_and_numeric_evidence_with_static_schema_valid_output(
     tmp_path: Path,
 ) -> None:
@@ -272,6 +289,81 @@ def test_review_packet_binds_visual_and_numeric_evidence_with_static_schema_vali
             tmp_path / "predated-review.zip",
             created_at="2026-08-28T00:40:00Z",
         )
+
+
+def test_three_member_transport_assembles_review_entirely_in_memory(tmp_path: Path) -> None:
+    _, comparison_path, _, _, _ = _sources(tmp_path)
+    before = {path.name for path in tmp_path.iterdir()}
+
+    archive_bytes = comparison_review_from_transport(
+        _transport(tmp_path, comparison_path),
+        visit_created_at="2026-08-28T01:00:00Z",
+        review_created_at="2026-08-28T01:01:00Z",
+    )
+    summary = comparison_review_summary(io.BytesIO(archive_bytes))
+
+    assert summary["valid"] is True
+    assert summary["event_count"] == 1
+    assert {path.name for path in tmp_path.iterdir()} == before
+    with pytest.raises(ValueError, match="exactly baseline.zip"):
+        comparison_review_from_transport(_transport(tmp_path, comparison_path, extra=True))
+
+
+def test_same_origin_review_endpoint_returns_no_store_archive_without_server_file(
+    tmp_path: Path,
+) -> None:
+    _, comparison_path, _, _, _ = _sources(tmp_path)
+    transport = _transport(tmp_path, comparison_path)
+    before = {path.name for path in tmp_path.iterdir()}
+    server = create_server(
+        {"schema_version": "1.0.0", "studies": []},
+        {},
+        port=0,
+        token="test-session-token",
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_port
+    headers = {
+        "Authorization": "Bearer test-session-token",
+        "Origin": f"http://127.0.0.1:{port}",
+        "Content-Type": "application/vnd.scanview.comparison-review-input+zip",
+        "Accept": "application/zip",
+    }
+    try:
+        connection = HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request(
+            "POST", "/v1/comparison-reviews", body=transport, headers=headers
+        )
+        response = connection.getresponse()
+        body = response.read()
+        response_headers = dict(response.getheaders())
+        connection.close()
+
+        assert response.status == HTTPStatus.OK
+        assert response_headers["Content-Type"] == "application/zip"
+        assert response_headers["Cache-Control"] == "no-store"
+        assert response_headers["Content-Disposition"].startswith(
+            'attachment; filename="scanview-comparison-review-'
+        )
+        assert comparison_review_summary(io.BytesIO(body))["valid"] is True
+        assert {path.name for path in tmp_path.iterdir()} == before
+
+        connection = HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request(
+            "POST",
+            "/v1/comparison-reviews",
+            body=transport,
+            headers={**headers, "Origin": "http://example.invalid"},
+        )
+        forbidden = connection.getresponse()
+        forbidden.read()
+        connection.close()
+        assert forbidden.status == HTTPStatus.FORBIDDEN
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_review_requires_exact_visible_source_measurement_join(tmp_path: Path) -> None:

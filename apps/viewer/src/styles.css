@@ -189,8 +189,8 @@ main { min-height: 100vh; }
 .tool-buttons button:hover { border-color: rgba(110, 231, 194, 0.32); color: var(--ink); }
 .tool-buttons button.active { color: var(--accent); border-color: rgba(110, 231, 194, 0.48); background: var(--accent-dark); }
 .tool-buttons button:disabled { cursor: not-allowed; opacity: 0.52; }
-.tool-buttons .visit-packet-button.saved { color: var(--accent); border-color: rgba(110, 231, 194, 0.48); background: var(--accent-dark); }
-.tool-buttons .visit-packet-button.error { color: #ffb5ae; border-color: rgba(255, 141, 132, 0.42); }
+.tool-buttons .visit-packet-button.saved, .tool-buttons .review-packet-button.saved { color: var(--accent); border-color: rgba(110, 231, 194, 0.48); background: var(--accent-dark); }
+.tool-buttons .visit-packet-button.error, .tool-buttons .review-packet-button.error { color: #ffb5ae; border-color: rgba(255, 141, 132, 0.42); }
 .viewer-toolbar p { margin: 0; color: var(--muted); font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: right; }
 .measurement-paste-panel { margin: 12px clamp(24px, 4vw, 64px) 0; display: grid; grid-template-columns: minmax(220px, 0.7fr) minmax(320px, 1.3fr) auto; align-items: end; gap: 14px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: #0a1715; }
 .measurement-paste-panel h2 { margin: 5px 0 7px; font-size: 15px; }

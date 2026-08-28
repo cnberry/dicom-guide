@@ -44,6 +44,11 @@ export type MeasurementComparisonDraft = {
   questions_for_clinician: string[];
 };
 
+export type ComparisonSourceIndexes = {
+  baseline: number;
+  followup: number;
+};
+
 type MetricDefinition = {
   metric: ComparisonMetric;
   key:
@@ -110,6 +115,47 @@ export const assessMeasurementPairingContext = (
   }
   return { ready: true, reason: 'Context supports explicit unreviewed measurement pairing.' };
 };
+
+export const findComparisonSourceIndexes = (
+  draft: MeasurementComparisonDraft | undefined,
+  baseline: DicomSeries | undefined,
+  followup: DicomSeries | undefined,
+): ComparisonSourceIndexes | undefined => {
+  if (!draft || !baseline || !followup) return undefined;
+  const baselineObservation = draft.observations.find(
+    (observation) => observation.timepoint === 'baseline',
+  );
+  const followupObservation = draft.observations.find(
+    (observation) => observation.timepoint === 'followup',
+  );
+  return {
+    baseline:
+      baselineObservation?.source.series_id === baseline.id
+        ? baseline.instances.findIndex(
+            (instance) => instance.instanceId === baselineObservation.source.instance_id,
+          )
+        : -1,
+    followup:
+      followupObservation?.source.series_id === followup.id
+        ? followup.instances.findIndex(
+            (instance) => instance.instanceId === followupObservation.source.instance_id,
+          )
+        : -1,
+  };
+};
+
+export const comparisonSourcesAreVisible = (
+  indexes: ComparisonSourceIndexes | undefined,
+  baselineIndex: number,
+  followupIndex: number,
+): boolean =>
+  Boolean(
+    indexes &&
+      indexes.baseline >= 0 &&
+      indexes.followup >= 0 &&
+      indexes.baseline === baselineIndex &&
+      indexes.followup === followupIndex,
+  );
 
 export const buildMeasurementComparisonDraft = (
   baseline: MeasurementEvidence,

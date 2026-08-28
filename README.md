@@ -53,6 +53,9 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Local comparison-review ZIPs bind an exact visit packet to its exact numeric
   comparison and two key images. Script-free printable review history, self-attested
   decisions, amendment requests, and amended comparisons remain separate from DICOM.
+- One-click local comparison-review export captures the two exact source slices for
+  the current explicit measurement pair, assembles both nested evidence artifacts in
+  memory, and downloads the validated seven-file ZIP without a server-side patient file.
 - Transparent metadata compatibility score and warnings.
 - Registration-gated derived comparisons; CT/MR subtraction is prohibited.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
@@ -146,15 +149,18 @@ The server exposes:
 - `GET /v1/comparison-candidates`
 - `GET /v1/instances/{opaque_id}`
 - `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
+- `POST /v1/comparison-reviews` (same-origin browser session; in-memory derivative only)
 
 All endpoints except health require the bearer token printed at startup. The unified
 browser uses a same-origin HttpOnly session cookie instead of exposing that token to
-application JavaScript. The visit-packet POST additionally requires the exact local
-origin and accepts a bounded ZIP containing only the two derived key-image archives;
-it returns the validated result from memory and creates no server-side file. There is
-no source mutation or deletion endpoint. The server refuses non-loopback bind
-addresses. This loopback interface is part of the offline local application, not an
-external processing API.
+application JavaScript. Both POSTs additionally require the exact local origin and a
+bounded, exact-member transport ZIP. Visit-packet input contains only the two derived
+key-image archives. Comparison-review input contains those same two archives plus the
+current normalized comparison JSON; the server builds the nested visit packet and
+review archive entirely in memory. Each route returns a validated ZIP with `no-store`
+and creates no server-side file. There is no source mutation or deletion endpoint.
+The server refuses non-loopback bind addresses. This loopback interface is part of
+the offline local application, not an external processing API.
 
 ## Save and reopen a measurement draft
 
@@ -188,7 +194,14 @@ the label, source IDs, coordinates, or numeric values.
 ## Create a local comparison-review packet
 
 Bind the exact visual visit packet to the exact numeric comparison before asking a
-person to review it:
+person to review it. In the unified viewer, build an explicit numeric preview from
+one baseline and one follow-up measurement. ScanView moves both panes to the exact
+source instances. **Save review packet** becomes available only while those exact
+slices remain displayed; it captures the two key images and downloads the complete
+validated archive through the same-origin loopback process. No source or intermediate
+patient file is written by the server.
+
+The equivalent standalone CLI workflow is:
 
 ```bash
 .venv/bin/scanview-agent assemble-comparison-review \

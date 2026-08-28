@@ -187,6 +187,14 @@ Source series, instance, tracking ID, type, units, and metric values must all ag
 The output contains exactly seven files: a v1 review record, the normalized comparison,
 the complete visit packet, both copied key-image PNGs, `review.html`, and `README.txt`.
 
+The unified viewer provides the same workflow from **Save review packet**. It first
+maps the selected measurement pair to exact source-instance indexes and restores
+both panes to those slices. Export remains disabled if either pane moves away. The
+browser then sends one bounded transport containing only `baseline.zip`,
+`followup.zip`, and `comparison.json` to the same-origin loopback assembler. The
+server creates the nested visit packet and final review archive in memory, returns
+the validated seven-file ZIP, and persists no patient artifact.
+
 Human decisions are appended to a new archive, never written into the comparison:
 
 ```bash
@@ -236,15 +244,17 @@ GET /v1/manifest
 GET /v1/comparison-candidates
 GET /v1/instances/{opaque_id}
 POST /v1/visit-packets
+POST /v1/comparison-reviews
 ```
 
-There is no source write, overwrite, or delete endpoint. The POST is a stateless
-derivative response: it requires the private browser session, exact loopback Origin,
-the visit-input media type, a declared bounded length, and exactly two supported ZIP
-members; it returns `application/zip` with `no-store`. Non-health agent requests
-require `Authorization: Bearer <token>`. The browser receives a SameSite, HttpOnly
-session cookie after a one-time loopback redirect; the token is not exposed to
-viewer JavaScript or retained in the visible URL.
+There is no source write, overwrite, or delete endpoint. Both POSTs are stateless
+derivative responses: they require the private browser session, exact loopback
+Origin, route-specific media type, declared bounded length, and an exact ZIP member
+allowlist. Visit input contains `baseline.zip` and `followup.zip`; review input adds
+only `comparison.json`. Both return `application/zip` with `no-store`. Non-health
+agent requests require `Authorization: Bearer <token>`. The browser receives a
+SameSite, HttpOnly session cookie after a one-time loopback redirect; the token is
+not exposed to viewer JavaScript or retained in the visible URL.
 
 ## Required agent output shape
 

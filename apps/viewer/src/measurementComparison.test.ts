@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { assessMeasurementPairingContext, buildMeasurementComparisonDraft } from './measurementComparison';
+import {
+  assessMeasurementPairingContext,
+  buildMeasurementComparisonDraft,
+  comparisonSourcesAreVisible,
+  findComparisonSourceIndexes,
+} from './measurementComparison';
 import type { DicomSeries } from './dicom';
 import type { MeasurementEvidence } from './measurements';
 
@@ -77,6 +82,54 @@ describe('explicit measurement comparison draft', () => {
     ]);
     expect(draft.candidate_interpretations).toEqual([]);
     expect(draft.limitations.join(' ')).toContain('not a treatment-response category');
+  });
+
+  it('maps a comparison only to its exact selected source instances', () => {
+    const baselineMeasurement = measurement({
+      type: 'length',
+      result: { value: 10, unit: 'mm' },
+    });
+    const followupMeasurement = measurement({
+      tracking_id: 'length:followup',
+      type: 'length',
+      source: { series_id: '1111111111111111', instance_id: '2222222222222222' },
+      result: { value: 8, unit: 'mm' },
+    });
+    const draft = buildMeasurementComparisonDraft(
+      baselineMeasurement,
+      followupMeasurement,
+      'Target lesion A',
+      '2026-08-28T12:00:00.000Z',
+    );
+    const baselineSeries: DicomSeries = {
+      ...series('0123456789abcdef', '20260101'),
+      instances: [
+        { instanceId: '0000000000000000', instanceNumber: 1 },
+        { instanceId: 'fedcba9876543210', instanceNumber: 2 },
+      ],
+    };
+    const followupSeries: DicomSeries = {
+      ...series('1111111111111111', '20260301'),
+      instances: [
+        { instanceId: '2222222222222222', instanceNumber: 1 },
+        { instanceId: '3333333333333333', instanceNumber: 2 },
+      ],
+    };
+
+    const indexes = findComparisonSourceIndexes(draft, baselineSeries, followupSeries);
+
+    expect(indexes).toEqual({ baseline: 1, followup: 0 });
+    expect(comparisonSourcesAreVisible(indexes, 1, 0)).toBe(true);
+    expect(comparisonSourcesAreVisible(indexes, 0, 0)).toBe(false);
+    expect(
+      findComparisonSourceIndexes(draft, baselineSeries, {
+        ...followupSeries,
+        instances: [{ instanceId: 'missing', instanceNumber: 1 }],
+      }),
+    ).toEqual({ baseline: 1, followup: -1 });
+    expect(
+      findComparisonSourceIndexes(draft, { ...baselineSeries, id: 'ffffffffffffffff' }, followupSeries),
+    ).toEqual({ baseline: -1, followup: 0 });
   });
 
   it('rejects type mismatch, same-series input, unknown units, and missing labels', () => {

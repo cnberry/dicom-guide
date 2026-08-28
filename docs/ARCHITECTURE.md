@@ -68,11 +68,12 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    cross-exam registration.
 4. **Local API:** binds to loopback only, uses an ephemeral bearer token for agents
    and an HttpOnly same-origin session for the browser, returns only opaque IDs and
-   an allowlisted metadata contract, and has no source write/delete API. The single
-   POST accepts only a bounded outer ZIP with `baseline.zip` and `followup.zip`,
-   requires an exact local Origin, assembles/revalidates the derivative in memory,
-   and returns it with `no-store`. Service-backed measurement IDs join directly to
-   the manifest; legacy folder IDs remain accepted.
+   an allowlisted metadata contract, and has no source write/delete API. Its two
+   POSTs accept bounded outer ZIPs from an exact local Origin. Visit input contains
+   only `baseline.zip` and `followup.zip`; review input adds only `comparison.json`.
+   The service assembles and revalidates every nested derivative in memory, returns
+   it with `no-store`, and persists nothing. Service-backed measurement IDs join
+   directly to the manifest; legacy folder IDs remain accepted.
 5. **Derivatives:** future transforms, resampled images, masks, additional
    measurements, and reports go to a separate store with source references and
    review status. Manual length/bidirectional/elliptical ROI drafts use versioned
@@ -90,9 +91,10 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
    candidate interpretations. Comparison-review ZIPs then bind one validated visit
    packet to one exact comparison through visible measurement IDs, sources, units,
    and values. They duplicate the two PNGs for a static human page and keep
-   self-attested review/amendment events in a separate hash chain. Each event-derived
-   archive is a new owner-only file anchored to its parent; no command overwrites an
-   ancestor or changes DICOM.
+   self-attested review/amendment events in a separate hash chain. The viewer exposes
+   this assembler only while the live panes display the exact source instances named
+   by the explicit pair. Each event-derived archive is a new owner-only file anchored
+   to its parent; no command overwrites an ancestor or changes DICOM.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

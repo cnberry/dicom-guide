@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from .measurements import measurement_comparison_summary
-from .visit_packets import visit_packet_summary
+from .visit_packets import visit_packet_archive_bytes, visit_packet_summary
 
 
 ArchiveSource = Path | BinaryIO
@@ -39,6 +39,13 @@ PAYLOAD_MEDIA_TYPES = {
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_MEMBER_BYTES = 128 * 1024 * 1024
 MAX_COMPARISON_BYTES = 2 * 1024 * 1024
+COMPARISON_REVIEW_TRANSPORT_FILES = {
+    "baseline.zip",
+    "followup.zip",
+    "comparison.json",
+}
+MAX_COMPARISON_REVIEW_TRANSPORT_BYTES = 196 * 1024 * 1024
+MAX_TRANSPORT_KEY_IMAGE_BYTES = 96 * 1024 * 1024
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 REVIEW_DECISIONS = {
     "accepted_for_discussion",
@@ -597,6 +604,67 @@ def comparison_review_archive_bytes(
     _ensure_after_source_artifacts(created, components)
     record = _initial_record(components, created)
     return _archive_bytes(record, components)
+
+
+def comparison_review_from_transport(
+    transport_bytes: bytes,
+    *,
+    visit_created_at: str | None = None,
+    review_created_at: str | None = None,
+) -> bytes:
+    if (
+        not transport_bytes
+        or len(transport_bytes) > MAX_COMPARISON_REVIEW_TRANSPORT_BYTES
+    ):
+        raise ValueError("comparison-review request exceeds the local safety limit")
+    try:
+        with zipfile.ZipFile(io.BytesIO(transport_bytes)) as archive:
+            infos = archive.infolist()
+            names = {info.filename for info in infos}
+            if names != COMPARISON_REVIEW_TRANSPORT_FILES or len(infos) != 3:
+                raise ValueError(
+                    "comparison-review request must contain exactly baseline.zip, "
+                    "followup.zip, and comparison.json"
+                )
+            if any(info.flag_bits & 0x1 for info in infos):
+                raise ValueError("encrypted comparison-review request members are unsupported")
+            info_by_name = {info.filename: info for info in infos}
+            if any(
+                info_by_name[path].file_size > MAX_TRANSPORT_KEY_IMAGE_BYTES
+                for path in ("baseline.zip", "followup.zip")
+            ) or info_by_name["comparison.json"].file_size > MAX_COMPARISON_BYTES:
+                raise ValueError(
+                    "comparison-review request member exceeds the local safety limit"
+                )
+            if (
+                sum(info.file_size for info in infos)
+                > MAX_COMPARISON_REVIEW_TRANSPORT_BYTES
+            ):
+                raise ValueError(
+                    "expanded comparison-review request exceeds the local safety limit"
+                )
+            baseline_bytes = archive.read("baseline.zip")
+            followup_bytes = archive.read("followup.zip")
+            comparison_bytes = archive.read("comparison.json")
+    except (OSError, zipfile.BadZipFile, KeyError) as error:
+        raise ValueError(
+            f"comparison-review request could not be read: {type(error).__name__}"
+        ) from error
+
+    visit_bytes = visit_packet_archive_bytes(
+        io.BytesIO(baseline_bytes),
+        io.BytesIO(followup_bytes),
+        created_at=visit_created_at,
+    )
+    payload = comparison_review_archive_bytes(
+        io.BytesIO(visit_bytes),
+        io.BytesIO(comparison_bytes),
+        created_at=review_created_at,
+    )
+    summary = comparison_review_summary(io.BytesIO(payload))
+    if not summary["valid"]:
+        raise ValueError("assembled comparison review failed local integrity validation")
+    return payload
 
 
 def _write_new_archive(output: Path, archive_bytes: bytes) -> None:

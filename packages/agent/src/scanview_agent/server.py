@@ -14,6 +14,11 @@ from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
 from .comparison import suggest_pairs
+from .comparison_reviews import (
+    MAX_COMPARISON_REVIEW_TRANSPORT_BYTES,
+    comparison_review_from_transport,
+    comparison_review_summary,
+)
 from .visit_packets import (
     MAX_VISIT_PACKET_TRANSPORT_BYTES,
     visit_packet_from_transport,
@@ -182,7 +187,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
-        if path != "/v1/visit-packets":
+        supported = {
+            "/v1/visit-packets": (
+                "application/vnd.scanview.visit-input+zip",
+                MAX_VISIT_PACKET_TRANSPORT_BYTES,
+            ),
+            "/v1/comparison-reviews": (
+                "application/vnd.scanview.comparison-review-input+zip",
+                MAX_COMPARISON_REVIEW_TRANSPORT_BYTES,
+            ),
+        }
+        if path not in supported:
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
             return
         if not self._authorized():
@@ -192,7 +207,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
             return
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
-        if content_type != "application/vnd.scanview.visit-input+zip":
+        expected_media_type, maximum_bytes = supported[path]
+        if content_type != expected_media_type:
             self._send_json(
                 {"error": "unsupported_media_type"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE
             )
@@ -202,7 +218,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._send_json({"error": "content_length_required"}, HTTPStatus.LENGTH_REQUIRED)
             return
-        if content_length <= 0 or content_length > MAX_VISIT_PACKET_TRANSPORT_BYTES:
+        if content_length <= 0 or content_length > maximum_bytes:
             self._send_json({"error": "request_too_large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
             return
         body = self.rfile.read(content_length)
@@ -211,18 +227,38 @@ class Handler(BaseHTTPRequestHandler):
             return
         created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         try:
-            payload = visit_packet_from_transport(body, created_at=created_at)
-            summary = visit_packet_summary(io.BytesIO(payload))
-            if not summary["valid"]:
-                raise ValueError("assembled visit packet failed local integrity validation")
+            if path == "/v1/visit-packets":
+                payload = visit_packet_from_transport(body, created_at=created_at)
+                summary = visit_packet_summary(io.BytesIO(payload))
+                if not summary["valid"]:
+                    raise ValueError("assembled visit packet failed local integrity validation")
+                filename_prefix = "scanview-visit-packet"
+            else:
+                payload = comparison_review_from_transport(
+                    body,
+                    visit_created_at=created_at,
+                )
+                summary = comparison_review_summary(io.BytesIO(payload))
+                if not summary["valid"]:
+                    raise ValueError(
+                        "assembled comparison review failed local integrity validation"
+                    )
+                filename_prefix = "scanview-comparison-review"
         except ValueError as error:
             self._send_json(
-                {"error": "invalid_visit_packet_input", "detail": str(error)},
+                {
+                    "error": (
+                        "invalid_visit_packet_input"
+                        if path == "/v1/visit-packets"
+                        else "invalid_comparison_review_input"
+                    ),
+                    "detail": str(error),
+                },
                 HTTPStatus.UNPROCESSABLE_ENTITY,
             )
             return
         timestamp = created_at.replace("-", "").replace(":", "").split(".", 1)[0] + "Z"
-        filename = f"scanview-visit-packet-{timestamp}.zip"
+        filename = f"{filename_prefix}-{timestamp}.zip"
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "application/zip")
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
@@ -281,7 +317,7 @@ def serve(
         if open_browser:
             webbrowser.open(session_url)
     print(
-        "Source mutation and deletion are disabled; visit-packet derivatives are returned "
+        "Source mutation and deletion are disabled; visit/review derivatives are returned "
         "from memory only. Press Ctrl-C to stop."
     )
     try:
