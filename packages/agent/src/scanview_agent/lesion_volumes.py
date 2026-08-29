@@ -862,10 +862,22 @@ def _validate_dicom_seg(
         errors.append("recomputed volume_mm3 does not match evidence.json")
     if not _close(volume_mm3 / 1000.0, float(measurement["volume_ml"]), max(1e-9, volume_mm3 * 1e-9)):
         errors.append("recomputed volume_ml does not match evidence.json")
-    return {"foreground": foreground, "volume_mm3": volume_mm3}, errors
+    return {
+        "foreground": foreground,
+        "volume_mm3": volume_mm3,
+        "dense_mask": bytes(dense),
+    }, errors
 
 
-def lesion_volume_archive_summary(archive: ArchiveSource, source_root: Path) -> dict[str, Any]:
+def _lesion_volume_archive_validation(
+    archive: ArchiveSource, source_root: Path
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any] | None,
+    list[SourceRecord],
+    dict[str, Any] | None,
+]:
     members, errors = _archive_members(archive)
     evidence: dict[str, Any] = {}
     if "evidence.json" in members:
@@ -903,7 +915,7 @@ def lesion_volume_archive_summary(archive: ArchiveSource, source_root: Path) -> 
         errors.extend(dicom_errors)
     errors = list(dict.fromkeys(errors))
     valid = not errors and result is not None
-    return {
+    summary = {
         "valid": valid,
         "errors": errors,
         "schema_version": evidence.get("schema_version") if evidence else None,
@@ -925,4 +937,39 @@ def lesion_volume_archive_summary(archive: ArchiveSource, source_root: Path) -> 
         "response_classification": False,
         "diagnosis": False,
         "clinical_conclusion": False,
+    }
+    return summary, evidence, result, sources, geometry
+
+
+def lesion_volume_archive_summary(archive: ArchiveSource, source_root: Path) -> dict[str, Any]:
+    return _lesion_volume_archive_validation(archive, source_root)[0]
+
+
+def lesion_volume_archive_display_data(
+    archive: ArchiveSource, source_root: Path
+) -> dict[str, Any]:
+    """Return a source-validated native-grid mask for an already reviewed display.
+
+    This helper deliberately exposes no partial data. The same strict archive, live
+    DICOM source, geometry, DICOM SEG, foreground-count, volume, and dense-mask hash
+    checks used by the public summary must all pass first.
+    """
+
+    summary, evidence, result, sources, geometry = _lesion_volume_archive_validation(
+        archive, source_root
+    )
+    if not summary["valid"] or result is None or geometry is None:
+        raise ValueError("lesion-volume evidence is invalid against the exact local source")
+    dense_mask = result.get("dense_mask")
+    if not isinstance(dense_mask, bytes):
+        raise ValueError("validated lesion-volume evidence did not produce a native mask")
+    source_instances = evidence["source"]["instances"]
+    return {
+        "evidence": evidence,
+        "mask": dense_mask,
+        "mask_sha256": _sha256_bytes(dense_mask),
+        "foreground_voxels": result["foreground"],
+        "volume_mm3": result["volume_mm3"],
+        "dimensions": [geometry["columns"], geometry["rows"], len(sources)],
+        "ordered_instance_ids": [item["instance_id"] for item in source_instances],
     }

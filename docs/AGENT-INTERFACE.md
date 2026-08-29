@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.4.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.5.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -24,8 +24,9 @@ DICOM catalog is built. The launched agent interface is the same loopback bearer
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-exact v0.4.0 artifact has passed no-index install, runtime, synthetic source-bound SEG,
-qualified boundary-review, and reviewed volume-comparison validation, source-tamper
+exact v0.5.0 artifact has passed no-index install, runtime, synthetic source-bound SEG,
+qualified boundary-review, reviewed volume-comparison validation, and reviewed native-
+boundary display with browser-only masks, source-tamper
 refusal, and loopback launch
 on macOS arm64 and Strawberry Linux x86_64; signing/notarization remains pending.
 
@@ -254,6 +255,41 @@ spatial overlay, voxelwise localization, biological tumor-burden interpretation,
 progression/response classification, treatment causality, diagnosis, clinical
 conclusion, or medical-record sign-off. The manual-boundary uncertainty remains
 unquantified.
+
+## Reviewed native-boundary display
+
+An already accepted reviewed-volume comparison can be reopened locally without
+creating a registration or a new patient artifact:
+
+```bash
+scanview-agent launch '/safe/local/DICOM/root' --no-open \
+  --lesion-volume-comparison '/safe/local/reviewed-volume-comparison.zip'
+```
+
+Startup recursively validates the outer comparison, both accepted boundary reviews,
+both DICOM SEG objects, and every exact source instance. The service retains only the
+two validated uint8 binary masks in memory. It guards the comparison and native source
+identities for the lifetime of the process; any change locks the specialized display
+while leaving ordinary native DICOM available.
+
+Bearer-authorized agents may read only
+`GET /v1/lesion-volume-comparison-display`. Its privacy-minimized summary exposes the
+discussion-only arithmetic, dates-as-elapsed-days, modality, authorization state, and
+explicit false values for registration, spatial overlay, voxelwise localization,
+response, diagnosis, causality, and clinical conclusion. It omits reviewer identity,
+organization, source series/instance IDs, tissue definitions, criteria, hashes, and
+mask bytes.
+
+The full v1 display context and the two verified masks require the separate HttpOnly
+browser session. The context conforms to
+`schemas/scanview-native-boundary-display-v1.schema.json`; mask responses are exact
+`application/vnd.scanview.native-binary-mask` bytes with byte-count and SHA-256
+headers. The browser revalidates context semantics, hashes, binary values, foreground
+counts, source order, dimensions, chronology, and arithmetic before creating render
+state. Both boundaries are read-only and remain on their own exact native DICOM grids.
+Normalized-grid mirroring is off by default and is approximate navigation only.
+Registered overlay, subtraction, propagation, spatial change, and response controls
+do not exist in this mode.
 
 ## Clinician consultation-packet archives
 
@@ -668,6 +704,9 @@ GET /v1/health
 GET /v1/manifest
 GET /v1/viewer-state
 GET /v1/comparison-candidates
+GET /v1/lesion-volume-comparison-display
+GET /v1/lesion-volume-comparison-display/context
+GET /v1/lesion-volume-comparison-display/masks/{baseline|followup}
 GET /v1/registration-qa
 GET /v1/registration-qa/preview
 GET /v1/registration-qa/files/{fixed.nrrd|moving.nrrd|registered-moving.nrrd|registered-moving-coverage.nrrd}
@@ -689,9 +728,10 @@ responses with exact ZIP allowlists. Visit input contains `baseline.zip` and
 `followup.zip`; consultation input contains `view-a.zip` and `view-b.zip`; review
 input adds only `comparison.json`. All return
 `application/zip` with `no-store`. Non-health
-agent requests require `Authorization: Bearer <token>`. QA preview and reviewed-display
-files plus QA review submission reject bearer-only authorization and require the human
-browser cookie. Reviewed routes exist only for one startup-validated accepted review;
+agent requests require `Authorization: Bearer <token>`. QA preview, reviewed-registration
+files, native-boundary context/masks, and QA review submission reject bearer-only
+authorization and require the human browser cookie. Reviewed routes exist only for one
+startup-validated accepted review;
 the server rechecks the review, bundle directory, and all seven evidence-file identities
 and metadata before each reviewed context or file response.
 The browser receives a

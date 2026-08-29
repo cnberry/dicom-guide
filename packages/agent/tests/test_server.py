@@ -9,10 +9,12 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator, FormatChecker
 
 import scanview_agent.server as server_module
 from scanview_agent.catalog import build_catalog
 from scanview_agent.lesion_volume_comparisons import lesion_volume_comparison_summary
+from scanview_agent.lesion_volume_comparisons import lesion_volume_comparison_archive_bytes
 from scanview_agent.registration_reviews import write_registration_review
 from scanview_agent.server import create_server
 from test_registration_reviews import registration_bundle, review_request
@@ -186,6 +188,140 @@ def test_local_server_assembles_source_recursive_lesion_volume_comparison(
         assert summary["valid"]
         assert summary["percent_volume_change"] == pytest.approx(100 / 3)
         assert not summary["response_classification"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("mutated_input", ["comparison", "native_source"])
+def test_reviewed_native_boundary_display_is_cached_guarded_and_browser_only(
+    tmp_path: Path, mutated_input: str,
+) -> None:
+    baseline, followup, pairing_request, source_root = _pair(tmp_path)
+    catalog, registry = build_catalog(source_root, include_hashes=True)
+    comparison = tmp_path / "accepted-comparison.zip"
+    comparison.write_bytes(
+        lesion_volume_comparison_archive_bytes(
+            baseline,
+            followup,
+            pairing_request,
+            source_root,
+            catalog=catalog,
+            comparison_id="volume_pair_33333333-3333-4333-8333-333333333333",
+            created_at="2026-02-02T12:00:00Z",
+        )
+    )
+    server = create_server(
+        catalog,
+        registry,
+        port=0,
+        token="native-boundary-token",
+        source_root=source_root,
+        lesion_volume_comparison=comparison,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_port
+    bearer = {"Authorization": "Bearer native-boundary-token"}
+    try:
+        status, _, body = request(
+            port, "/v1/lesion-volume-comparison-display", headers=bearer
+        )
+        assert status == HTTPStatus.OK
+        summary = json.loads(body)
+        assert summary["available"] is True
+        assert summary["source_validated"] is True
+        assert summary["native_spaces"] == 2
+        assert summary["registered"] is False
+        assert summary["browser_session_required_for_pixels"] is True
+        assert summary["external_api_required"] is False
+        assert summary["response_classification"] is False
+        assert "Synthetic Pairing Reviewer" not in body.decode()
+        assert "Synthetic clinic" not in body.decode()
+        assert str(source_root) not in body.decode()
+
+        status, _, body = request(
+            port,
+            "/v1/lesion-volume-comparison-display/context",
+            headers=bearer,
+        )
+        assert status == HTTPStatus.FORBIDDEN
+        assert json.loads(body) == {"error": "browser_session_required"}
+        status, _, body = request(
+            port,
+            "/v1/lesion-volume-comparison-display/masks/baseline",
+            headers=bearer,
+        )
+        assert status == HTTPStatus.FORBIDDEN
+
+        status, headers, _ = request(
+            port, f"/?session={server.browser_bootstrap_token}"
+        )
+        assert status == HTTPStatus.SEE_OTHER
+        browser = {"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
+        status, _, body = request(
+            port,
+            "/v1/lesion-volume-comparison-display/context",
+            headers=browser,
+        )
+        assert status == HTTPStatus.OK
+        context = json.loads(body)
+        schema = json.loads(
+            (
+                Path(__file__).parents[3]
+                / "schemas"
+                / "scanview-native-boundary-display-v1.schema.json"
+            ).read_text()
+        )
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(
+            schema, format_checker=FormatChecker()
+        ).validate(context)
+        assert context["display_label"] == "REVIEWED NATIVE BOUNDARIES — UNREGISTERED"
+        assert context["navigation_policy"]["registered"] is False
+        assert context["navigation_policy"]["default_linked"] is False
+        assert "spatial_overlay" in context["display_policy"]["always_locked"]
+        assert context["comparison"]["response_assessment"] == "not_performed"
+
+        for role in ("baseline", "followup"):
+            status, mask_headers, mask = request(
+                port,
+                f"/v1/lesion-volume-comparison-display/masks/{role}",
+                headers=browser,
+            )
+            descriptor = context["timepoints"][role]["mask"]
+            assert status == HTTPStatus.OK
+            assert mask_headers["Content-Type"] == (
+                "application/vnd.scanview.native-binary-mask"
+            )
+            assert mask_headers["Cache-Control"] == "no-store"
+            assert mask_headers["X-Content-SHA256"] == descriptor["sha256"]
+            assert len(mask) == descriptor["bytes"]
+            assert set(mask) <= {0, 1}
+            assert sum(mask) == context["timepoints"][role]["foreground_voxel_count"]
+
+        if mutated_input == "comparison":
+            payload = comparison.read_bytes()
+            comparison.write_bytes(payload + b"changed")
+        else:
+            source = next(iter(registry.values()))
+            payload = source.read_bytes()
+            source.write_bytes(payload + b"changed")
+        status, _, body = request(
+            port,
+            "/v1/lesion-volume-comparison-display/context",
+            headers=browser,
+        )
+        assert status == HTTPStatus.LOCKED
+        assert json.loads(body) == {"error": "native_boundary_display_inputs_changed"}
+        status, _, body = request(
+            port, "/v1/lesion-volume-comparison-display", headers=bearer
+        )
+        assert status == HTTPStatus.OK
+        changed_summary = json.loads(body)
+        assert changed_summary["available"] is False
+        assert changed_summary["display_status"] == "invalid"
     finally:
         server.shutdown()
         server.server_close()

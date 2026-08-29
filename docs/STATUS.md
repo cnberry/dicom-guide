@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 00:05 PDT
+Last updated: 2026-08-29 00:43 PDT
 
 ## Data transfer
 
@@ -75,6 +75,19 @@ Last updated: 2026-08-29 00:05 PDT
   malformed, mismatched, or source-changed state withholds every numeric value;
   response, treatment causality, spatial localization, diagnosis, conclusion, and
   sign-off remain false.
+- An accepted volume-comparison archive can now launch a dedicated reviewed native-
+  boundary workspace. Startup recursively validates both reviews, both DICOM SEG
+  masks, and every native source byte, then guards those identities for the process
+  lifetime. The browser independently rehashes/recounts both binary masks and shows
+  each as a locked overlay on its own exact axial/coronal/sagittal DICOM volume.
+  Independent boundary-centroid navigation is the default. Optional normalized-grid
+  mirroring is off by default and prominently labeled approximate navigation only;
+  registration, cross-scan overlay, subtraction, propagation, spatial change,
+  response, diagnosis, causality, conclusion, and sign-off remain unavailable.
+- Bearer agents receive only a privacy-minimized reviewed-native-display summary.
+  The full context and mask bytes require the browser session; reviewer identity,
+  organization, source IDs, tissue definitions, criteria, hashes, and masks are not
+  exposed to the bearer interface. This adds the 24th strict embedded JSON Schema.
 - Validated DICOM patient-orientation labels implemented; labels are withheld rather
   than guessed when Image Orientation (Patient) is missing or malformed.
 - Follow-up auto-selection removed; same-exam pairings are explicitly incompatible
@@ -214,7 +227,8 @@ Last updated: 2026-08-29 00:05 PDT
   numeric-comparison, visit-packet,
   comparison-review, navigation-intent, viewer-state, rigid-registration,
   registration-QA, reviewed-registration-display, source-bound manual ROI volume,
-  manual boundary-review, and reviewed manual ROI volume-comparison
+  manual boundary-review, reviewed manual ROI volume-comparison, and reviewed native-
+  boundary display
   JSON Schemas plus local validation are implemented. Same-series pairs, unknown units,
   mismatched measurement types, and mismatched visual/numeric evidence are refused; no
   response label is emitted.
@@ -224,7 +238,7 @@ Last updated: 2026-08-29 00:05 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 23 contracts without breaking lightweight
+  UI-embedded wheel together with all 24 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -240,6 +254,35 @@ Last updated: 2026-08-29 00:05 PDT
 - Research, architecture, plan, roadmap, safety, and status committed to the project.
 
 ## Verification
+
+- v0.5.0 reviewed native-boundary milestone: passing. The full Python suite reports
+  197 tests; the viewer reports 118 tests across 24 files; TypeScript typecheck,
+  production build, diff hygiene, and all 24 Draft 2020-12 schemas pass. Adversarial
+  coverage includes recursive accepted-comparison/review/SEG/source validation,
+  bearer refusal for context and masks, exact browser capability, source/comparison
+  mutation locks, strict context arithmetic/chronology/source ordering, and mask
+  byte/hash/binary/foreground-count checks.
+- Production browser QA with synthetic MR only: passing. The local production bundle
+  rendered six canvases across two native tri-planar workspaces with no load banner or
+  browser warning/error. Link mode was false by default; the independent mask centroids
+  resolved to `14.3% · 0.0% · 33.3%` and `21.4% · 0.0% · 50.0%`. The page stated
+  “Two accepted boundaries, two native spaces” and “Not registered. No spatial
+  correspondence.” Read-only overlays were visible and normalized linking was
+  separately verified as navigation only.
+- Offline runtime bundle v0.5.0: passing on macOS arm64 and Strawberry Linux x86_64.
+  The 5,466,019-byte owner-only ZIP has nine fixed-timestamp members and SHA-256
+  `60b867598f7b64c05c8e17084a7301eefcd046c102e5718afe58c302f85c41ac`.
+  It contains the 3,070,976-byte ScanView wheel (SHA-256
+  `7405bef078a7fea763af23f7cc9b3ab7e9b7b9e29035aaa5bab63fc96989e12f`),
+  11 UI/worker/codec files (10,217,834 uncompressed bytes), all 24 schemas (229,332
+  bytes), and pinned `pydicom` 3.0.2. A second build from those exact two wheels was
+  byte-identical. Fresh extractions on macOS and Strawberry Ubuntu / Python 3.14.4
+  verified and installed with package-index access disabled, passed the 24-schema
+  runtime gate and recursive comparison validator, launched the embedded UI/service,
+  kept bearer agents out of context/masks, and returned both browser-session masks
+  with exact byte counts, SHA-256 values, binary values, and foreground counts.
+  Runtime and external DICOM-processing API requirements were both false. Only a
+  six-instance synthetic fixture went to Strawberry; no Mila data left this computer.
 
 - Python agent tests: 195 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON

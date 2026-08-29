@@ -71,9 +71,19 @@ export type ViewportToolController = {
 
 export type MprTool = 'crosshairs' | 'window' | 'pan' | 'zoom' | 'paint' | 'erase';
 export type MprOrientation = 'axial' | 'coronal' | 'sagittal';
+export type NormalizedMprPoint = [number, number, number];
+export type ReadonlyMprSegmentation = {
+  mask: Uint8Array;
+  foregroundVoxels: number;
+  label: string;
+};
 export type MprViewportController = {
   setPrimaryTool: (tool: MprTool) => void;
   subscribeToPatientPoint: (listener: (point: MprPatientPoint) => void) => () => void;
+  subscribeToNormalizedPoint: (
+    listener: (point: NormalizedMprPoint) => void,
+  ) => () => void;
+  setNormalizedPoint: (point: NormalizedMprPoint) => void;
   reset: () => void;
   setBrushSize: (size: number) => void;
   clearSegmentation: () => void;
@@ -578,7 +588,7 @@ const buildDicomSeg = async ({
   dataset.SeriesDescription = 'ScanView unreviewed manual lesion ROI';
   dataset.Manufacturer = 'ScanView local';
   dataset.ManufacturerModelName = 'ScanView';
-  dataset.SoftwareVersions = '0.4.0';
+  dataset.SoftwareVersions = '0.5.0';
   const segmentItem = Array.isArray(dataset.SegmentSequence)
     ? dataset.SegmentSequence[0]
     : dataset.SegmentSequence;
@@ -600,6 +610,7 @@ export const createMprViewports = async (
   elements: Record<MprOrientation, HTMLDivElement>,
   series: DicomSeries,
   primaryTool: MprTool,
+  readonlySegmentation?: ReadonlyMprSegmentation,
 ): Promise<MprViewportController> => {
   await initializeCornerstone();
   const engine = new RenderingEngine(engineId);
@@ -666,6 +677,31 @@ export const createMprViewports = async (
       labelmapVolume = volumeLoader.createAndCacheDerivedLabelmapVolume(volumeId, {
         volumeId: labelmapVolumeId,
       });
+      if (readonlySegmentation) {
+        if (
+          readonlySegmentation.mask.length !== volume.numVoxels ||
+          readonlySegmentation.foregroundVoxels < 1 ||
+          readonlySegmentation.foregroundVoxels > volume.numVoxels
+        ) {
+          throw new Error('The reviewed native boundary does not match the exact source grid.');
+        }
+        let foreground = 0;
+        for (const value of readonlySegmentation.mask) {
+          if (value !== 0 && value !== 1) {
+            throw new Error('The reviewed native boundary must remain strictly binary.');
+          }
+          foreground += value;
+        }
+        if (foreground !== readonlySegmentation.foregroundVoxels) {
+          throw new Error('The reviewed native boundary foreground count changed.');
+        }
+        const ownedMask = new Uint8Array(readonlySegmentation.mask);
+        if (!labelmapVolume.voxelManager?.setCompleteScalarDataArray) {
+          throw new Error('The local reviewed-boundary labelmap is unavailable.');
+        }
+        labelmapVolume.voxelManager.setCompleteScalarDataArray(ownedMask);
+        labelmapVolume.modified();
+      }
       segmentation.addSegmentations([
         {
           segmentationId,
@@ -677,12 +713,12 @@ export const createMprViewports = async (
             },
           },
           config: {
-            label: 'Manual unreviewed region',
+            label: readonlySegmentation?.label ?? 'Manual unreviewed region',
             segments: {
               1: {
-                label: 'Manual region 1',
-                active: true,
-                locked: false,
+                label: readonlySegmentation?.label ?? 'Manual region 1',
+                active: !readonlySegmentation,
+                locked: Boolean(readonlySegmentation),
                 cachedStats: {},
               },
             },
@@ -692,9 +728,16 @@ export const createMprViewports = async (
       segmentationAdded = true;
       viewportIds.forEach((viewportId) => {
         segmentation.addLabelmapRepresentationToViewport(viewportId, [{ segmentationId }]);
-        segmentation.activeSegmentation.setActiveSegmentation(viewportId, segmentationId);
+        if (!readonlySegmentation) {
+          segmentation.activeSegmentation.setActiveSegmentation(viewportId, segmentationId);
+        }
       });
-      segmentation.segmentIndex.setActiveSegmentIndex(segmentationId, 1);
+      if (readonlySegmentation) {
+        segmentation.segmentLocking.setSegmentIndexLocked(segmentationId, 1, true);
+        segmentation.triggerSegmentationEvents.triggerSegmentationDataModified(segmentationId);
+      } else {
+        segmentation.segmentIndex.setActiveSegmentIndex(segmentationId, 1);
+      }
     }
 
     const toolGroup = ToolGroupManager.createToolGroup(toolGroupId);
@@ -703,7 +746,7 @@ export const createMprViewports = async (
       toolGroup.addTool(toolClass.toolName),
     );
     toolGroup.addTool(CrosshairsTool.toolName, mprCrosshairConfiguration);
-    if (evidenceEligibility.eligible) {
+    if (evidenceEligibility.eligible && !readonlySegmentation) {
       toolGroup.addToolInstance(MPR_PAINT_TOOL, BrushTool.toolName, {
         activeStrategy: 'FILL_INSIDE_CIRCLE',
         brushSize: 12,
@@ -722,7 +765,7 @@ export const createMprViewports = async (
       window: WindowLevelTool.toolName,
       pan: PanTool.toolName,
       zoom: ZoomTool.toolName,
-      ...(evidenceEligibility.eligible
+      ...(evidenceEligibility.eligible && !readonlySegmentation
         ? { paint: MPR_PAINT_TOOL, erase: MPR_ERASE_TOOL }
         : {}),
     };
@@ -753,6 +796,13 @@ export const createMprViewports = async (
     const voxelVolumeMm3 =
       series.geometry.pixelSpacing![0] * series.geometry.pixelSpacing![1] * sliceSpacingMm;
     let segmentationDirty = false;
+    const normalizedPoint = (point: MprPatientPoint): NormalizedMprPoint | undefined => {
+      const index = volume.imageData?.worldToIndex(point as Types.Point3);
+      if (!index || index.length !== 3 || !index.every(Number.isFinite)) return undefined;
+      return [0, 1, 2].map((axis) =>
+        Math.max(0, Math.min(1, index[axis] / Math.max(1, volume.dimensions[axis] - 1))),
+      ) as NormalizedMprPoint;
+    };
     const currentStats = () =>
       labelmapVolume
         ? segmentationStats(scalarMask(labelmapVolume), voxelVolumeMm3)
@@ -778,6 +828,40 @@ export const createMprViewports = async (
             onCenterChanged,
           );
       },
+      subscribeToNormalizedPoint: (listener) => {
+        const emitCurrentPoint = () => {
+          const point = crosshairs.toolCenter;
+          if (point?.length !== 3 || !point.every(Number.isFinite)) return;
+          const normalized = normalizedPoint([point[0], point[1], point[2]]);
+          if (normalized) listener(normalized);
+        };
+        const onCenterChanged = (event: Event) => {
+          const detail = (event as CustomEvent<{ toolGroupId?: string }>).detail;
+          if (detail?.toolGroupId === toolGroupId) emitCurrentPoint();
+        };
+        eventTarget.addEventListener(ToolEnums.Events.CROSSHAIR_TOOL_CENTER_CHANGED, onCenterChanged);
+        emitCurrentPoint();
+        return () =>
+          eventTarget.removeEventListener(
+            ToolEnums.Events.CROSSHAIR_TOOL_CENTER_CHANGED,
+            onCenterChanged,
+          );
+      },
+      setNormalizedPoint: (point) => {
+        if (
+          point.length !== 3 ||
+          !point.every((value) => Number.isFinite(value) && value >= 0 && value <= 1)
+        ) {
+          throw new Error('Normalized native-grid location must remain within zero and one.');
+        }
+        const world = volume.imageData?.indexToWorld(
+          point.map((value, axis) => value * Math.max(1, volume.dimensions[axis] - 1)) as Types.Point3,
+        );
+        if (!world || world.length !== 3 || !world.every(Number.isFinite)) {
+          throw new Error('The normalized native-grid location cannot be resolved.');
+        }
+        crosshairs.setToolCenter([world[0], world[1], world[2]], true);
+      },
       reset: () => {
         viewports.forEach((viewport) => {
           viewport.resetProperties();
@@ -786,7 +870,7 @@ export const createMprViewports = async (
         viewports.forEach((viewport) => viewport.render());
       },
       setBrushSize: (size) => {
-        if (!labelmapVolume) return;
+        if (!labelmapVolume || readonlySegmentation) return;
         const bounded = Math.max(1, Math.min(50, Math.round(size)));
         toolUtilities.segmentation.setBrushSizeForToolGroup(
           toolGroupId,
@@ -800,7 +884,7 @@ export const createMprViewports = async (
         );
       },
       clearSegmentation: () => {
-        if (labelmapVolume) {
+        if (labelmapVolume && !readonlySegmentation) {
           segmentation.helpers.clearSegmentValue(segmentationId, 1);
           segmentationDirty = false;
         }
@@ -821,12 +905,16 @@ export const createMprViewports = async (
         const onModified = (event: Event) => {
           const detail = (event as CustomEvent<{ segmentationId?: string }>).detail;
           if (detail?.segmentationId === segmentationId) {
-            segmentationDirty = true;
+            segmentationDirty = !readonlySegmentation;
             emit();
           }
         };
         eventTarget.addEventListener(ToolEnums.Events.SEGMENTATION_DATA_MODIFIED, onModified);
-        listener({ foregroundVoxels: 0, voxelVolumeMm3, volumeMm3: 0, volumeMl: 0 });
+        listener(
+          readonlySegmentation
+            ? currentStats()
+            : { foregroundVoxels: 0, voxelVolumeMm3, volumeMm3: 0, volumeMl: 0 },
+        );
         return () => {
           if (pending !== undefined) window.clearTimeout(pending);
           eventTarget.removeEventListener(
@@ -836,6 +924,9 @@ export const createMprViewports = async (
         };
       },
       exportSegmentationEvidence: async (label, targetDefinition) => {
+        if (readonlySegmentation) {
+          throw new Error('Reviewed native boundaries are read-only and cannot be re-exported as drafts.');
+        }
         if (!labelmapVolume || !evidenceEligibility.eligible) {
           throw new Error(evidenceEligibility.reason);
         }
@@ -881,8 +972,11 @@ export const createMprViewports = async (
           targetDefinition: normalizedDefinition,
         });
       },
-      hasSegmentationDraft: () => segmentationDirty,
-      resize: () => engine.resize(true, false),
+      hasSegmentationDraft: () => !readonlySegmentation && segmentationDirty,
+      // ResizeObserver fires after the initial reviewed-boundary center is set.
+      // Preserve each viewport camera so layout changes cannot silently move the
+      // independent native-space crosshair back to the volume midpoint.
+      resize: () => engine.resize(true, true),
       destroy: () => {
         loadAbortController.abort();
         removeSegmentation();

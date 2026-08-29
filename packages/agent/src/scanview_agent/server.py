@@ -40,6 +40,10 @@ from .lesion_volume_comparisons import (
     lesion_volume_comparison_from_transport,
     lesion_volume_comparison_summary,
 )
+from .lesion_volume_display import (
+    lesion_volume_comparison_display_agent_summary,
+    lesion_volume_comparison_display_context,
+)
 from .navigation import NAVIGATION_FRAGMENT_PREFIX
 from .registration_display import (
     reviewed_registration_display_context,
@@ -239,6 +243,12 @@ class ScanViewServer(ThreadingHTTPServer):
     registration_review_request_sha256: str | None
     registration_review_payload: bytes | None
     registration_review_filename: str | None
+    lesion_volume_comparison: Path | None
+    lesion_volume_display_context: dict[str, Any] | None
+    lesion_volume_display_masks: dict[str, bytes]
+    lesion_volume_display_guard: dict[str, Any] | None
+    lesion_volume_display_instance_ids: set[str]
+    lesion_volume_display_agent_summary: dict[str, Any]
 
     def reviewed_registration_inputs_unchanged(self) -> bool:
         if self.registration_review is None:
@@ -246,6 +256,41 @@ class ScanViewServer(ThreadingHTTPServer):
         if self.reviewed_registration_context is None or not self.reviewed_registration_guards:
             return False
         return _metadata_guards_unchanged(self.reviewed_registration_guards)
+
+    def lesion_volume_display_inputs_unchanged(self) -> bool:
+        if self.lesion_volume_comparison is None:
+            return True
+        if (
+            self.lesion_volume_display_context is None
+            or self.lesion_volume_display_guard is None
+        ):
+            return False
+        try:
+            if (
+                _path_metadata_guard(self.lesion_volume_comparison)
+                != self.lesion_volume_display_guard
+            ):
+                return False
+            for instance_id in self.lesion_volume_display_instance_ids:
+                path = self.registry.get(instance_id)
+                guard = self.instance_guards.get(instance_id)
+                if path is None or guard is None:
+                    return False
+                metadata = path.lstat()
+                observed = {
+                    "device": metadata.st_dev,
+                    "inode": metadata.st_ino,
+                    "bytes": metadata.st_size,
+                    "mtime_ns": metadata.st_mtime_ns,
+                    "ctime_ns": metadata.st_ctime_ns,
+                }
+                if not stat.S_ISREG(metadata.st_mode) or any(
+                    observed[field] != guard[field] for field in observed
+                ):
+                    return False
+        except OSError:
+            return False
+        return True
 
     def publish_viewer_state(self, state: dict[str, Any]) -> bool:
         with self.viewer_state_lock:
@@ -441,6 +486,47 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/v1/comparison-candidates":
             self._send_json(suggest_pairs(self.server.catalog))
+            return
+        if path == "/v1/lesion-volume-comparison-display":
+            summary = self.server.lesion_volume_display_agent_summary
+            if (
+                self.server.lesion_volume_display_context is not None
+                and not self.server.lesion_volume_display_inputs_unchanged()
+            ):
+                summary = lesion_volume_comparison_display_agent_summary(
+                    None,
+                    configured=True,
+                    error="validated comparison or native DICOM inputs changed after startup",
+                )
+            self._send_json(summary)
+            return
+        if path == "/v1/lesion-volume-comparison-display/context":
+            if not self._browser_authorized():
+                self._send_json(
+                    {"error": "browser_session_required"}, HTTPStatus.FORBIDDEN
+                )
+                return
+            if self.server.lesion_volume_comparison is None:
+                self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+                return
+            if self.server.lesion_volume_display_context is None:
+                self._send_json(
+                    {"error": "native_boundary_display_locked"}, HTTPStatus.LOCKED
+                )
+                return
+            if not self.server.lesion_volume_display_inputs_unchanged():
+                self._send_json(
+                    {"error": "native_boundary_display_inputs_changed"},
+                    HTTPStatus.LOCKED,
+                )
+                return
+            self._send_json(self.server.lesion_volume_display_context)
+            return
+        lesion_mask_prefix = "/v1/lesion-volume-comparison-display/masks/"
+        if path.startswith(lesion_mask_prefix):
+            self._send_lesion_volume_display_mask(
+                path.removeprefix(lesion_mask_prefix)
+            )
             return
         if path == "/v1/registration-qa":
             summary = self.server.registration_agent_summary
@@ -667,6 +753,50 @@ class Handler(BaseHTTPRequestHandler):
                 "registered-moving.nrrd",
             },
         )
+
+    def _send_lesion_volume_display_mask(self, role: str) -> None:
+        if not self._browser_authorized():
+            self._send_json(
+                {"error": "browser_session_required"}, HTTPStatus.FORBIDDEN
+            )
+            return
+        if role not in {"baseline", "followup"}:
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        if self.server.lesion_volume_comparison is None:
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        if (
+            self.server.lesion_volume_display_context is None
+            or not self.server.lesion_volume_display_inputs_unchanged()
+        ):
+            self._send_json(
+                {"error": "native_boundary_display_locked"}, HTTPStatus.LOCKED
+            )
+            return
+        payload = self.server.lesion_volume_display_masks.get(role)
+        descriptor = self.server.lesion_volume_display_context["timepoints"][role][
+            "mask"
+        ]
+        if (
+            payload is None
+            or len(payload) != descriptor["bytes"]
+            or hashlib.sha256(payload).hexdigest() != descriptor["sha256"]
+        ):
+            self._send_json(
+                {"error": "native_boundary_mask_integrity_failed"},
+                HTTPStatus.LOCKED,
+            )
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header(
+            "Content-Type", "application/vnd.scanview.native-binary-mask"
+        )
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("X-Content-SHA256", descriptor["sha256"])
+        self._security_headers()
+        self.end_headers()
+        self.wfile.write(payload)
 
     def _send_instance_file(self, instance_id: str) -> None:
         source = self.server.registry.get(instance_id)
@@ -988,6 +1118,7 @@ def create_server(
     ui_dist: Path | None = None,
     registration_bundle: Path | None = None,
     registration_review: Path | None = None,
+    lesion_volume_comparison: Path | None = None,
     source_root: Path | None = None,
 ) -> ScanViewServer:
     if host not in {"127.0.0.1", "::1", "localhost"}:
@@ -1003,6 +1134,12 @@ def create_server(
         raise ValueError(f"ScanView UI bundle is missing index.html: {resolved_ui}")
     if registration_review is not None and registration_bundle is None:
         raise ValueError("--registration-review requires --registration-bundle")
+    if lesion_volume_comparison is not None and registration_bundle is not None:
+        raise ValueError(
+            "--lesion-volume-comparison cannot be combined with a registration display mode"
+        )
+    if lesion_volume_comparison is not None and resolved_source_root is None:
+        raise ValueError("--lesion-volume-comparison requires the local DICOM source root")
     resolved_registration = None
     resolved_registration_review = None
     cached_registration_context = None
@@ -1062,6 +1199,66 @@ def create_server(
                             "Reviewed registration display validation failed."
                         ],
                     }
+    resolved_lesion_volume_comparison = None
+    cached_lesion_volume_display_context = None
+    cached_lesion_volume_display_masks: dict[str, bytes] = {}
+    lesion_volume_display_guard = None
+    lesion_volume_display_instance_ids: set[str] = set()
+    cached_lesion_volume_display_summary = (
+        lesion_volume_comparison_display_agent_summary(None, configured=False)
+    )
+    if lesion_volume_comparison is not None:
+        resolved_lesion_volume_comparison = _absolute_without_resolving_links(
+            lesion_volume_comparison
+        )
+        try:
+            candidate_guard = _path_metadata_guard(
+                resolved_lesion_volume_comparison
+            )
+            (
+                cached_lesion_volume_display_context,
+                cached_lesion_volume_display_masks,
+            ) = lesion_volume_comparison_display_context(
+                resolved_lesion_volume_comparison,
+                resolved_source_root,
+                catalog=catalog,
+            )
+            if (
+                _path_metadata_guard(resolved_lesion_volume_comparison)
+                != candidate_guard
+            ):
+                raise ValueError(
+                    "lesion-volume comparison changed during startup validation"
+                )
+            lesion_volume_display_guard = candidate_guard
+            lesion_volume_display_instance_ids = {
+                instance_id
+                for role in ("baseline", "followup")
+                for instance_id in cached_lesion_volume_display_context["timepoints"][
+                    role
+                ]["ordered_instance_ids"]
+            }
+            if not lesion_volume_display_instance_ids.issubset(guarded_registry):
+                raise ValueError(
+                    "reviewed native boundary source instances are unavailable"
+                )
+            cached_lesion_volume_display_summary = (
+                lesion_volume_comparison_display_agent_summary(
+                    cached_lesion_volume_display_context, configured=True
+                )
+            )
+        except (KeyError, OSError, TypeError, ValueError):
+            cached_lesion_volume_display_context = None
+            cached_lesion_volume_display_masks = {}
+            lesion_volume_display_guard = None
+            lesion_volume_display_instance_ids = set()
+            cached_lesion_volume_display_summary = (
+                lesion_volume_comparison_display_agent_summary(
+                    None,
+                    configured=True,
+                    error="reviewed native-boundary display validation failed",
+                )
+            )
     server = ScanViewServer((host, port), Handler)
     server.catalog = catalog
     server.registry = guarded_registry
@@ -1088,6 +1285,14 @@ def create_server(
     server.registration_review_request_sha256 = None
     server.registration_review_payload = None
     server.registration_review_filename = None
+    server.lesion_volume_comparison = resolved_lesion_volume_comparison
+    server.lesion_volume_display_context = cached_lesion_volume_display_context
+    server.lesion_volume_display_masks = cached_lesion_volume_display_masks
+    server.lesion_volume_display_guard = lesion_volume_display_guard
+    server.lesion_volume_display_instance_ids = lesion_volume_display_instance_ids
+    server.lesion_volume_display_agent_summary = (
+        cached_lesion_volume_display_summary
+    )
     return server
 
 
@@ -1103,6 +1308,7 @@ def serve(
     navigation_fragment: str | None = None,
     registration_bundle: Path | None = None,
     registration_review: Path | None = None,
+    lesion_volume_comparison: Path | None = None,
     source_root: Path | None = None,
 ) -> None:
     if navigation_fragment is not None and (
@@ -1119,6 +1325,7 @@ def serve(
         ui_dist=ui_dist,
         registration_bundle=registration_bundle,
         registration_review=registration_review,
+        lesion_volume_comparison=lesion_volume_comparison,
         source_root=source_root,
     )
     url_host = f"[{host}]" if ":" in host else host
@@ -1142,6 +1349,13 @@ def serve(
         )
     else:
         registration_notice = "Registration QA preview is human-session-only."
+    if server.lesion_volume_comparison is not None:
+        registration_notice = (
+            "Reviewed native-boundary comparison is browser-session-only, "
+            "unregistered, and bound to startup-validated local evidence."
+            if server.lesion_volume_display_context is not None
+            else "Reviewed native-boundary comparison display is locked; ordinary DICOM remains available."
+        )
     print(
         "Source mutation and deletion are disabled; visit/review derivatives and opt-in "
         f"viewer state remain memory-only. {registration_notice} Press Ctrl-C to stop."

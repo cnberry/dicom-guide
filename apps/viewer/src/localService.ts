@@ -1,6 +1,6 @@
 import type { DicomInstance, DicomSeries, Geometry } from './dicom';
 
-type LocalServiceCatalog = {
+export type LocalServiceCatalog = {
   series: DicomSeries[];
   studyCount: number;
   instanceCount: number;

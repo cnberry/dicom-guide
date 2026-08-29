@@ -45,6 +45,11 @@ result into a medical conclusion.
   modality, distinct studies/series, same lesion/tissue, comparability, registration
   consideration, and checklist gates are enforced before discussion-only arithmetic.
   Response, causality, spatial localization, diagnosis, and clinical conclusion stay locked.
+- Display-only reopening of one accepted volume-comparison archive as two independent
+  native tri-planar workspaces with exact, rehashed, read-only binary boundaries.
+  Each scan centers on its own mask; optional normalized-grid navigation is off by
+  default and never grants registration, correspondence, overlay, subtraction,
+  propagation, spatial-change localization, or response authority.
 - Physically linked, visible LPS crosshairs within one MPR volume, with canonical
   planes protected from oblique rotation and slab-thickness manipulation.
 - Source-linked local key-image archives with display provenance, permanent review
@@ -198,3 +203,8 @@ result into a medical conclusion.
     confirms chronology, same lesion/tissue, comparability, and registration need.
     Non-accepted or source-invalid states withhold every value, and acceptance never
     authorizes response, causality, spatial localization, diagnosis, or sign-off.
+21. **Native-boundary display separation:** display startup recursively revalidates
+    the accepted comparison, both nested masks, and every source byte. Agents cannot
+    fetch mask pixels; browser masks are independently rehashed and remain read-only
+    on separate native grids. Optional normalized navigation cannot become anatomical
+    correspondence, registration, spatial change, or response evidence.

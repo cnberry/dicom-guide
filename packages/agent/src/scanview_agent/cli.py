@@ -96,6 +96,11 @@ def parser() -> argparse.ArgumentParser:
     api.add_argument("--no-hashes", action="store_true")
     api.add_argument("--registration-bundle", type=Path)
     api.add_argument("--registration-review", type=Path)
+    api.add_argument(
+        "--lesion-volume-comparison",
+        type=Path,
+        help="Accepted reviewed volume-comparison ZIP to display in two unregistered native spaces",
+    )
 
     launch = commands.add_parser(
         "launch",
@@ -109,6 +114,11 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--ui-dist", type=Path)
     launch.add_argument("--registration-bundle", type=Path)
     launch.add_argument("--registration-review", type=Path)
+    launch.add_argument(
+        "--lesion-volume-comparison",
+        type=Path,
+        help="Accepted reviewed volume-comparison ZIP to display in two unregistered native spaces",
+    )
     launch.add_argument("--baseline-series", help="Exact opaque baseline series ID")
     launch.add_argument("--baseline-instance", help="Exact opaque baseline instance ID")
     launch.add_argument("--followup-series", help="Optional exact opaque follow-up series ID")
@@ -465,6 +475,7 @@ def main() -> None:
             token=args.token,
             registration_bundle=args.registration_bundle,
             registration_review=args.registration_review,
+            lesion_volume_comparison=args.lesion_volume_comparison,
             source_root=args.root,
         )
     elif args.command == "launch":
@@ -512,6 +523,7 @@ def main() -> None:
             navigation_fragment=navigation_fragment,
             registration_bundle=args.registration_bundle,
             registration_review=args.registration_review,
+            lesion_volume_comparison=args.lesion_volume_comparison,
             source_root=args.root,
         )
     elif args.command == "viewer-link":

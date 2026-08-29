@@ -12,10 +12,11 @@ from scanview_agent.consultation_boards import ARTIFACT_TYPE as BOARD_ARTIFACT_T
 from scanview_agent.consultation_packets import ARTIFACT_TYPE
 from scanview_agent.lesion_volume_reviews import ARTIFACT_TYPE as ROI_REVIEW_ARTIFACT_TYPE
 from scanview_agent.lesion_volume_comparisons import ARTIFACT_TYPE as ROI_COMPARISON_ARTIFACT_TYPE
+from scanview_agent.lesion_volume_display import DISPLAY_ARTIFACT_TYPE as NATIVE_DISPLAY_ARTIFACT_TYPE
 
 
 def main() -> None:
-    if version("scanview-agent") != "0.4.0" or version("pydicom") != "3.0.2":
+    if version("scanview-agent") != "0.5.0" or version("pydicom") != "3.0.2":
         raise SystemExit("installed ScanView runtime versions are invalid")
     if ARTIFACT_TYPE != "clinician_consultation_packet":
         raise SystemExit("installed ScanView consultation contract is unavailable")
@@ -27,17 +28,19 @@ def main() -> None:
         raise SystemExit("installed ScanView manual ROI review contract is unavailable")
     if ROI_COMPARISON_ARTIFACT_TYPE != "scanview.lesion-volume-comparison-review":
         raise SystemExit("installed ScanView manual ROI comparison contract is unavailable")
+    if NATIVE_DISPLAY_ARTIFACT_TYPE != "lesion_volume_native_boundary_display_context":
+        raise SystemExit("installed ScanView native-boundary display contract is unavailable")
     if not _viewer_dist(None).joinpath("index.html").is_file():
         raise SystemExit("installed ScanView UI is unavailable")
     schemas = list(files("scanview_agent").joinpath("schemas").iterdir())
     schema_count = len([path for path in schemas if path.name.endswith(".json")])
-    if schema_count != 23:
+    if schema_count != 24:
         raise SystemExit("installed ScanView schemas are incomplete")
     print(
         json.dumps(
             {
                 "valid": True,
-                "scanview_agent": "0.4.0",
+                "scanview_agent": "0.5.0",
                 "pydicom": "3.0.2",
                 "embedded_ui": True,
                 "schema_count": schema_count,

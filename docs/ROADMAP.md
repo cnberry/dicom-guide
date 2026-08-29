@@ -500,6 +500,11 @@
    source-tamper refusal. No Mila data left the computer.
 7. Added the 23rd embedded JSON Schema and advanced the deterministic offline bundle to
    v0.4.0. Exact macOS and Strawberry Linux package evidence is recorded in Status.
+8. Added the 24th JSON Schema and reviewed native-boundary display. One accepted
+   manual-volume comparison can reopen both exact, rehashed DICOM SEG masks in
+   independent native tri-planar workspaces. The masks are read-only; normalized
+   navigation is off by default; registration, cross-scan overlay, subtraction,
+   spatial change, and response assessment remain locked.
 
 ## Immediate
 
@@ -530,14 +535,11 @@
 1. Import a future same-modality Mila follow-up and complete explicit series pairing,
    separately reviewed ROI boundaries, same-lesion/tissue confirmation, and qualified
    pairing review. Keep the current MRI+CT media out of this longitudinal path.
-2. Add linked tri-planar review of both native accepted boundaries without inferring
-   voxelwise change; require a separately accepted registration before any spatial
-   overlay and keep response categories absent.
-3. Add platform signing and notarization without weakening local-only runtime behavior.
-4. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
+2. Add platform signing and notarization without weakening local-only runtime behavior.
+3. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
    configuration.
-5. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-6. Extend append-only audit records from review decisions to local evidence access.
+4. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
+5. Extend append-only audit records from review decisions to local evidence access.
 
 ## Registration milestone
 

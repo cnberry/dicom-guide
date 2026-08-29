@@ -100,6 +100,17 @@ quality-system, and regulatory review.
   voxelwise localization, response/progression classification, treatment causality,
   diagnosis, clinical conclusion, and medical-record sign-off remain false. Any
   rejection, revision, malformed input, or changed source withholds all numeric values.
+- Reviewed native-boundary display is a separate startup mode and creates no new
+  patient artifact. It recursively validates that accepted five-file comparison,
+  both nested reviews, both DICOM SEG masks, and every source byte before holding two
+  exact binary masks in memory. Agents receive only a privacy-minimized status;
+  context and mask bytes require the HttpOnly browser session. The browser independently
+  rehashes, recounts, and verifies binary masks before render. Each mask is displayed
+  only on its own native grid, is locked against editing/export, and opens at its own
+  centroid. Normalized-grid mirroring is off by default and is explicitly not
+  anatomical correspondence. No registration, overlay, subtraction, propagation,
+  spatial change, treatment response, diagnosis, or conclusion is available. Source
+  or comparison mutation locks this surface while ordinary native DICOM remains usable.
 - Rigid registration invokes a version-gated local Slicer 5.12.3/BRAINSFit process.
   The release computed revision is 34627; the enforced runtime repository revision is
   `9034c71`. The official macOS package and this host's installed copy were
@@ -252,6 +263,12 @@ are established.
   difference may still reflect boundary choices, acquisition/contrast, motion,
   partial-volume effects, edema, necrosis, resection cavity, treatment effect, or
   other non-tumor-burden factors. It is not a response criterion or causal conclusion.
+- Seeing both accepted boundaries at once does not create correspondence between
+  their native coordinate systems. Different centroids, matrices, slice spacing,
+  coverage, orientation, positioning, and acquisition state can make matching
+  fractional grid locations anatomically unrelated. The display therefore provides
+  no cross-scan overlay or voxelwise difference and cannot show “where the tumor
+  changed.”
 
 ## Agent output contract
 
@@ -294,6 +311,13 @@ is `accepted_for_volume_change_discussion`. Agents must preserve the phrases
 progression, regression, treatment effect, tumor burden, spatial change, clinical
 validation, or sign-off. Every invalid/non-accepted state has `evidence_use: none` and
 null numeric fields.
+
+The native-boundary display summary has the same discussion-only arithmetic authority
+and no pixel authority for bearer agents. Agents must preserve `registered: false`,
+`spatial_overlay: false`, `voxelwise_change_localization: false`, and
+`response_classification: false`. “Both reviewed boundaries are available in their
+independent native spaces” is acceptable; “the overlay shows response” is impossible
+in this mode.
 
 The browser pairing editor uses the same constraints and requires strictly ordered
 acquisition dates, a human-selected measurement at each timepoint, and a bounded

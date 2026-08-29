@@ -15,12 +15,15 @@ From this extracted directory:
 python3 verify.py
 sh install.sh
 sh launch.sh '/absolute/path/to/DICOM'
+sh launch.sh '/absolute/path/to/DICOM' --lesion-volume-comparison \
+  '/absolute/path/to/reviewed-volume-comparison.zip'
 ```
 
 Set `SCANVIEW_PYTHON=/absolute/path/to/python3` when the required interpreter is
 not named `python3`. Installation uses only the included wheels with `--no-index`
 and `--require-hashes`. Every launch rechecks the installed versions, embedded UI,
-schemas, and consultation contracts before indexing DICOM. Launch binds the application
+all 24 schemas, consultation contracts, manual ROI review/comparison, and native-
+boundary display support before indexing DICOM. Launch binds the application
 to loopback; DICOM bytes stay on the computer. There is no cloud fallback: missing
 local capability fails closed rather than sending source or derived data elsewhere.
 Keep this directory and its

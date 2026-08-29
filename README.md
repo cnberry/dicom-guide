@@ -55,6 +55,13 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   both DICOM SEG objects and every original source byte before exposing transparent
   volume arithmetic. It never classifies response, attributes change to treatment,
   localizes voxelwise change, diagnoses, or signs a medical record.
+- Reviewed native-boundary comparison display: launch with one already accepted
+  volume-comparison archive to reopen both exact DICOM source grids and both verified
+  binary DICOM SEG masks in two independent tri-planar workspaces. Each boundary is
+  read-only and starts at its own centroid. Optional normalized-grid mirroring is off
+  by default and is labeled approximate navigation only; registration, cross-scan
+  overlay, subtraction, mask propagation, spatial change, and response conclusions
+  remain unavailable.
 - Window/level, pan, zoom, reset, DICOM patient-orientation labels, and manual
   length/bidirectional/elliptical ROI measurement tools.
 - Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
@@ -123,7 +130,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
 - Versioned measurement, key-image, manual ROI volume, manual ROI review, manual ROI
-  volume-comparison review, consultation-key-image, consultation-packet, comparison, visit-packet, review-record,
+  volume-comparison review, reviewed native-boundary display, consultation-key-image,
+  consultation-packet, comparison, visit-packet, review-record,
   navigation-intent, viewer-state, rigid-registration, and registration-QA JSON
   Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
@@ -163,8 +171,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.4.0.zip
-cd scanview-offline-0.4.0
+unzip release/scanview-offline-0.5.0.zip
+cd scanview-offline-0.5.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -214,6 +222,8 @@ python3 -m venv .venv
 .venv/bin/scanview-agent manifest '/path/to/copied/DICOM' --output /safe/local/manifest.json
 .venv/bin/scanview-agent serve '/path/to/copied/DICOM'
 .venv/bin/scanview-agent launch '/path/to/copied/DICOM'
+.venv/bin/scanview-agent launch '/path/to/copied/DICOM' \
+  --lesion-volume-comparison '/path/to/reviewed-volume-comparison.zip'
 .venv/bin/scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 .venv/bin/scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
 .venv/bin/scanview-agent validate-lesion-volume \

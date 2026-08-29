@@ -788,12 +788,64 @@ footer { display: flex; justify-content: space-between; gap: 24px; padding: 18px
 .reviewed-limitations ul { margin: 0; padding-left: 18px; }
 .reviewed-limitations li + li { margin-top: 5px; }
 
+.native-boundary-workspace { min-height: 100vh; padding-bottom: 64px; }
+.native-boundary-header { display: flex; justify-content: space-between; align-items: center; gap: 28px; padding: 24px clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--line); background: rgba(6, 15, 14, 0.94); }
+.native-boundary-header h1 { margin: 5px 0 4px; font-size: clamp(26px, 4vw, 40px); letter-spacing: -0.04em; }
+.native-boundary-header p { margin: 0; color: var(--muted); font-size: 11px; }
+.native-boundary-header-actions { display: grid; justify-items: end; gap: 9px; }
+.native-boundary-header-actions strong { max-width: 340px; padding: 10px 13px; border: 1px solid rgba(255, 141, 132, 0.58); border-radius: 7px; color: #ffc1bb; background: rgba(105, 23, 19, 0.24); text-align: center; font: 700 10px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.06em; }
+.native-boundary-header-actions button, .native-boundary-controls button { border: 1px solid var(--line); border-radius: 6px; background: #081512; color: var(--muted); padding: 7px 9px; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; cursor: pointer; text-transform: capitalize; }
+.native-boundary-safety { padding: 12px clamp(24px, 4vw, 64px); color: #e5cba2; background: #291d09; border-bottom: 1px solid rgba(232, 179, 92, 0.34); font: 10px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.native-boundary-safety strong { color: var(--warn); }
+.native-boundary-summary { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 1px; margin: 16px clamp(24px, 4vw, 64px) 0; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--line); }
+.native-boundary-summary > div { display: grid; gap: 5px; padding: 14px; background: #0a1715; }
+.native-boundary-summary span { color: var(--muted); font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.native-boundary-summary strong { color: var(--accent); font-size: 19px; }
+.native-boundary-summary > p { grid-column: 1 / -1; margin: 0; padding: 9px 13px; color: var(--muted); background: #07110f; font: 9px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.native-boundary-controls { display: grid; grid-template-columns: auto minmax(260px, 1fr) minmax(260px, 1fr) auto; gap: 18px; align-items: center; margin: 12px clamp(24px, 4vw, 64px); padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: #091513; }
+.native-boundary-controls > div:first-child { display: flex; flex-wrap: wrap; gap: 6px; }
+.native-boundary-controls > div:first-child > span { flex-basis: 100%; color: var(--muted); font: 600 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; }
+.native-boundary-controls button.active { color: var(--accent); border-color: rgba(110, 231, 194, 0.48); background: var(--accent-dark); }
+.native-boundary-controls label { display: flex; align-items: flex-start; gap: 8px; color: #d2dfdb; font-size: 10px; }
+.native-boundary-controls label input { accent-color: var(--accent); }
+.native-boundary-controls label span { display: grid; gap: 3px; }
+.native-boundary-controls label small, .native-boundary-location { color: var(--muted); font: 8px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.native-boundary-location { display: grid; gap: 4px; }
+.native-boundary-timepoints { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 clamp(24px, 4vw, 64px); }
+.native-boundary-timepoint { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #06100e; }
+.native-boundary-timepoint > header { min-height: 80px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 13px 15px; border-bottom: 1px solid var(--line); background: #0d1e1c; }
+.native-boundary-timepoint > header h2 { margin: 3px 0; font-size: 15px; }
+.native-boundary-timepoint > header p { margin: 0; color: var(--muted); font-size: 9px; }
+.native-boundary-volume { display: grid; justify-items: end; gap: 3px; text-align: right; }
+.native-boundary-volume strong { color: var(--accent); font-size: 17px; }
+.native-boundary-volume span { max-width: 190px; color: var(--muted); font: 8px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.native-boundary-mpr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); }
+.native-boundary-mpr-grid .mpr-host { height: min(19vw, 320px); min-height: 220px; }
+.native-boundary-definition { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 0; background: var(--line); }
+.native-boundary-definition > div { padding: 10px 11px; background: #081512; }
+.native-boundary-definition dt { color: var(--accent); font: 600 8px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; }
+.native-boundary-definition dd { margin: 5px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.native-boundary-load-error { min-height: 380px; display: grid; place-content: center; gap: 8px; margin: 0 clamp(24px, 4vw, 64px); border: 1px solid rgba(255, 141, 132, 0.45); border-radius: 12px; background: #140908; color: #ffc1bb; text-align: center; }
+.native-boundary-load-error p { max-width: 700px; margin: 0; color: var(--muted); }
+.native-boundary-limitations { display: grid; grid-template-columns: minmax(260px, 0.7fr) minmax(400px, 1.3fr); gap: 26px; margin: 14px clamp(24px, 4vw, 64px); padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.native-boundary-limitations h2 { margin: 5px 0 8px; font-size: 20px; }
+.native-boundary-limitations p, .native-boundary-limitations li { color: var(--muted); font-size: 10px; line-height: 1.65; }
+.native-boundary-limitations ul { margin: 0; padding-left: 18px; }
+.native-boundary-limitations li + li { margin-top: 5px; }
+
 @media (max-width: 900px) {
   .reviewed-header { align-items: flex-start; flex-direction: column; }
   .reviewed-header-actions { justify-items: start; }
   .reviewed-image-grid { grid-template-columns: 1fr; }
   .reviewed-adjustments { grid-template-columns: 1fr 1fr; }
   .reviewed-limitations { grid-template-columns: 1fr; }
+  .native-boundary-header { align-items: flex-start; flex-direction: column; }
+  .native-boundary-header-actions { justify-items: start; }
+  .native-boundary-summary { grid-template-columns: 1fr 1fr; }
+  .native-boundary-controls { grid-template-columns: 1fr 1fr; }
+  .native-boundary-timepoints { grid-template-columns: 1fr; }
+  .native-boundary-mpr-grid .mpr-host { height: min(38vw, 360px); }
+  .native-boundary-limitations { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 620px) {
@@ -808,4 +860,17 @@ footer { display: flex; justify-content: space-between; gap: 24px; padding: 18px
   .reviewed-adjustments,
   .reviewed-limitations { margin-left: 16px; margin-right: 16px; }
   .reviewed-adjustments { grid-template-columns: 1fr; }
+  .native-boundary-header,
+  .native-boundary-safety,
+  .native-boundary-timepoints { padding-left: 16px; padding-right: 16px; }
+  .native-boundary-summary,
+  .native-boundary-controls,
+  .native-boundary-load-error,
+  .native-boundary-limitations { margin-left: 16px; margin-right: 16px; }
+  .native-boundary-controls,
+  .native-boundary-summary,
+  .native-boundary-definition { grid-template-columns: 1fr; }
+  .native-boundary-summary > p { grid-column: auto; }
+  .native-boundary-mpr-grid { grid-template-columns: 1fr; }
+  .native-boundary-mpr-grid .mpr-host { height: min(90vw, 460px); }
 }

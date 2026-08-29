@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import App from './App';
 import { RegistrationQaWorkspace } from './components/RegistrationQaWorkspace';
 import { ReviewedRegistrationWorkspace } from './components/ReviewedRegistrationWorkspace';
+import { NativeBoundaryComparisonWorkspace } from './components/NativeBoundaryComparisonWorkspace';
+import {
+  loadNativeBoundaryDisplayContext,
+  type NativeBoundaryDisplayContext,
+} from './nativeBoundaryDisplayService';
 import {
   loadRegistrationQaContext,
   type RegistrationQaContext,
@@ -14,6 +19,10 @@ import {
 type RootState =
   | { status: 'probing' }
   | {
+      status: 'native-boundary-comparison';
+      context: NativeBoundaryDisplayContext;
+    }
+  | {
       status: 'reviewed-registration';
       context: ReviewedRegistrationContext;
       ordinaryOpened: boolean;
@@ -23,6 +32,8 @@ type RootState =
       status: 'dicom-viewer';
       reviewedContext?: ReviewedRegistrationContext;
       reviewedWarning?: string;
+      nativeBoundaryContext?: NativeBoundaryDisplayContext;
+      nativeBoundaryWarning?: string;
     }
   | { status: 'qa-error'; message: string };
 
@@ -32,6 +43,22 @@ export default function Root() {
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
+      const nativeBoundaryResult = await loadNativeBoundaryDisplayContext(controller.signal);
+      if (controller.signal.aborted) return;
+      if (nativeBoundaryResult.status === 'available') {
+        setState({
+          status: 'native-boundary-comparison',
+          context: nativeBoundaryResult.context,
+        });
+        return;
+      }
+      if (nativeBoundaryResult.status === 'error') {
+        setState({
+          status: 'dicom-viewer',
+          nativeBoundaryWarning: nativeBoundaryResult.message,
+        });
+        return;
+      }
       const reviewedResult = await loadReviewedRegistrationContext(controller.signal);
       if (controller.signal.aborted) return;
       if (reviewedResult.status === 'available') {
@@ -74,6 +101,19 @@ export default function Root() {
   if (state.status === 'registration-qa') {
     return <RegistrationQaWorkspace context={state.context} />;
   }
+  if (state.status === 'native-boundary-comparison') {
+    return (
+      <NativeBoundaryComparisonWorkspace
+        context={state.context}
+        onExit={() =>
+          setState({
+            status: 'dicom-viewer',
+            nativeBoundaryContext: state.context,
+          })
+        }
+      />
+    );
+  }
   if (state.status === 'qa-error') {
     return (
       <main className="qa-probe qa-error-state" role="alert">
@@ -86,6 +126,7 @@ export default function Root() {
   }
   const showingReviewed = state.status === 'reviewed-registration';
   const reviewedContext = showingReviewed ? state.context : state.reviewedContext;
+  const nativeBoundaryContext = showingReviewed ? undefined : state.nativeBoundaryContext;
   const ordinaryMounted = !showingReviewed || state.ordinaryOpened;
 
   return (
@@ -131,10 +172,36 @@ export default function Root() {
           </button>
         </aside>
       )}
+      {!showingReviewed && nativeBoundaryContext && (
+        <aside className="reviewed-entry-banner native-boundary-entry-banner">
+          <div>
+            <strong>Accepted native boundaries are available.</strong>
+            <span>Two unregistered native spaces · read-only masks · discussion only</span>
+          </div>
+          <button
+            type="button"
+            autoFocus
+            onClick={() =>
+              setState({
+                status: 'native-boundary-comparison',
+                context: nativeBoundaryContext,
+              })
+            }
+          >
+            Open native boundary comparison
+          </button>
+        </aside>
+      )}
       {!showingReviewed && state.reviewedWarning && (
         <aside className="reviewed-warning-banner" role="alert">
           <strong>Registered display remains locked.</strong>
           <span>{state.reviewedWarning} Ordinary local DICOM remains available.</span>
+        </aside>
+      )}
+      {!showingReviewed && state.nativeBoundaryWarning && (
+        <aside className="reviewed-warning-banner" role="alert">
+          <strong>Reviewed native-boundary display remains locked.</strong>
+          <span>{state.nativeBoundaryWarning} Ordinary local DICOM remains available.</span>
         </aside>
       )}
     </>

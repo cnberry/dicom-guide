@@ -289,6 +289,29 @@ strict native source grid --> person-painted binary ROI --> DICOM SEG-format + s
 software-established lesion identity / spatial change / response / causality: unavailable
 ```
 
+An accepted arithmetic review can authorize a display-only reopening of those two
+exact native masks without authorizing registration:
+
+```text
+accepted volume-comparison archive + exact local source root
+                         |
+                         +--> recursive startup validation and guarded source identities
+                                      |
+                                      +--> browser-session-only context + two binary masks
+                                                   |
+                                                   +--> native baseline MPR + read-only mask
+                                                   +--> native follow-up MPR + read-only mask
+
+default: independent centers at each mask centroid
+optional: mirrored normalized grid fraction (navigation only)
+unavailable: cross-scan overlay / subtraction / propagation / spatial change / response
+```
+
+The bearer agent sees a minimized authorization/arithmetic summary but cannot fetch
+mask bytes or the full human context. The browser rehashes and recounts every mask
+before rendering. This is a capability boundary, not proof that a person is present
+or that the reviewed tissue is clinically correct.
+
 When a catalog contains no valid dated same-modality cross-study source pair, the
 ordinary viewer enters a separate neutral state:
 
@@ -325,10 +348,11 @@ is not an MVP feature and is never allowed between CT and MRI.
   `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
   payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
   and `--require-hashes`; every launch verifies the bundle and probes installed
-  versions, UI, schemas, and consultation contract before cataloging DICOM.
+  versions, UI, all 24 schemas, consultation contracts, manual ROI review/comparison,
+  and native-boundary display support before cataloging DICOM.
 - Trust boundary: the offline manifest detects payload corruption but is not publisher
   authentication. Python 3.11+ is supplied by the host and is not covered by the
   bundle. The builder may fetch the pinned wheel; installation and runtime do not.
-- Next: execute the same artifact on Linux x86_64, then produce signed/notarized macOS
-  and Linux distributions; optional Orthanc remains separate.
+- Next: produce signed/notarized macOS and Linux distributions; optional Orthanc
+  remains separate.
 - Later: Tauri/Electron or a packaged interpreter after both platform smoke tests.

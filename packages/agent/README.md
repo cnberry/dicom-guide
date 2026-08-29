@@ -11,6 +11,8 @@ scanview-agent manifest '/path/to/copied/DICOM' --output manifest.json
 scanview-agent candidates manifest.json
 scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
+scanview-agent launch '/path/to/copied/DICOM' \
+  --lesion-volume-comparison '/path/to/reviewed-volume-comparison.zip'
 scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
 scanview-agent validate-lesion-volume \
@@ -72,9 +74,9 @@ For offline transfer and installation on macOS or Linux, run
 wheel, pinned pure-Python `pydicom` 3.0.2, hash-locked local requirements, and
 verifier/install/launch scripts. The installer invokes pip only with `--no-index` and
 `--require-hashes`, and every launch checks the bundle and installed runtime before
-indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.4.0 bundle has passed
+indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.5.0 bundle has passed
 offline install, runtime checks, source-bound boundary-review and reviewed volume-
-comparison validation, tamper refusal, and loopback launch on both macOS arm64 and
+comparison validation, reviewed native-boundary display, tamper refusal, and loopback launch on both macOS arm64 and
 Strawberry Linux x86_64;
 publisher signing remains pending.
 The server has no source-write or delete endpoint. The unified viewer's derivative
