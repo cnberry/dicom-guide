@@ -5,6 +5,9 @@ import {
   formatDicomDate,
   getPatientOrientationLabels,
   getLinkStrategy,
+  hasLongitudinalSourcePair,
+  isConsultationSourcePair,
+  isLongitudinalSourcePair,
   mapLinkedIndex,
   mapNormalizedIndex,
   type DicomInstance,
@@ -34,6 +37,38 @@ const series = (overrides: Partial<DicomSeries> = {}): DicomSeries => ({
 });
 
 describe('comparison safety', () => {
+  it('detects only dated same-patient, same-modality, cross-study longitudinal sources', () => {
+    const earlier = series();
+    const later = series({
+      id: 'series-b',
+      studyId: 'study-b',
+      acquisitionDate: '20260201',
+    });
+    expect(isLongitudinalSourcePair(earlier, later)).toBe(true);
+    expect(hasLongitudinalSourcePair([earlier, later])).toBe(true);
+    expect(isLongitudinalSourcePair(earlier, { ...later, modality: 'CT' })).toBe(false);
+    expect(isLongitudinalSourcePair(earlier, { ...later, acquisitionDate: '20260231' })).toBe(false);
+    expect(isLongitudinalSourcePair(earlier, { ...later, patientContextId: 'patient-b' })).toBe(
+      false,
+    );
+    expect(hasLongitudinalSourcePair([earlier, { ...later, modality: 'CT' }])).toBe(false);
+  });
+
+  it('accepts distinct same-patient MRI and CT studies only as neutral consultation views', () => {
+    const mr = series();
+    const ct = series({
+      id: 'series-b',
+      studyId: 'study-b',
+      acquisitionDate: undefined,
+      modality: 'CT',
+    });
+    expect(isConsultationSourcePair(mr, ct)).toBe(true);
+    expect(isLongitudinalSourcePair(mr, ct)).toBe(false);
+    expect(isConsultationSourcePair(mr, { ...ct, modality: 'MR' })).toBe(false);
+    expect(isConsultationSourcePair(mr, { ...ct, studyId: mr.studyId })).toBe(false);
+    expect(isConsultationSourcePair(mr, { ...ct, patientContextId: 'patient-b' })).toBe(false);
+  });
+
   it('never treats CT and MR as intensity-compatible', () => {
     const result = assessCompatibility(series(), series({ modality: 'CT' }));
     expect(result.level).toBe('incompatible');

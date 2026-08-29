@@ -106,6 +106,47 @@ The live MPR panel exposes its current LPS patient coordinate in accessible UI t
 an agent can help a person navigate, but that transient point is not saved, compared,
 or promoted to an observation.
 
+## Clinician consultation-packet archives
+
+When the local catalog has no qualified longitudinal pair, agents and people can
+prepare one neutral MRI view and one neutral CT view for source-grounded clinician
+discussion. The browser uses consultation key-image v1 sidecars with `view_a` and
+`view_b` selection slots—never baseline/follow-up roles—and a permanent neutral
+footer. The exact standalone workflow is:
+
+```bash
+scanview-agent assemble-consultation-packet '/safe/local/DICOM/root' \
+  view-a-key-image.zip view-b-key-image.zip \
+  --output scanview-consultation-packet.zip
+scanview-agent validate-consultation-packet scanview-consultation-packet.zip
+```
+
+Assembly requires exactly one MR plus one CT from distinct source studies and one
+matching opaque patient context. It independently joins study/series/instance
+metadata and stack position/count to the live hashed catalog, opens the guarded
+source without following a final symlink, and rehashes the stable DICOM descriptor.
+Hashless catalogs, browser-folder sidecars, metadata/position disagreement, changed
+sources, same-study, same-modality, cross-patient, malformed, duplicate, encrypted,
+oversized, or extra archive content fail closed.
+
+The output contains exactly nine files: `consultation-packet.json`, `review.html`,
+`README.txt`, and the neutral three-file evidence bundle under each of `view-a/` and
+`view-b/`. The agent record includes source anchors, fixed limitations/missing context/
+clinician questions, and mandatory empty `computed_results` and
+`candidate_interpretations`. The deterministic script-free review page binds both
+source byte counts and SHA-256 digests and visibly states that dates are source labels
+only; the views are unregistered, not aligned, not a comparison, not diagnostic, and
+not a response conclusion. Validation summaries omit source IDs, hashes, dates,
+descriptions, and measurement values.
+
+The unified viewer sends the two neutral in-memory key-image ZIPs to the exact-origin
+loopback endpoint and receives the validated packet with `no-store`; the server writes
+no patient file. A valid packet is still sensitive, unreviewed derived evidence and
+must be checked against the clinical imaging system by a clinician. Live viewer-state
+publication is deliberately unavailable in Consult Prep because viewer-state v1 uses
+baseline/follow-up fields; an agent must not infer timepoint roles from the internal
+pane implementation.
+
 ## Clinician visit-packet archives
 
 Agents can assemble two explicitly ordered key-image archives into one local
@@ -436,6 +477,7 @@ GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd}
 GET /v1/instances/{opaque_id}
 POST /v1/viewer-state
 POST /v1/visit-packets
+POST /v1/consultation-packets
 POST /v1/comparison-reviews
 POST /v1/registration-reviews
 ```
@@ -443,9 +485,10 @@ POST /v1/registration-reviews
 There is no source write, overwrite, or delete endpoint. The viewer-state POST is a
 memory-only session publication/clear route: exact loopback Origin, private browser
 session, exact media type, 16 KiB limit, strict fields, catalog validation, publisher
-revocation, and a 30-second TTL apply. The other two POSTs are stateless derivative
+revocation, and a 30-second TTL apply. The three evidence POSTs are stateless derivative
 responses with exact ZIP allowlists. Visit input contains `baseline.zip` and
-`followup.zip`; review input adds only `comparison.json`. Both return
+`followup.zip`; consultation input contains `view-a.zip` and `view-b.zip`; review
+input adds only `comparison.json`. All return
 `application/zip` with `no-store`. Non-health
 agent requests require `Authorization: Bearer <token>`. QA preview and reviewed-display
 files plus QA review submission reject bearer-only authorization and require the human

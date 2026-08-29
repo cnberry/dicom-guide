@@ -47,6 +47,14 @@ two validated dated key images -- CLI or in-memory local POST --> Python gates
                                                                                +--> static human review
                                                                                +--> agent manifest
 
+one neutral MR view + one neutral CT view --> live catalog/source-byte gates
+                                                   |
+                                                   +--> consultation-packet ZIP
+                                                        (no chronology/comparison/response)
+                                                              |
+                                                              +--> static clinician questions
+                                                              +--> minimized agent validation
+
 Alternate local input: browser folder picker --> Cornerstone3D
 
 Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
@@ -96,7 +104,9 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    state, optional MPR series, and evidence counts. The browser never publishes
    pixels, descriptions, dates, measurement content, paths, or direct identifiers.
    Opt-out rotates and revokes the tab publisher; page close clears it and a missing
-   heartbeat expires it within 30 seconds.
+   heartbeat expires it within 30 seconds. Consult Prep disables this v1 bridge
+   because its pane fields use baseline/follow-up names; neutral agent evidence uses
+   the consultation packet instead.
    Single-series MPR additionally requires complete, regular patient-space geometry;
    its interpolated orthographic planes remain navigation-only derivatives and do
    not enter native key-image evidence. A Cornerstone crosshair controller moves one
@@ -108,7 +118,8 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    an allowlisted metadata contract, and has no source write/delete API. Its
    derivative POSTs accept bounded outer ZIPs from an exact local Origin. Visit input
    contains only `baseline.zip` and `followup.zip`; review input adds only
-   `comparison.json`.
+   `comparison.json`; consultation input contains only neutral `view-a.zip` and
+   `view-b.zip`.
    The service assembles and revalidates every nested derivative in memory, returns
    it with `no-store`, and persists nothing. Service-backed measurement IDs join
    directly to the manifest; legacy folder IDs remain accepted.
@@ -141,7 +152,13 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    patient-context and
    strict longitudinal gates. The viewer and CLI share that Python assembler; the
    viewer transport does not persist an intermediate server-side file. None modifies
-   native instances. Agent comparisons accept only explicit, distinct-series
+   native instances. Consultation key images instead use neutral selection slots.
+   Their assembler requires exactly one MR and one CT from distinct studies with one
+   matching opaque patient context, verifies the displayed instance/position against
+   the live hashed catalog, and reads each guarded DICOM descriptor without following
+   a final symlink. The exact byte count and SHA-256 are bound into the deterministic
+   manifested review page. Computed and interpretation arrays stay empty; source
+   dates have no timepoint meaning. Agent comparisons accept only explicit, distinct-series
    measurement selections and emit no response label. The browser can feed that path
    through a bounded strict JSON paste, session-only deletion, and a transient working
    lesion label; the label lives only in the exported comparison draft and never
@@ -207,6 +224,20 @@ two validated key images --> visit packet ----+
 explicit measurement pair --> comparison ----+                              |
                                                                              +--> self-attested review (new ZIP)
                                                                              +--> amended comparison (new ZIP, unreviewed)
+```
+
+When a catalog contains no valid dated same-modality cross-study source pair, the
+ordinary viewer enters a separate neutral state:
+
+```text
+catalog has no longitudinal pair --> Consult Prep --> explicit MR + CT selection
+                                                           |
+                                                           +--> independent native views
+                                                           +--> consultation packet
+                                                           +--> clinician questions
+
+chronology / lesion pairing / registration / response assessment: unavailable
+viewer-state v1 publication: unavailable (timepoint-named schema)
 ```
 
 The hashes make partial edits evident but do not authenticate a clinician. Signed

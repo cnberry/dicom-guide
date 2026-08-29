@@ -257,23 +257,47 @@
    plus seccomp denial of socket creation, socket pairs, and io_uring. Weaker
    `unshare`-only execution fails closed with no unsandboxed fallback.
 
+## Completed in the eighteenth milestone
+
+1. Added dataset-aware Consult Prep mode for catalogs such as the current MRI+CT
+   copy that contain no valid dated same-modality longitudinal source pair. Visible
+   roles become Image A/Image B and no response pairing is suggested.
+2. Disabled approximate cross-exam slice linking, longitudinal lesion-pair arithmetic,
+   visit-packet export, and comparison-review export in that mode. Only optional
+   verified shared-patient-position linking can activate. Viewer-state v1 publication
+   is also disabled because its fields use longitudinal pane roles.
+3. Added neutral consultation key-image v1 and clinician consultation-packet v1
+   contracts. V1 requires exactly one MR plus one CT from distinct studies with one
+   matching opaque patient context and explicitly asserts no chronology, alignment,
+   lesion relationship, comparison, or response authority.
+4. Bound every selected image to its exact live catalog position and stable guarded
+   DICOM descriptor, rehashing the bytes during assembly. The static nine-file packet
+   includes source byte/SHA anchors, fixed questions/limitations, empty computed and
+   interpretation arrays, and no script or external resource.
+5. Added non-overwriting CLI assembly/validation, bounded in-memory same-origin
+   loopback export, strict schemas, hostile archive/JSON/source-tamper tests, and a
+   real-copy visual smoke test with no retained patient derivative.
+
 ## Immediate
 
-1. Import a future same-modality MRI follow-up, have a person confirm the intended
+1. Use the consultation packet only to prepare questions with Mila's clinicians;
+   confirm the correct MRI and CT source views in the clinical imaging system and do
+   not treat the packet as a diagnosis or treatment-response analysis.
+2. Import a future same-modality MRI follow-up, have a person confirm the intended
    earlier/later sequences and clinical roles, run the required engine on that pair,
    and complete qualified visual/quantitative QA.
-2. Install or explicitly locate the required Slicer build, independently record its
+3. Install or explicitly locate the required Slicer build, independently record its
    trusted launcher hash, then verify one real local headless job without retaining
    logs that may contain patient context.
-3. Repeat production packaging and real-codec smoke tests on Linux without exposing
+4. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-4. Produce signed/notarized macOS/Linux release artifacts around the self-contained
+5. Produce signed/notarized macOS/Linux release artifacts around the self-contained
    Python wheel.
-5. Design optional authenticated signature integration for clinical organizations;
+6. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
-6. Design an append-only, privacy-minimized local audit for bearer access to live
+7. Design an append-only, privacy-minimized local audit for bearer access to live
    viewer state without recording patient content or putting tokens in logs.
-7. Add an explicit transformed moving-coverage mask to a future registration bundle so
+8. Add an explicit transformed moving-coverage mask to a future registration bundle so
    reviewed display can enforce shared coverage pixel by pixel rather than visually.
 
 ## Next milestone
@@ -284,6 +308,9 @@
    comparison-review page.
 4. Extend append-only audit records from review decisions to local evidence access.
 5. Package and smoke-test on macOS Apple Silicon and Linux x86_64.
+6. Prototype a source-bound 2–8 image consultation evidence board with explicit
+   clinician-selected labels, while retaining the no-comparison/no-interpretation
+   default and exact DICOM provenance.
 
 ## Registration milestone
 

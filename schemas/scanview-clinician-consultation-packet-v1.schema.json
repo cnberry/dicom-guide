@@ -1,0 +1,376 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-clinician-consultation-packet-v1.schema.json",
+  "title": "ScanView unreviewed clinician consultation packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_at",
+    "review_status",
+    "artifact_type",
+    "purpose",
+    "relationship",
+    "observations",
+    "computed_results",
+    "candidate_interpretations",
+    "limitations",
+    "missing_context",
+    "questions_for_clinician",
+    "implementation",
+    "files"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "review_status": { "const": "unreviewed" },
+    "artifact_type": { "const": "clinician_consultation_packet" },
+    "purpose": { "const": "two_source_views_for_clinician_discussion_only" },
+    "relationship": { "$ref": "#/$defs/relationship" },
+    "observations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "#/$defs/viewAObservation" },
+        { "$ref": "#/$defs/viewBObservation" }
+      ]
+    },
+    "computed_results": { "type": "array", "maxItems": 0 },
+    "candidate_interpretations": { "type": "array", "maxItems": 0 },
+    "limitations": {
+      "const": [
+        "The two images were explicitly selected as reference views only; no temporal, longitudinal, anatomical, or lesion relationship is asserted.",
+        "MR and CT have different acquisition physics and intensity meaning and must not be compared as if their pixel values were equivalent.",
+        "The images are not registered, spatially aligned, or guaranteed to show the same anatomy, lesion, or tumor component.",
+        "Measurements are manual, source-linked, and unreviewed; they do not establish diagnosis, lesion identity, treatment response, or clinical significance.",
+        "Original DICOM instances remain authoritative; all included PNG and JSON files are derived evidence and may retain identifying pixel content."
+      ]
+    },
+    "missing_context": {
+      "const": [
+        "Clinical confirmation of patient identity, diagnosis, pathology, treatment timeline, symptoms, medications, and operative history.",
+        "Qualified identification of the anatomy, lesion, tumor component, and purpose represented by each selected view.",
+        "The intended same-modality MRI sequence and timepoints for any future longitudinal response assessment."
+      ]
+    },
+    "questions_for_clinician": {
+      "const": [
+        "Are these the correct source exams, series, and images for this consultation?",
+        "What anatomy or tumor-related feature is clinically relevant in each selected view?",
+        "What different questions do the MRI and CT answer, and what should not be compared between them?",
+        "Which MRI sequence and follow-up timepoint should be used for a future treatment-response comparison?",
+        "What findings, uncertainties, and next-step questions should be recorded in the medical record?"
+      ]
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "ScanView clinician consultation-packet assembler" },
+        "version": { "const": "0.1.0" }
+      }
+    },
+    "files": { "$ref": "#/$defs/files" }
+  },
+  "$defs": {
+    "studyId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|study_[0-9a-f]{20})$"
+    },
+    "seriesId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|series_[0-9a-f]{20})$"
+    },
+    "instanceId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|instance_[0-9a-f]{20})$"
+    },
+    "patientContextId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|patient_[0-9a-f]{20})$"
+    },
+    "frameId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|frame_[0-9a-f]{20})$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_method",
+        "same_patient_context",
+        "modalities",
+        "modality_relationship",
+        "same_source_instance",
+        "distinct_source_studies",
+        "temporal_relationship",
+        "registration_status",
+        "spatial_relationship",
+        "longitudinal_comparison_authorized",
+        "response_assessment_authorized"
+      ],
+      "properties": {
+        "selection_method": { "const": "explicit_two_view_selection" },
+        "same_patient_context": { "const": true },
+        "modalities": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "oneOf": [
+            { "const": ["MR", "CT"] },
+            { "const": ["CT", "MR"] }
+          ]
+        },
+        "modality_relationship": { "const": "cross_modality" },
+        "same_source_instance": { "const": false },
+        "distinct_source_studies": { "const": true },
+        "temporal_relationship": { "const": "not_asserted" },
+        "registration_status": { "const": "not_registered" },
+        "spatial_relationship": { "const": "not_aligned" },
+        "longitudinal_comparison_authorized": { "const": false },
+        "response_assessment_authorized": { "const": false }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "study_id",
+        "series_id",
+        "instance_id",
+        "patient_context_id",
+        "modality",
+        "series_description",
+        "instance_number"
+      ],
+      "properties": {
+        "study_id": { "$ref": "#/$defs/studyId" },
+        "series_id": { "$ref": "#/$defs/seriesId" },
+        "instance_id": { "$ref": "#/$defs/instanceId" },
+        "patient_context_id": { "$ref": "#/$defs/patientContextId" },
+        "frame_of_reference_id": { "$ref": "#/$defs/frameId" },
+        "modality": { "enum": ["MR", "CT"] },
+        "acquisition_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "series_description": { "type": "string", "minLength": 1 },
+        "instance_number": { "type": "integer" }
+      }
+    },
+    "orientation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "right", "top", "bottom"],
+      "properties": {
+        "left": { "type": "string", "pattern": "^[RLAPHF]{1,3}$" },
+        "right": { "type": "string", "pattern": "^[RLAPHF]{1,3}$" },
+        "top": { "type": "string", "pattern": "^[RLAPHF]{1,3}$" },
+        "bottom": { "type": "string", "pattern": "^[RLAPHF]{1,3}$" }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "voi_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lower", "upper"],
+          "properties": {
+            "lower": { "type": "number" },
+            "upper": { "type": "number" }
+          }
+        },
+        "invert": { "type": "boolean" },
+        "zoom": { "type": "number", "exclusiveMinimum": 0 },
+        "pan": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "number" }
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_slot",
+        "stack_position",
+        "stack_count",
+        "source_kind",
+        "viewport_width_px",
+        "viewport_height_px",
+        "presentation"
+      ],
+      "properties": {
+        "selection_slot": { "enum": ["view_a", "view_b"] },
+        "stack_position": { "type": "integer", "minimum": 1 },
+        "stack_count": { "type": "integer", "minimum": 1 },
+        "source_kind": { "enum": ["browser-folder", "loopback-service"] },
+        "viewport_width_px": { "type": "integer", "minimum": 1 },
+        "viewport_height_px": { "type": "integer", "minimum": 1 },
+        "patient_orientation": { "$ref": "#/$defs/orientation" },
+        "presentation": { "$ref": "#/$defs/presentation" }
+      }
+    },
+    "sourceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog_match", "dicom_bytes", "dicom_sha256"],
+      "properties": {
+        "catalog_match": { "const": true },
+        "dicom_bytes": { "type": "integer", "minimum": 1 },
+        "dicom_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slot",
+        "source",
+        "source_anchor",
+        "display",
+        "key_image_path",
+        "key_image_sidecar_path",
+        "measurement_path",
+        "measurement_count",
+        "tracking_ids",
+        "review_status"
+      ],
+      "properties": {
+        "slot": { "enum": ["view_a", "view_b"] },
+        "source": { "$ref": "#/$defs/source" },
+        "source_anchor": { "$ref": "#/$defs/sourceAnchor" },
+        "display": { "$ref": "#/$defs/display" },
+        "key_image_path": { "type": "string", "minLength": 1 },
+        "key_image_sidecar_path": { "type": "string", "minLength": 1 },
+        "measurement_path": { "type": "string", "minLength": 1 },
+        "measurement_count": { "type": "integer", "minimum": 0 },
+        "tracking_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "review_status": { "const": "unreviewed" }
+      }
+    },
+    "viewAObservation": {
+      "allOf": [
+        { "$ref": "#/$defs/observation" },
+        {
+          "properties": {
+            "slot": { "const": "view_a" },
+            "display": {
+              "allOf": [
+                { "$ref": "#/$defs/display" },
+                { "properties": { "selection_slot": { "const": "view_a" } } }
+              ]
+            },
+            "key_image_path": { "const": "view-a/key-image.png" },
+            "key_image_sidecar_path": { "const": "view-a/key-image.json" },
+            "measurement_path": { "const": "view-a/measurements.json" }
+          }
+        }
+      ]
+    },
+    "viewBObservation": {
+      "allOf": [
+        { "$ref": "#/$defs/observation" },
+        {
+          "properties": {
+            "slot": { "const": "view_b" },
+            "display": {
+              "allOf": [
+                { "$ref": "#/$defs/display" },
+                { "properties": { "selection_slot": { "const": "view_b" } } }
+              ]
+            },
+            "key_image_path": { "const": "view-b/key-image.png" },
+            "key_image_sidecar_path": { "const": "view-b/key-image.json" },
+            "measurement_path": { "const": "view-b/measurements.json" }
+          }
+        }
+      ]
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_type", "byte_count", "sha256"],
+      "properties": {
+        "media_type": { "type": "string", "minLength": 1 },
+        "byte_count": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review.html",
+        "README.txt",
+        "view-a/key-image.json",
+        "view-a/key-image.png",
+        "view-a/measurements.json",
+        "view-b/key-image.json",
+        "view-b/key-image.png",
+        "view-b/measurements.json"
+      ],
+      "properties": {
+        "review.html": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "text/html" } } }
+          ]
+        },
+        "README.txt": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "text/plain" } } }
+          ]
+        },
+        "view-a/key-image.json": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "application/json" } } }
+          ]
+        },
+        "view-a/key-image.png": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "image/png" } } }
+          ]
+        },
+        "view-a/measurements.json": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "application/json" } } }
+          ]
+        },
+        "view-b/key-image.json": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "application/json" } } }
+          ]
+        },
+        "view-b/key-image.png": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "image/png" } } }
+          ]
+        },
+        "view-b/measurements.json": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "application/json" } } }
+          ]
+        }
+      }
+    }
+  }
+}

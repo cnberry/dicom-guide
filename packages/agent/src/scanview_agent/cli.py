@@ -14,6 +14,10 @@ from .comparison_reviews import (
     comparison_review_summary,
     write_comparison_review,
 )
+from .consultation_packets import (
+    consultation_packet_summary,
+    write_consultation_packet,
+)
 from .key_images import key_image_archive_summary
 from .measurements import (
     build_measurement_comparison,
@@ -148,6 +152,28 @@ def parser() -> argparse.ArgumentParser:
         help="Validate a local ScanView clinician visit packet and all integrity links",
     )
     validate_visit_packet.add_argument("archive", type=Path)
+
+    assemble_consultation_packet = commands.add_parser(
+        "assemble-consultation-packet",
+        help=(
+            "Assemble two live-source-validated MR/CT reference views for a "
+            "clinician discussion"
+        ),
+    )
+    assemble_consultation_packet.add_argument(
+        "root", type=Path, help="Local DICOM root used to verify exact source bytes"
+    )
+    assemble_consultation_packet.add_argument("view_a_archive", type=Path)
+    assemble_consultation_packet.add_argument("view_b_archive", type=Path)
+    assemble_consultation_packet.add_argument(
+        "--output", "-o", type=Path, required=True
+    )
+
+    validate_consultation_packet = commands.add_parser(
+        "validate-consultation-packet",
+        help="Validate a local clinician consultation packet and all integrity links",
+    )
+    validate_consultation_packet.add_argument("archive", type=Path)
 
     compare_measurements = commands.add_parser(
         "compare-measurements",
@@ -433,6 +459,25 @@ def main() -> None:
             raise SystemExit(1)
     elif args.command == "validate-visit-packet":
         summary = visit_packet_summary(args.archive)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "assemble-consultation-packet":
+        try:
+            write_consultation_packet(
+                args.root,
+                args.view_a_archive,
+                args.view_b_archive,
+                args.output,
+            )
+        except (OSError, ValueError) as error:
+            argument_parser.error(str(error))
+        summary = consultation_packet_summary(args.output)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-consultation-packet":
+        summary = consultation_packet_summary(args.archive)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

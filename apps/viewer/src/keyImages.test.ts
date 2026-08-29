@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildConsultationKeyImageEvidencePacket,
   buildKeyImageEvidencePacket,
+  CONSULTATION_KEY_IMAGE_IMPLEMENTATION,
+  CONSULTATION_KEY_IMAGE_LIMITATIONS,
   scopeMeasurementPacketToInstance,
 } from './keyImages';
 import type { MeasurementEvidencePacket } from './measurements';
@@ -126,5 +129,56 @@ describe('key-image evidence', () => {
     expect(packet.measurement_evidence.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(packet.image.sha256).not.toBe(packet.measurement_evidence.sha256);
     expect(JSON.stringify(packet)).not.toContain('1.2.840.');
+  });
+
+  it('builds a neutral consultation sidecar with an explicit non-temporal view slot', async () => {
+    const scoped = scopeMeasurementPacketToInstance(
+      measurementPacket,
+      '0123456789abcdef',
+      'fedcba9876543210',
+      '2026-08-28T01:02:03.000Z',
+    );
+    const measurementBytes = new TextEncoder().encode(`${JSON.stringify(scoped)}\n`);
+    const packet = await buildConsultationKeyImageEvidencePacket({
+      createdAt: '2026-08-28T01:02:03.000Z',
+      source: {
+        study_id: 'abcdef0123456789',
+        series_id: '0123456789abcdef',
+        instance_id: 'fedcba9876543210',
+        patient_context_id: '1234567890abcdef',
+        modality: 'MR',
+        acquisition_date: '20260828',
+        series_description: 'Synthetic axial',
+        instance_number: 2,
+      },
+      display: {
+        selection_slot: 'view_a',
+        stack_position: 2,
+        stack_count: 3,
+        source_kind: 'loopback-service',
+        viewport_width_px: 512,
+        viewport_height_px: 512,
+        patient_orientation: { left: 'R', right: 'L', top: 'A', bottom: 'P' },
+        presentation: { invert: false, zoom: 1, pan: [0, 0] },
+      },
+      imageWidth: 512,
+      imageHeight: 560,
+      pngBytes: new Uint8Array([1, 2, 3]),
+      measurementPacket: scoped,
+      measurementBytes,
+    });
+
+    expect(packet).toMatchObject({
+      schema_version: '1.0.0',
+      review_status: 'unreviewed',
+      artifact_type: 'derived_display_consultation_key_image',
+      display: { selection_slot: 'view_a' },
+      implementation: CONSULTATION_KEY_IMAGE_IMPLEMENTATION,
+      limitations: CONSULTATION_KEY_IMAGE_LIMITATIONS,
+    });
+    expect(Object.keys(packet.display)).not.toContain('viewport_role');
+    expect(JSON.stringify(packet)).not.toMatch(/baseline|followup|follow-up/i);
+    expect(packet.image.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(packet.measurement_evidence.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 });

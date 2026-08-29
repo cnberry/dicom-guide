@@ -25,6 +25,11 @@ from .comparison_reviews import (
     comparison_review_from_transport,
     comparison_review_summary,
 )
+from .consultation_packets import (
+    MAX_CONSULTATION_PACKET_TRANSPORT_BYTES,
+    consultation_packet_from_transport,
+    consultation_packet_summary,
+)
 from .navigation import NAVIGATION_FRAGMENT_PREFIX
 from .registration_display import (
     reviewed_registration_display_context,
@@ -503,6 +508,10 @@ class Handler(BaseHTTPRequestHandler):
                 "application/vnd.scanview.comparison-review-input+zip",
                 MAX_COMPARISON_REVIEW_TRANSPORT_BYTES,
             ),
+            "/v1/consultation-packets": (
+                "application/vnd.scanview.consultation-input+zip",
+                MAX_CONSULTATION_PACKET_TRANSPORT_BYTES,
+            ),
         }
         if path not in supported:
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
@@ -540,7 +549,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not summary["valid"]:
                     raise ValueError("assembled visit packet failed local integrity validation")
                 filename_prefix = "scanview-visit-packet"
-            else:
+            elif path == "/v1/comparison-reviews":
                 payload = comparison_review_from_transport(
                     body,
                     visit_created_at=created_at,
@@ -551,14 +560,27 @@ class Handler(BaseHTTPRequestHandler):
                         "assembled comparison review failed local integrity validation"
                     )
                 filename_prefix = "scanview-comparison-review"
+            else:
+                payload = consultation_packet_from_transport(
+                    body,
+                    self.server.catalog,
+                    self.server.registry,
+                    created_at=created_at,
+                )
+                summary = consultation_packet_summary(io.BytesIO(payload))
+                if not summary["valid"]:
+                    raise ValueError(
+                        "assembled consultation packet failed local integrity validation"
+                    )
+                filename_prefix = "scanview-consultation-packet"
         except ValueError as error:
             self._send_json(
                 {
-                    "error": (
-                        "invalid_visit_packet_input"
-                        if path == "/v1/visit-packets"
-                        else "invalid_comparison_review_input"
-                    ),
+                    "error": {
+                        "/v1/visit-packets": "invalid_visit_packet_input",
+                        "/v1/comparison-reviews": "invalid_comparison_review_input",
+                        "/v1/consultation-packets": "invalid_consultation_packet_input",
+                    }[path],
                     "detail": str(error),
                 },
                 HTTPStatus.UNPROCESSABLE_ENTITY,

@@ -39,6 +39,15 @@ result into a medical conclusion.
 - One-click visit-packet export from the two live viewer panes through a bounded,
   authenticated same-origin loopback request; assembly and validation remain local
   and in memory.
+- Dataset-aware Consult Prep mode when no valid dated same-modality longitudinal
+  source pair exists. It uses neutral Image A/Image B roles, disables approximate
+  cross-exam linking and lesion-pair arithmetic, and never silently treats MRI+CT as
+  a treatment-response pair.
+- Source-bound one-MR/one-CT consultation packets for clinician discussion. Neutral
+  key-image archives, exact live-catalog position and source-byte rehashing, strict
+  cross-study/patient-context gates, static human presentation, privacy-minimized
+  validation, CLI workflows, and a bounded same-origin in-memory endpoint are
+  implemented without external processing APIs.
 - Explicit, numeric-only local measurement comparison for agents.
 - Human/agent measurement workspace with strict pasted-JSON import, session-only
   deletion, explicit labeled lesion pairing, local numeric preview/export, and a
@@ -126,3 +135,7 @@ result into a medical conclusion.
     require the separate browser session capability. Bearer access exposes only a
     privacy-minimized status and cannot approve a transform; the capability alone does
     not authenticate human presence.
+15. **Cross-modality honesty:** MRI+CT consultation views use no timepoint roles,
+    computed change, lesion linkage, intensity comparison, registration claim, or
+    response assessment. The artifact proves its exact local DICOM source bytes while
+    keeping clinical interpretation explicitly absent.

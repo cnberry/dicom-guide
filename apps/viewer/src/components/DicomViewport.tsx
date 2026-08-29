@@ -9,9 +9,13 @@ import {
 } from '../cornerstone';
 import { assessMprEligibility, getPatientOrientationLabels, type DicomSeries } from '../dicom';
 import {
+  createConsultationKeyImageArchive,
   createKeyImageArchive,
   downloadArchive,
+  type ConsultationKeyImageArchive,
+  type ConsultationSelectionSlot,
   type KeyImageArchive,
+  type KeyImageArchiveInput,
   type KeyImagePresentation,
 } from '../keyImages';
 import type { MeasurementEvidencePacket } from '../measurements';
@@ -26,10 +30,15 @@ type Props = {
   resetNonce: number;
   measurementPacket?: MeasurementEvidencePacket;
   onOpenMpr?: () => void;
+  consultationSelectionSlot?: ConsultationSelectionSlot;
 };
 
 export type DicomViewportHandle = {
   createKeyImageArchive: (createdAt?: string) => Promise<KeyImageArchive>;
+  createConsultationKeyImageArchive: (
+    selectionSlot: ConsultationSelectionSlot,
+    createdAt?: string,
+  ) => Promise<ConsultationKeyImageArchive>;
 };
 
 export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function DicomViewport(
@@ -43,6 +52,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     resetNonce,
     measurementPacket,
     onOpenMpr,
+    consultationSelectionSlot,
   }: Props,
   ref,
 ) {
@@ -146,7 +156,9 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
   const maxIndex = Math.max(0, (series?.instances.length ?? 1) - 1);
   const orientationLabels = getPatientOrientationLabels(series?.geometry.orientation);
   const mprEligibility = assessMprEligibility(series);
-  const buildKeyImage = async (createdAt?: string): Promise<KeyImageArchive> => {
+  const buildKeyImageInput = (
+    createdAt?: string,
+  ): Omit<KeyImageArchiveInput, 'viewportRole'> => {
     const viewport = viewportRef.current;
     const element = elementRef.current;
     if (!viewport || !element || !series) {
@@ -176,11 +188,10 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
         upper: properties.voiRange.upper,
       };
     }
-    return createKeyImageArchive({
+    return {
       viewportCanvas: viewport.getCanvas(),
       annotationSvg: element.querySelector<SVGSVGElement>('svg.svg-layer') ?? undefined,
       orientationLabels,
-      viewportRole: id,
       source: {
         study_id: series.studyId,
         series_id: series.id,
@@ -200,16 +211,36 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
       },
       measurementPacket: createMeasurementEvidencePacket(),
       createdAt,
-    });
+    };
   };
 
-  useImperativeHandle(ref, () => ({ createKeyImageArchive: buildKeyImage }));
+  const buildKeyImage = async (createdAt?: string): Promise<KeyImageArchive> =>
+    createKeyImageArchive({
+      ...buildKeyImageInput(createdAt),
+      viewportRole: id,
+    });
+
+  const buildConsultationKeyImage = async (
+    selectionSlot: ConsultationSelectionSlot,
+    createdAt?: string,
+  ): Promise<ConsultationKeyImageArchive> =>
+    createConsultationKeyImageArchive({
+      ...buildKeyImageInput(createdAt),
+      selectionSlot,
+    });
+
+  useImperativeHandle(ref, () => ({
+    createKeyImageArchive: buildKeyImage,
+    createConsultationKeyImageArchive: buildConsultationKeyImage,
+  }));
 
   const saveKeyImage = async () => {
     setKeyImageState('working');
     setKeyImageError('');
     try {
-      const result = await buildKeyImage();
+      const result = consultationSelectionSlot
+        ? await buildConsultationKeyImage(consultationSelectionSlot)
+        : await buildKeyImage();
       downloadArchive(result.bytes, result.filename);
       const viewport = viewportRef.current;
       setKeyImageState(
@@ -249,20 +280,31 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
           <button
             className={`key-image-button ${keyImageState}`}
             disabled={!series || keyImageState === 'working' || Boolean(status)}
-            title={keyImageError || 'Save a local ZIP with PNG, provenance, and measurements'}
+            title={
+              keyImageError ||
+              (consultationSelectionSlot
+                ? 'Save a neutral local reference-view ZIP with PNG, provenance, and measurements'
+                : 'Save a local ZIP with PNG, provenance, and measurements')
+            }
             onClick={() => void saveKeyImage()}
           >
             {keyImageState === 'working'
               ? 'Saving…'
               : keyImageState === 'saved'
-                ? 'Saved key image'
+                ? consultationSelectionSlot
+                  ? 'Saved reference view'
+                  : 'Saved key image'
                 : keyImageState === 'error'
                   ? 'Export failed'
-                  : 'Save key image'}
+                  : consultationSelectionSlot
+                    ? 'Save reference view'
+                    : 'Save key image'}
           </button>
           <span className="sr-only" aria-live="polite">
             {keyImageState === 'saved'
-              ? 'Local key-image archive saved.'
+              ? consultationSelectionSlot
+                ? 'Local neutral reference-view archive saved.'
+                : 'Local key-image archive saved.'
               : keyImageState === 'error'
                 ? keyImageError
                 : ''}

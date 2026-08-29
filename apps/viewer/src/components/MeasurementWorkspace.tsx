@@ -13,6 +13,7 @@ type Props = {
   baseline?: DicomSeries;
   followup?: DicomSeries;
   compatibilityLevel: Compatibility['level'];
+  allowLongitudinalPairing?: boolean;
   onDeleteMeasurement: (trackingId: string) => boolean;
   onComparisonDraftChange: (draft: MeasurementComparisonDraft | undefined) => void;
 };
@@ -62,6 +63,7 @@ export function MeasurementWorkspace({
   baseline,
   followup,
   compatibilityLevel,
+  allowLongitudinalPairing = true,
   onDeleteMeasurement,
   onComparisonDraftChange,
 }: Props) {
@@ -89,6 +91,10 @@ export function MeasurementWorkspace({
   useEffect(() => {
     onComparisonDraftChange(comparisonDraft);
   }, [comparisonDraft, onComparisonDraftChange]);
+
+  useEffect(() => {
+    if (!allowLongitudinalPairing) setComparisonDraft(undefined);
+  }, [allowLongitudinalPairing]);
 
   useEffect(() => {
     if (!baselineMeasurements.some((item) => item.tracking_id === baselineMeasurementId)) {
@@ -187,6 +193,22 @@ export function MeasurementWorkspace({
         </table>
       </div>
 
+      {!allowLongitudinalPairing ? (
+        <div className="pairing-editor" aria-label="Consultation measurement safeguard">
+          <div className="pairing-heading">
+            <div>
+              <span className="eyebrow">Reference views only · source-linked notes</span>
+              <h3>Longitudinal measurement pairing is unavailable</h3>
+            </div>
+            <span className="unreviewed-badge">No response comparison</span>
+          </div>
+          <p className="pairing-message">
+            These selected studies do not form a qualified longitudinal source pair. Manual
+            measurements remain attached to their individual source images and are not linked
+            across views.
+          </p>
+        </div>
+      ) : (
       <div className="pairing-editor" aria-label="Explicit lesion measurement pairing">
         <div className="pairing-heading">
           <div>
@@ -291,6 +313,7 @@ export function MeasurementWorkspace({
           </div>
         )}
       </div>
+      )}
     </section>
   );
 }

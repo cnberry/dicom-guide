@@ -13,6 +13,8 @@ import {
   assessCompatibility,
   formatDicomDate,
   getLinkStrategy,
+  hasLongitudinalSourcePair,
+  isConsultationSourcePair,
   mapLinkedIndex,
   parseDicomFiles,
   type DicomSeries,
@@ -36,6 +38,7 @@ import {
   type NavigationParseResult,
 } from './navigationIntent';
 import { saveVisitPacket as saveLocalVisitPacket } from './visitPacketService';
+import { saveConsultationPacket as saveLocalConsultationPacket } from './consultationPacketService';
 import {
   buildViewerStatePublication,
   clearViewerState,
@@ -116,6 +119,10 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const [comparisonReviewMessage, setComparisonReviewMessage] = useState(
     'Build an explicit numeric preview to enable one-click local review export.',
   );
+  const [consultationPacketState, setConsultationPacketState] = useState<ExportState>('idle');
+  const [consultationPacketMessage, setConsultationPacketMessage] = useState(
+    'Select two local reference views to prepare a neutral clinician discussion packet.',
+  );
   const [agentStateSharing, setAgentStateSharing] = useState(false);
   const [agentStateMessage, setAgentStateMessage] = useState(
     'Agent viewer state is off by default. Enable it to share only expiring opaque positions locally.',
@@ -124,11 +131,14 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const baseline = series.find((item) => item.id === baselineId);
   const followup = series.find((item) => item.id === followupId);
   const mprSeries = series.find((item) => item.id === mprSeriesId);
+  const consultPrepMode = series.length > 0 && !hasLongitudinalSourcePair(series);
   const compatibility = useMemo(
     () => assessCompatibility(baseline, followup),
     [baseline, followup],
   );
   const linkStrategy = useMemo(() => getLinkStrategy(baseline, followup), [baseline, followup]);
+  const effectiveSynchronized =
+    synchronized && (!consultPrepMode || linkStrategy === 'patient-position');
   const visibleMeasurements = liveMeasurementPacket
     ? liveMeasurementPacket.measurements
     : (measurementPacket?.measurements ?? []);
@@ -136,7 +146,16 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     baseline?.sourceKind === 'loopback-service' && followup?.sourceKind === 'loopback-service',
   );
   const visitPacketReady = Boolean(
-    baseline && followup && visitPacketUsesLoopback && compatibility.level !== 'incompatible',
+    !consultPrepMode &&
+      baseline &&
+      followup &&
+      visitPacketUsesLoopback &&
+      compatibility.level !== 'incompatible',
+  );
+  const consultationPacketReady = Boolean(
+    consultPrepMode &&
+      visitPacketUsesLoopback &&
+      isConsultationSourcePair(baseline, followup),
   );
   const comparisonSourceIndexes = useMemo(() => {
     return findComparisonSourceIndexes(measurementComparisonDraft, baseline, followup);
@@ -150,13 +169,16 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     visitPacketReady && measurementComparisonDraft && comparisonSourcesVisible,
   );
   const evidenceExportWorking =
-    visitPacketState === 'working' || comparisonReviewState === 'working';
+    visitPacketState === 'working' ||
+    comparisonReviewState === 'working' ||
+    consultationPacketState === 'working';
   const viewerStatePublication = useMemo(
-    () =>
-      buildViewerStatePublication({
+    () => {
+      if (consultPrepMode) return undefined;
+      return buildViewerStatePublication({
         publisherId: agentPublisherId,
         activeTool,
-        synchronized,
+        synchronized: effectiveSynchronized,
         linkStrategy,
         baseline,
         baselineIndex,
@@ -165,7 +187,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         mprSeries,
         measurementCount: visibleMeasurements.length,
         comparisonDraftPresent: Boolean(measurementComparisonDraft),
-      }),
+      });
+    },
     [
       activeTool,
       agentPublisherId,
@@ -173,10 +196,11 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       baselineIndex,
       followup,
       followupIndex,
+      consultPrepMode,
       linkStrategy,
       measurementComparisonDraft,
       mprSeries,
-      synchronized,
+      effectiveSynchronized,
       visibleMeasurements.length,
     ],
   );
@@ -185,6 +209,13 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setVisitPacketState('idle');
     setVisitPacketMessage(
       'Visit packets require two dated, same-patient MR or CT studies in the unified local workspace.',
+    );
+  }, [baselineId, baselineIndex, followupId, followupIndex]);
+
+  useEffect(() => {
+    setConsultationPacketState('idle');
+    setConsultationPacketMessage(
+      'Select two local reference views to prepare a neutral clinician discussion packet.',
     );
   }, [baselineId, baselineIndex, followupId, followupIndex]);
 
@@ -232,6 +263,15 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   }, [agentStateSharing]);
 
   useEffect(() => {
+    if (agentStateSharing) return;
+    setAgentStateMessage(
+      consultPrepMode
+        ? 'Live agent state is unavailable in Consult Prep because the current state schema uses timepoint roles. Use the neutral consultation packet for agent evidence.'
+        : 'Agent viewer state is off by default. Enable it to share only expiring opaque positions locally.',
+    );
+  }, [agentStateSharing, consultPrepMode]);
+
+  useEffect(() => {
     agentPublisherIdRef.current = agentPublisherId;
   }, [agentPublisherId]);
 
@@ -253,7 +293,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       agentStateSharingRef.current = false;
       setAgentStateSharing(false);
       setAgentStateMessage(
-        'Agent viewer state stopped: it is available only through the authenticated local launcher.',
+        consultPrepMode
+          ? 'Agent viewer state stopped because Consult Prep does not publish timepoint-role state. Use the neutral consultation packet instead.'
+          : 'Agent viewer state stopped: it is available only through the authenticated local launcher.',
       );
       const revokedPublisherId = agentPublisherId;
       setAgentPublisherId(createViewerStatePublisherId());
@@ -298,7 +340,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       window.clearTimeout(initial);
       window.clearInterval(heartbeat);
     };
-  }, [active, agentPublisherId, agentStateSharing, viewerStatePublication]);
+  }, [active, agentPublisherId, agentStateSharing, consultPrepMode, viewerStatePublication]);
 
   useEffect(() => {
     const clearPublishedState = () => {
@@ -437,12 +479,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const updateIndex = (side: 'baseline' | 'followup', next: number) => {
     if (side === 'baseline') {
       setBaselineIndex(next);
-      if (synchronized && baseline && followup) {
+      if (effectiveSynchronized && baseline && followup) {
         setFollowupIndex(mapLinkedIndex(next, baseline, followup).index);
       }
     } else {
       setFollowupIndex(next);
-      if (synchronized && baseline && followup) {
+      if (effectiveSynchronized && baseline && followup) {
         setBaselineIndex(mapLinkedIndex(next, followup, baseline).index);
       }
     }
@@ -591,6 +633,56 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     }
   };
 
+  const exportConsultationPacket = async () => {
+    if (!baseline || !followup) {
+      setConsultationPacketState('error');
+      setConsultationPacketMessage('Choose both Image A and Image B first.');
+      return;
+    }
+    if (!visitPacketUsesLoopback) {
+      setConsultationPacketState('error');
+      setConsultationPacketMessage(
+        'Use the unified local launcher for source-verified consultation assembly.',
+      );
+      return;
+    }
+    if (!isConsultationSourcePair(baseline, followup)) {
+      setConsultationPacketState('error');
+      setConsultationPacketMessage(
+        'Choose one MR and one CT view from distinct studies with one matching opaque patient context.',
+      );
+      return;
+    }
+    const viewA = baselineViewportRef.current;
+    const viewB = followupViewportRef.current;
+    if (!viewA || !viewB) {
+      setConsultationPacketState('error');
+      setConsultationPacketMessage('Both selected images must finish rendering before export.');
+      return;
+    }
+    setConsultationPacketState('working');
+    setConsultationPacketMessage(
+      'Capturing both selected images and verifying their exact local DICOM sources…',
+    );
+    try {
+      const createdAt = new Date().toISOString();
+      const [viewAArchive, viewBArchive] = await Promise.all([
+        viewA.createConsultationKeyImageArchive('view_a', createdAt),
+        viewB.createConsultationKeyImageArchive('view_b', createdAt),
+      ]);
+      const result = await saveLocalConsultationPacket(viewAArchive.bytes, viewBArchive.bytes);
+      setConsultationPacketState('saved');
+      setConsultationPacketMessage(
+        `Saved ${result.filename}: reference views only, no temporal or response conclusion.`,
+      );
+    } catch (error) {
+      setConsultationPacketState('error');
+      setConsultationPacketMessage(
+        error instanceof Error ? error.message : 'Local consultation-packet export failed.',
+      );
+    }
+  };
+
   const exportComparisonReview = async () => {
     if (!measurementComparisonDraft) {
       setComparisonReviewState('error');
@@ -664,7 +756,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           </div>
           <div>
             <h1>ScanView</h1>
-            <p>Longitudinal imaging workspace</p>
+            <p>{consultPrepMode ? 'Consult preparation workspace' : 'Longitudinal imaging workspace'}</p>
           </div>
         </div>
         <div className="safety-banner">
@@ -726,7 +818,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         <>
           <section className="selection-panel">
             <SeriesSelect
-              label="Baseline series"
+              label={consultPrepMode ? 'Image A series' : 'Baseline series'}
               value={baselineId}
               series={series}
               onChange={(id) => {
@@ -738,21 +830,27 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               }}
             />
             <button
-              className={`sync-button ${synchronized && baseline && followup ? 'active' : ''}`}
+              className={`sync-button ${effectiveSynchronized && baseline && followup ? 'active' : ''}`}
               onClick={() => setSynchronized((value) => !value)}
-              aria-pressed={Boolean(synchronized && baseline && followup)}
-              disabled={!baseline || !followup}
+              aria-pressed={Boolean(effectiveSynchronized && baseline && followup)}
+              disabled={
+                !baseline ||
+                !followup ||
+                (consultPrepMode && linkStrategy !== 'patient-position')
+              }
             >
               {!baseline || !followup
                 ? 'Link after pairing'
-                : synchronized
+                : consultPrepMode && linkStrategy !== 'patient-position'
+                  ? 'Independent reference views'
+                : effectiveSynchronized
                   ? linkStrategy === 'patient-position'
                     ? 'Patient-position linked'
                     : 'Approximate index link'
                   : 'Independent slices'}
             </button>
             <SeriesSelect
-              label="Follow-up series"
+              label={consultPrepMode ? 'Image B series' : 'Follow-up series'}
               value={followupId}
               series={series}
               onChange={(id) => {
@@ -800,72 +898,108 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                 title={
                   viewerStatePublication
                     ? 'Opt in to an expiring, privacy-minimized state for bearer-authorized local agents'
+                    : consultPrepMode
+                      ? 'Live agent state is unavailable because its current schema uses longitudinal pane roles; use a consultation packet instead'
                     : 'Available only through the authenticated local launcher'
                 }
                 onClick={toggleAgentStateSharing}
               >
                 Agent state: {agentStateSharing ? 'on' : 'off'}
               </button>
-              <button
-                className={`visit-packet-button ${visitPacketState}`}
-                disabled={!visitPacketReady || evidenceExportWorking}
-                title={
-                  !baseline || !followup
-                    ? 'Choose a baseline and follow-up series'
-                    : !visitPacketUsesLoopback
-                      ? 'Available through the unified local launcher'
-                      : compatibility.level === 'incompatible'
-                        ? 'The selected pair fails longitudinal safety gates'
-                        : 'Capture both displayed images and save one locally validated visit packet'
-                }
-                onClick={() => void exportVisitPacket()}
-              >
-                {visitPacketState === 'working'
-                  ? 'Building visit packet…'
-                  : visitPacketState === 'saved'
-                    ? 'Saved visit packet'
-                    : visitPacketState === 'error'
-                      ? 'Visit packet failed'
-                      : 'Save visit packet'}
-              </button>
-              <button
-                className={`review-packet-button ${comparisonReviewState}`}
-                disabled={!comparisonReviewReady || evidenceExportWorking}
-                title={
-                  !measurementComparisonDraft
-                    ? 'Build an explicit numeric preview first'
-                    : !visitPacketUsesLoopback
-                      ? 'Available through the unified local launcher'
-                      : compatibility.level === 'incompatible'
-                        ? 'The selected pair fails longitudinal safety gates'
-                        : !comparisonSourcesVisible
-                          ? 'Display the exact selected measurement source slices'
-                          : 'Bind both displayed images and the numeric pair into one local review ZIP'
-                }
-                onClick={() => void exportComparisonReview()}
-              >
-                {comparisonReviewState === 'working'
-                  ? 'Building review packet…'
-                  : comparisonReviewState === 'saved'
-                    ? 'Saved review packet'
-                    : comparisonReviewState === 'error'
-                      ? 'Review packet failed'
-                      : 'Save review packet'}
-              </button>
+              {consultPrepMode ? (
+                <button
+                  className={`visit-packet-button ${consultationPacketState}`}
+                  disabled={!consultationPacketReady || evidenceExportWorking}
+                  title={
+                    !baseline || !followup
+                      ? 'Choose Image A and Image B'
+                      : !visitPacketUsesLoopback
+                        ? 'Available through the unified local launcher'
+                        : !isConsultationSourcePair(baseline, followup)
+                          ? 'Choose one MR and one CT from distinct studies with one matching patient context'
+                          : 'Save source-verified reference views for a clinician discussion'
+                  }
+                  onClick={() => void exportConsultationPacket()}
+                >
+                  {consultationPacketState === 'working'
+                    ? 'Building consultation packet…'
+                    : consultationPacketState === 'saved'
+                      ? 'Saved consultation packet'
+                      : consultationPacketState === 'error'
+                        ? 'Consultation packet failed'
+                        : 'Save consultation packet'}
+                </button>
+              ) : (
+                <>
+                  <button
+                    className={`visit-packet-button ${visitPacketState}`}
+                    disabled={!visitPacketReady || evidenceExportWorking}
+                    title={
+                      !baseline || !followup
+                        ? 'Choose a baseline and follow-up series'
+                        : !visitPacketUsesLoopback
+                          ? 'Available through the unified local launcher'
+                          : compatibility.level === 'incompatible'
+                            ? 'The selected pair fails longitudinal safety gates'
+                            : 'Capture both displayed images and save one locally validated visit packet'
+                    }
+                    onClick={() => void exportVisitPacket()}
+                  >
+                    {visitPacketState === 'working'
+                      ? 'Building visit packet…'
+                      : visitPacketState === 'saved'
+                        ? 'Saved visit packet'
+                        : visitPacketState === 'error'
+                          ? 'Visit packet failed'
+                          : 'Save visit packet'}
+                  </button>
+                  <button
+                    className={`review-packet-button ${comparisonReviewState}`}
+                    disabled={!comparisonReviewReady || evidenceExportWorking}
+                    title={
+                      !measurementComparisonDraft
+                        ? 'Build an explicit numeric preview first'
+                        : !visitPacketUsesLoopback
+                          ? 'Available through the unified local launcher'
+                          : compatibility.level === 'incompatible'
+                            ? 'The selected pair fails longitudinal safety gates'
+                            : !comparisonSourcesVisible
+                              ? 'Display the exact selected measurement source slices'
+                              : 'Bind both displayed images and the numeric pair into one local review ZIP'
+                    }
+                    onClick={() => void exportComparisonReview()}
+                  >
+                    {comparisonReviewState === 'working'
+                      ? 'Building review packet…'
+                      : comparisonReviewState === 'saved'
+                        ? 'Saved review packet'
+                        : comparisonReviewState === 'error'
+                          ? 'Review packet failed'
+                          : 'Save review packet'}
+                  </button>
+                </>
+              )}
             </div>
             <p>
               Primary drag:{' '}
               {['length', 'bidirectional', 'roi'].includes(activeTool)
                 ? 'unreviewed measurement'
                 : activeTool}{' '}
-              · wheel: slices · {!baseline || !followup
-                ? 'choose a follow-up to link'
-                : linkStrategy === 'patient-position'
-                  ? 'shared-frame physical linking'
-                  : 'index linking is approximate'}<br />
+              · wheel: slices · {consultPrepMode
+                ? linkStrategy === 'patient-position' && baseline && followup
+                  ? 'optional patient-position linking; no registration implied'
+                  : 'reference views remain independent'
+                : !baseline || !followup
+                  ? 'choose a follow-up to link'
+                  : linkStrategy === 'patient-position'
+                    ? 'shared-frame physical linking'
+                    : 'index linking is approximate'}<br />
               {measurementMessage}<br />
-              {visitPacketMessage}<br />
-              {comparisonReviewMessage}<br />
+              {consultPrepMode ? (
+                <>{consultationPacketMessage}<br /></>
+              ) : (
+                <>{visitPacketMessage}<br />{comparisonReviewMessage}<br /></>
+              )}
               {agentStateMessage}
             </p>
           </section>
@@ -901,25 +1035,27 @@ export default function App({ active = true }: { active?: boolean } = {}) {
             <DicomViewport
               ref={baselineViewportRef}
               id="baseline"
-              label="Baseline"
+              label={consultPrepMode ? 'Image A' : 'Baseline'}
               series={baseline}
               index={baselineIndex}
               onIndexChange={(index) => updateIndex('baseline', index)}
               activeTool={activeTool}
               resetNonce={resetNonce}
               measurementPacket={measurementPacket}
+              consultationSelectionSlot={consultPrepMode ? 'view_a' : undefined}
               onOpenMpr={() => baseline && setMprSeriesId(baseline.id)}
             />
             <DicomViewport
               ref={followupViewportRef}
               id="followup"
-              label="Follow-up"
+              label={consultPrepMode ? 'Image B' : 'Follow-up'}
               series={followup}
               index={followupIndex}
               onIndexChange={(index) => updateIndex('followup', index)}
               activeTool={activeTool}
               resetNonce={resetNonce}
               measurementPacket={measurementPacket}
+              consultationSelectionSlot={consultPrepMode ? 'view_b' : undefined}
               onOpenMpr={() => followup && setMprSeriesId(followup.id)}
             />
           </section>
@@ -927,30 +1063,63 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           {mprSeries && <MprPanel series={mprSeries} onClose={() => setMprSeriesId(undefined)} />}
 
           <section className="review-grid">
-            <article className={`compatibility-card ${compatibility.level}`}>
-              <div className="card-heading">
-                <div>
-                  <span className="eyebrow">Pairing suggestion · never auto-approved</span>
-                  <h2>
-                    {compatibility.level === 'compatible'
-                      ? 'Plausibly comparable'
-                      : 'Review compatibility'}
-                  </h2>
+            {consultPrepMode ? (
+              <article className="compatibility-card review">
+                <div className="card-heading">
+                  <div>
+                    <span className="eyebrow">Neutral consultation context</span>
+                    <h2>Reference views only</h2>
+                  </div>
+                  <span className="unreviewed-badge">No temporal roles</span>
                 </div>
-                <div className="score">{compatibility.score}<small>/100</small></div>
-              </div>
-              <ul>
-                {compatibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}
-              </ul>
-            </article>
+                <ul>
+                  <li>
+                    {isConsultationSourcePair(baseline, followup)
+                      ? 'The views use one matching opaque patient context and distinct source studies.'
+                      : 'Choose one MR and one CT from distinct studies with one matching opaque patient context.'}
+                  </li>
+                  <li>
+                    {baseline && followup && baseline.modality !== followup.modality
+                      ? `${baseline.modality} and ${followup.modality} answer different questions; their intensity values are not directly comparable.`
+                      : 'No chronological, anatomical, or same-lesion relationship is asserted.'}
+                  </li>
+                  <li>
+                    Images are unregistered reference views. Source dates identify exams only and do
+                    not assign an earlier or later role.
+                  </li>
+                </ul>
+              </article>
+            ) : (
+              <article className={`compatibility-card ${compatibility.level}`}>
+                <div className="card-heading">
+                  <div>
+                    <span className="eyebrow">Pairing suggestion · never auto-approved</span>
+                    <h2>
+                      {compatibility.level === 'compatible'
+                        ? 'Plausibly comparable'
+                        : 'Review compatibility'}
+                    </h2>
+                  </div>
+                  <div className="score">{compatibility.score}<small>/100</small></div>
+                </div>
+                <ul>
+                  {compatibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                </ul>
+              </article>
+            )}
             <article className="locked-card">
               <div className="lock-icon" aria-hidden="true">×</div>
               <div>
-                <span className="eyebrow">Derived comparison locked</span>
-                <h2>Registration review required</h2>
+                <span className="eyebrow">
+                  {consultPrepMode ? 'Comparison unavailable' : 'Derived comparison locked'}
+                </span>
+                <h2>
+                  {consultPrepMode ? 'Use these views for discussion only' : 'Registration review required'}
+                </h2>
                 <p>
-                  Overlay, swipe, and subtraction remain disabled until a spatial transform is created
-                  and explicitly accepted for display. CT and MRI intensities are never subtracted.
+                  {consultPrepMode
+                    ? 'This workspace does not compute change, pair lesions, register images, or generate a treatment-response conclusion.'
+                    : 'Overlay, swipe, and subtraction remain disabled until a spatial transform is created and explicitly accepted for display. CT and MRI intensities are never subtracted.'}
                 </p>
               </div>
             </article>
@@ -960,6 +1129,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
             baseline={baseline}
             followup={followup}
             compatibilityLevel={compatibility.level}
+            allowLongitudinalPairing={!consultPrepMode}
             onDeleteMeasurement={removeMeasurementAnnotation}
             onComparisonDraftChange={setMeasurementComparisonDraft}
           />

@@ -392,6 +392,58 @@ export type Compatibility = {
   reasons: string[];
 };
 
+const isValidDicomDate = (value?: string): value is string => {
+  if (!value || !/^\d{8}$/.test(value)) return false;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(4, 6));
+  const day = Number(value.slice(6, 8));
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+};
+
+export const isLongitudinalSourcePair = (
+  left?: DicomSeries,
+  right?: DicomSeries,
+): boolean =>
+  Boolean(
+    left &&
+      right &&
+      left.id !== right.id &&
+      left.studyId !== right.studyId &&
+      left.patientContextId &&
+      left.patientContextId === right.patientContextId &&
+      ['MR', 'CT'].includes(left.modality) &&
+      left.modality === right.modality &&
+      isValidDicomDate(left.acquisitionDate) &&
+      isValidDicomDate(right.acquisitionDate) &&
+      left.acquisitionDate !== right.acquisitionDate,
+  );
+
+export const hasLongitudinalSourcePair = (series: DicomSeries[]): boolean =>
+  series.some((left, index) =>
+    series.slice(index + 1).some((right) => isLongitudinalSourcePair(left, right)),
+  );
+
+export const isConsultationSourcePair = (
+  left?: DicomSeries,
+  right?: DicomSeries,
+): boolean =>
+  Boolean(
+    left &&
+      right &&
+      left.id !== right.id &&
+      left.studyId !== right.studyId &&
+      left.patientContextId &&
+      left.patientContextId === right.patientContextId &&
+      ['MR', 'CT'].includes(left.modality) &&
+      ['MR', 'CT'].includes(right.modality) &&
+      left.modality !== right.modality,
+  );
+
 export const assessCompatibility = (left?: DicomSeries, right?: DicomSeries): Compatibility => {
   if (!left || !right) {
     return { level: 'review', score: 0, reasons: ['Select a series in each viewport.'] };

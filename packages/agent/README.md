@@ -16,6 +16,9 @@ scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
 scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
   --output scanview-visit-packet.zip
 scanview-agent validate-visit-packet scanview-visit-packet.zip
+scanview-agent assemble-consultation-packet '/path/to/copied/DICOM' \
+  view-a-key-image.zip view-b-key-image.zip --output scanview-consultation-packet.zip
+scanview-agent validate-consultation-packet scanview-consultation-packet.zip
 scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
@@ -51,10 +54,11 @@ schemas from the source checkout. `launch` serves an embedded or explicitly supp
 and the API from one loopback origin. It establishes an
 HttpOnly browser session, while agents continue to use the printed bearer token.
 The server has no source-write or delete endpoint. The unified viewer's derivative
-POSTs accept exact bounded transports: two derived key-image bundles for a visit
-packet, or those same bundles plus one normalized comparison for a comparison-review
-packet. Both recursively assemble and revalidate in memory, return `no-store`, and
-create no server-side patient file. Measurement validation returns only validity, schema,
+POSTs accept exact bounded transports: two timepoint key-image bundles for a visit
+packet, one neutral MRI plus one neutral CT key-image bundle for a consultation
+packet, or the timepoint bundles plus one normalized comparison for a comparison-
+review packet. All recursively assemble and revalidate in memory, return `no-store`,
+and create no server-side patient file. Measurement validation returns only validity, schema,
 review state, count, and errors; it does not echo source identifiers, coordinates,
 or values. Comparison requires explicit tracking IDs from distinct source series and
 trusted millimeter results. It emits source-linked numeric change, missing context,
@@ -67,6 +71,13 @@ archives with one matching opaque patient context, distinct dated studies/series
 explicit ordering, and one modality. It creates a static review page plus an
 integrity-linked agent manifest and does not perform lesion matching, registration,
 response scoring, or interpretation.
+Consultation-packet assembly is a separate neutral contract. It requires the local
+DICOM root so each selected view can be joined to a hashed live catalog and exact
+guarded source descriptor. Exactly one MR and one CT from distinct studies with one
+matching opaque patient context are accepted. The final packet uses `view_a`/`view_b`,
+not timepoint roles, binds source byte/SHA anchors into a static page, keeps computed
+and interpretation arrays empty, and asserts no chronology, alignment, lesion match,
+comparison, diagnosis, or response authority.
 Comparison-review assembly recursively validates both artifacts and requires the
 selected measurements, source instances, units, and numeric values to match the
 visible key-image evidence exactly. It creates an owner-only ZIP with both images, a

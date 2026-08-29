@@ -57,6 +57,36 @@ export type KeyImageEvidencePacket = {
   limitations: string[];
 };
 
+export type ConsultationSelectionSlot = 'view_a' | 'view_b';
+
+export const CONSULTATION_KEY_IMAGE_IMPLEMENTATION = {
+  name: 'ScanView consultation key-image normalizer',
+  version: '0.1.0',
+  renderer: 'Cornerstone3D 5.8.2',
+  source_key_image_schema: '2.0.0',
+} as const;
+
+export const CONSULTATION_KEY_IMAGE_LIMITATIONS = [
+  'This PNG is an unreviewed derived display capture for source-image discussion only; original DICOM remains authoritative.',
+  'The packet-local view slot does not establish chronology, lesion matching, diagnosis, or treatment response.',
+  'Rendered pixels and burned-in text may identify the patient; this evidence is sensitive and not deidentified.',
+] as const;
+
+export type ConsultationKeyImageEvidencePacket = {
+  schema_version: '1.0.0';
+  created_at: string;
+  review_status: 'unreviewed';
+  artifact_type: 'derived_display_consultation_key_image';
+  source: KeyImageEvidencePacket['source'];
+  display: Omit<KeyImageEvidencePacket['display'], 'viewport_role'> & {
+    selection_slot: ConsultationSelectionSlot;
+  };
+  image: KeyImageEvidencePacket['image'];
+  measurement_evidence: KeyImageEvidencePacket['measurement_evidence'];
+  implementation: typeof CONSULTATION_KEY_IMAGE_IMPLEMENTATION;
+  limitations: [...typeof CONSULTATION_KEY_IMAGE_LIMITATIONS];
+};
+
 type BuildPacketInput = {
   createdAt: string;
   source: KeyImageEvidencePacket['source'];
@@ -66,6 +96,10 @@ type BuildPacketInput = {
   pngBytes: Uint8Array;
   measurementPacket: MeasurementEvidencePacket;
   measurementBytes: Uint8Array;
+};
+
+type BuildConsultationPacketInput = Omit<BuildPacketInput, 'display'> & {
+  display: ConsultationKeyImageEvidencePacket['display'];
 };
 
 export type KeyImageArchiveInput = {
@@ -85,6 +119,19 @@ export type KeyImageArchiveInput = {
 export type KeyImageArchive = {
   filename: string;
   packet: KeyImageEvidencePacket;
+  bytes: Uint8Array;
+};
+
+export type ConsultationKeyImageArchiveInput = Omit<
+  KeyImageArchiveInput,
+  'viewportRole'
+> & {
+  selectionSlot: ConsultationSelectionSlot;
+};
+
+export type ConsultationKeyImageArchive = {
+  filename: string;
+  packet: ConsultationKeyImageEvidencePacket;
   bytes: Uint8Array;
 };
 
@@ -154,7 +201,9 @@ const composeKeyImage = async (
   sourceCanvas: HTMLCanvasElement,
   annotationSvg: SVGSVGElement | undefined,
   orientationLabels: PatientOrientationLabels | undefined,
-  viewportRole: 'baseline' | 'followup',
+  footer:
+    | { kind: 'longitudinal'; viewportRole: 'baseline' | 'followup' }
+    | { kind: 'consultation'; selectionSlot: ConsultationSelectionSlot },
   stackPosition: number,
   stackCount: number,
 ): Promise<HTMLCanvasElement> => {
@@ -210,14 +259,18 @@ const composeKeyImage = async (
   context.textBaseline = 'middle';
   context.font = `600 ${Math.max(10, 11 * scale)}px ui-monospace, monospace`;
   context.fillText(
-    'UNREVIEWED · DERIVED DISPLAY KEY IMAGE · NOT FOR DIAGNOSIS',
+    footer.kind === 'consultation'
+      ? 'UNREVIEWED · CONSULTATION REFERENCE VIEW · NOT FOR DIAGNOSIS'
+      : 'UNREVIEWED · DERIVED DISPLAY KEY IMAGE · NOT FOR DIAGNOSIS',
     output.width / 2,
     sourceCanvas.height + footerHeight * 0.34,
   );
   context.fillStyle = '#9bb0aa';
   context.font = `400 ${Math.max(9, 9 * scale)}px ui-monospace, monospace`;
   context.fillText(
-    `${viewportRole.toUpperCase()} · slice ${stackPosition} / ${stackCount} · original DICOM retained separately`,
+    footer.kind === 'consultation'
+      ? `${footer.selectionSlot === 'view_a' ? 'VIEW A' : 'VIEW B'} · slice ${stackPosition} / ${stackCount} · no chronology or response relationship`
+      : `${footer.viewportRole.toUpperCase()} · slice ${stackPosition} / ${stackCount} · original DICOM retained separately`,
     output.width / 2,
     sourceCanvas.height + footerHeight * 0.72,
   );
@@ -286,6 +339,40 @@ export const buildKeyImageEvidencePacket = async ({
   ],
 });
 
+export const buildConsultationKeyImageEvidencePacket = async ({
+  createdAt,
+  source,
+  display,
+  imageWidth,
+  imageHeight,
+  pngBytes,
+  measurementPacket,
+  measurementBytes,
+}: BuildConsultationPacketInput): Promise<ConsultationKeyImageEvidencePacket> => ({
+  schema_version: '1.0.0',
+  created_at: createdAt,
+  review_status: 'unreviewed',
+  artifact_type: 'derived_display_consultation_key_image',
+  source,
+  display,
+  image: {
+    filename: 'key-image.png',
+    mime_type: 'image/png',
+    width_px: imageWidth,
+    height_px: imageHeight,
+    sha256: await sha256Hex(pngBytes),
+  },
+  measurement_evidence: {
+    filename: 'measurements.json',
+    schema_version: '3.0.0',
+    measurement_count: measurementPacket.measurements.length,
+    tracking_ids: measurementPacket.measurements.map((measurement) => measurement.tracking_id),
+    sha256: await sha256Hex(measurementBytes),
+  },
+  implementation: CONSULTATION_KEY_IMAGE_IMPLEMENTATION,
+  limitations: [...CONSULTATION_KEY_IMAGE_LIMITATIONS],
+});
+
 export const createKeyImageArchive = async ({
   viewportCanvas,
   annotationSvg,
@@ -307,7 +394,7 @@ export const createKeyImageArchive = async ({
     viewportCanvas,
     annotationSvg,
     orientationLabels,
-    viewportRole,
+    { kind: 'longitudinal', viewportRole },
     display.stack_position,
     display.stack_count,
   );
@@ -340,6 +427,66 @@ export const createKeyImageArchive = async ({
   const timestamp = createdAt.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const filename = `scanview-key-image-${timestamp}-${viewportRole}.zip`;
   return { filename, packet, bytes: archive };
+};
+
+export const createConsultationKeyImageArchive = async ({
+  viewportCanvas,
+  annotationSvg,
+  orientationLabels,
+  selectionSlot,
+  source,
+  display,
+  measurementPacket,
+  createdAt = new Date().toISOString(),
+}: ConsultationKeyImageArchiveInput): Promise<ConsultationKeyImageArchive> => {
+  const scopedMeasurements = scopeMeasurementPacketToInstance(
+    measurementPacket,
+    source.series_id,
+    source.instance_id,
+    createdAt,
+  );
+  const measurementBytes = strToU8(`${JSON.stringify(scopedMeasurements, null, 2)}\n`);
+  const composite = await composeKeyImage(
+    viewportCanvas,
+    annotationSvg,
+    orientationLabels,
+    { kind: 'consultation', selectionSlot },
+    display.stack_position,
+    display.stack_count,
+  );
+  const pngBytes = await canvasToPngBytes(composite);
+  const packet = await buildConsultationKeyImageEvidencePacket({
+    createdAt,
+    source,
+    display: {
+      selection_slot: selectionSlot,
+      ...display,
+      viewport_width_px: viewportCanvas.width,
+      viewport_height_px: viewportCanvas.height,
+      patient_orientation: orientationLabels,
+    },
+    imageWidth: composite.width,
+    imageHeight: composite.height,
+    pngBytes,
+    measurementPacket: scopedMeasurements,
+    measurementBytes,
+  });
+  const packetBytes = strToU8(`${JSON.stringify(packet, null, 2)}\n`);
+  const archive = zipSync(
+    {
+      'key-image.json': [packetBytes, { level: 6 }],
+      'key-image.png': [pngBytes, { level: 6 }],
+      'measurements.json': [measurementBytes, { level: 6 }],
+    },
+    { level: 6 },
+  );
+  const timestamp = createdAt.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const slot = selectionSlot.replace('_', '-');
+  return {
+    filename: `scanview-consultation-key-image-${timestamp}-${slot}.zip`,
+    packet,
+    bytes: archive,
+  };
 };
 
 export const downloadArchive = (bytes: Uint8Array, filename: string): void => {

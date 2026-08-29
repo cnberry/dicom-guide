@@ -28,7 +28,8 @@ quality-system, and regulatory review.
   uses a SameSite, HttpOnly session cookie established by a one-time local redirect.
 - The derivative POSTs are not external DICOM-processing dependencies. They accept
   only exact bounded ZIP transports from the exact loopback origin. Visit input has
-  two derived key-image ZIPs; review input adds one normalized comparison JSON.
+  two derived timepoint key-image ZIPs; consultation input has one neutral MR and one
+  neutral CT key-image ZIP; review input adds one normalized comparison JSON.
   Compressed and uncompressed size limits, duplicate/extra/encrypted-member refusal,
   recursive in-memory validation, and `no-store` responses apply. No server-side
   patient file is created.
@@ -41,6 +42,9 @@ quality-system, and regulatory review.
   latest state in memory, returns `no-store`, and requires the bearer token to read
   it. Opt-out clears and revokes the ephemeral publisher; absent heartbeats expire
   within 30 seconds. Opaque IDs remain sensitive and potentially linkable.
+- Consult Prep disables viewer-state v1 publication because that contract uses
+  baseline/follow-up pane names. Neutral agent evidence travels only in the explicit
+  consultation packet, preventing internal UI roles from becoming a chronology claim.
 - Paths, patient names/IDs, DICOM headers, and response bodies are absent from logs.
 - Agent viewer links contain only opaque local catalog IDs in a bounded URL fragment.
   Fragments are not transmitted in HTTP, are removed immediately on receipt, and
@@ -116,6 +120,16 @@ quality-system, and regulatory review.
   only, not registered, and contains empty numeric
   result and interpretation arrays. Successful integrity validation is not clinical
   review or sign-off.
+- A clinician consultation packet also inherits the sensitivity of both rendered
+  views and may contain burned-in identifiers. V1 permits exactly one MRI plus one CT
+  from distinct studies with one matching opaque patient context. It assigns no
+  chronological role, lesion relationship, registration, alignment, intensity
+  equivalence, comparison, diagnosis, or response authority. The assembler verifies
+  exact live catalog positions and rehashes each guarded source DICOM; the resulting
+  byte/SHA anchors establish provenance, not patient identity or clinical meaning.
+  Its computed and interpretation arrays are fixed empty. A valid packet remains an
+  unreviewed question-preparation artifact that must be confirmed in the clinical
+  imaging system.
 - A comparison-review ZIP inherits the sensitivity of its visit packet plus any
   person-entered reviewer identity and note. It never calls an external API. Exact
   visible-measurement joins prevent an unrelated comparison from being presented
@@ -140,6 +154,8 @@ are established.
   differences can invalidate comparisons.
 - MRI intensity has no universal absolute scale across exams.
 - CT and MRI intensities must never be subtracted.
+- Adjacent MRI and CT exam dates do not make them a longitudinal pair. In Consult
+  Prep they remain independent reference views; dates label sources only.
 - Registration can create plausible but wrong alignment; tumor, edema, surgery, and
   ventricles may change anatomy. Every clinical-looking overlay needs case QA.
 - MPR reslices interpolate a single source volume. Missing or irregular geometry

@@ -47,6 +47,16 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - One-click local clinician visit-packet export from the two live unified-viewer
   panes, plus the equivalent CLI workflow. Both use the same Python validation gates
   and produce a static side-by-side review page with an agent-verifiable manifest.
+- Automatic **Consult preparation workspace** when the loaded catalog has no valid
+  dated same-modality longitudinal source pair. It uses neutral Image A/Image B roles,
+  disables approximate linking and lesion-pair arithmetic, and never presents MRI+CT
+  as a response pair. Live viewer-state v1 is disabled in this mode because it uses
+  timepoint field names; agents use the neutral consultation packet instead.
+- One-click and CLI local consultation packets for exactly one MRI plus one CT from
+  distinct studies with one matching opaque patient context. Exact catalog positions
+  and stable DICOM bytes are reverified and hashed; the static packet contains no
+  comparison, registration, computed result, interpretation, diagnosis, or response
+  conclusion.
 - Local agent comparison of explicitly selected, distinct-series measurements;
   a bounded working lesion label and numeric changes remain source-linked and never
   become a response verdict. The same workflow is available in the human viewer.
@@ -82,7 +92,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   and native DICOM remains authoritative.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
-- Versioned measurement, key-image, comparison, visit-packet, review-record,
+- Versioned measurement, key-image, consultation-key-image, consultation-packet,
+  comparison, visit-packet, review-record,
   navigation-intent, viewer-state, rigid-registration, and registration-QA JSON
   Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
@@ -154,6 +165,9 @@ python3 -m venv .venv
 .venv/bin/scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
   --output scanview-visit-packet.zip
 .venv/bin/scanview-agent validate-visit-packet scanview-visit-packet.zip
+.venv/bin/scanview-agent assemble-consultation-packet '/path/to/copied/DICOM' \
+  view-a-key-image.zip view-b-key-image.zip --output scanview-consultation-packet.zip
+.venv/bin/scanview-agent validate-consultation-packet scanview-consultation-packet.zip
 .venv/bin/scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
@@ -197,6 +211,7 @@ The server exposes:
 - `GET /v1/instances/{opaque_id}`
 - `POST /v1/viewer-state` (same-origin browser publication/clear; memory only)
 - `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
+- `POST /v1/consultation-packets` (same-origin browser session; in-memory derivative only)
 - `POST /v1/comparison-reviews` (same-origin browser session; in-memory derivative only)
 - `POST /v1/registration-reviews` (same-origin human browser; one in-memory JSON response)
 
@@ -207,7 +222,8 @@ that browser session; a bearer-authorized agent can read only the minimized QA s
 All POSTs additionally require the exact local origin and bounded route-specific
 content. The viewer-state route accepts at most 16 KiB of strict JSON and keeps only
 the latest 30-second publication in memory. Visit-packet
-input contains only the two derived key-image archives. Comparison-review input
+input contains only the two timepoint key-image archives. Consultation input contains
+only two neutral MR/CT key-image archives. Comparison-review input
 contains those same two archives plus the current normalized comparison JSON; the
 server builds the nested visit packet and review archive entirely in memory. Every
 route returns `no-store` and creates no server-side file. There is no source mutation
@@ -479,6 +495,41 @@ The shared point links only the three planes reconstructed from that one source 
 it does not align baseline and follow-up exams.
 Evidence export stays on the native source panes until derived-image provenance is
 implemented.
+
+## Prepare a neutral MRI/CT consultation packet
+
+The current copied media contains one MRI exam and one CT exam, not a valid
+longitudinal response pair. ScanView therefore opens **Consult preparation workspace**
+and labels the panes **Image A** and **Image B**. Choose one MRI series and one CT
+series from the distinct studies, place the desired native source image in each pane,
+and choose **Save consultation packet**. Approximate slice linking and cross-view
+lesion measurement pairing remain unavailable; dates label source exams only.
+
+The unified viewer creates neutral, source-scoped key images in memory and sends them
+only to the exact-origin loopback assembler. The endpoint rechecks the matching
+opaque patient context, distinct studies, modalities, exact catalog membership,
+instance order/count, metadata, source size, and SHA-256 read from the stable guarded
+DICOM descriptors. It returns the validated ZIP with `no-store` and writes no source,
+intermediate, or output patient file.
+
+The equivalent non-overwriting local CLI workflow is:
+
+```bash
+.venv/bin/scanview-agent assemble-consultation-packet \
+  '/Users/chris/Desktop/Mila Scan CD' \
+  view-a-key-image.zip view-b-key-image.zip \
+  --output scanview-consultation-packet.zip
+.venv/bin/scanview-agent validate-consultation-packet \
+  scanview-consultation-packet.zip
+```
+
+The nine-file packet includes both neutral key images and measurements, a strict
+agent JSON record, instructions, and a script-free printable `review.html`. Source
+byte counts and SHA-256 anchors are visible in the deterministic page. The packet
+permanently states that the views are unregistered, unaligned, unreviewed, not a
+comparison, not for diagnosis, and not a response conclusion; computed results and
+candidate interpretations are fixed empty. Treat it as sensitive question-preparation
+evidence and confirm both source images in the clinician's imaging system.
 
 ## Assemble a clinician visit packet
 
