@@ -441,12 +441,42 @@
    and repeated the exact validation and tamper refusal on macOS arm64 and Strawberry
    Ubuntu x86_64/Python 3.14.4. No Mila data left the local computer.
 
+## Completed in the twenty-fifth milestone
+
+1. Added a separate four-file manual ROI boundary-review archive without mutating or
+   upgrading the source v1 evidence. It embeds the exact evidence ZIP, one strict v1
+   review record, a script-free printable page, and local instructions.
+2. Added a qualified-role human form beside the live three-plane mask. It records
+   represented tissue, inclusion/exclusion criteria, acquisition suitability, eight
+   full-boundary checks, a decision, note, and fixed self-attestation; identity and
+   credentials remain explicitly unverified.
+3. Made `accepted_for_discussion` fail closed unless acquisition is suitable, every
+   checklist item is true, all canonical planes are recorded, required definitions are
+   present, and the source has one locally derived opaque patient context. Acceptance
+   authorizes only single-timepoint discussion and future pairing-review input.
+4. Added independent `validate-lesion-volume-review` validation. It enforces exact
+   archive shape, strict JSON/text, file hashes, static-page safety and record equality,
+   source-snapshot equality, then recursively reopens the DICOM SEG evidence and every
+   original DICOM source descriptor before reporting its privacy-minimized state.
+5. Kept longitudinal linkage, percentage change, response classification, diagnosis,
+   clinical conclusion, identity authentication, and medical-record sign-off false for
+   every review decision. Invalid or source-changed evidence withholds the volume and
+   sets evidence use to `none`.
+6. Found and fixed a production MPR race: editable labelmap derivation now waits for
+   the bounded source-volume load so every image-plane metadata record exists. A local
+   synthetic browser run rendered all three planes, painted 454 voxels / 0.908 mL,
+   exercised the complete accepted-review form, and produced no browser errors.
+7. The exact browser-produced archive passed the independent validator against all 12
+   synthetic source objects. Changing one source byte failed nonzero and removed all
+   volume and future-pairing authority. The v0.3.0 offline release embeds 22 schemas;
+   macOS and Strawberry Linux package gates are recorded in Status.
+
 ## Immediate
 
-1. Use manual ROI volume evidence only as a source-bound discussion draft. Have a
-   qualified clinician inspect the complete boundary on the original images and define
-   represented tissue/inclusion criteria; review is necessary but does not itself make
-   ScanView clinically validated or authorize diagnosis/response use.
+1. Use manual ROI volume evidence only as a source-bound discussion draft. A qualified
+   clinician can now record the separate complete-boundary review, represented tissue,
+   and inclusion/exclusion criteria; even accepted review does not make ScanView
+   clinically validated or authorize diagnosis/response use.
 2. Use consultation packets or boards only to prepare questions with Mila's
    clinicians; confirm every MRI/CT source view in the clinical imaging system and do
    not treat either artifact as a diagnosis or treatment-response analysis.
@@ -468,9 +498,11 @@
 
 ## Next milestone
 
-1. Design a separate qualified review record for one manual ROI boundary, represented
-   tissue/inclusion criteria, and acquisition suitability; do not change exported v1
-   drafts or call source/arithmetic validation clinical approval.
+1. Design a separate two-timepoint pairing review that accepts only two exact,
+   independently source-validated `accepted_for_discussion` boundary records; require
+   same modality, matching opaque patient context, distinct studies/series, strict
+   chronology, matched sequence/tissue definitions, and explicit same-target review
+   before permitting unreviewed volume-change arithmetic. Keep response categories absent.
 2. Import a future same-modality Mila follow-up and complete explicit series pairing,
    separately reviewed ROI boundaries, same-lesion confirmation, and qualified review
    before designing source-bound longitudinal volume-change evidence.

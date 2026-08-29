@@ -11,7 +11,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
-from typing import Any, Iterable
+from typing import Any, BinaryIO, Iterable
 
 from pydicom import dcmread
 from pydicom.errors import InvalidDicomError
@@ -42,6 +42,7 @@ SOURCE_TAGS = [
     "ImagePositionPatient",
     "NumberOfFrames",
 ]
+ArchiveSource = Path | BinaryIO
 
 
 @dataclass(frozen=True)
@@ -138,7 +139,7 @@ def _strict_json(data: bytes) -> Any:
     return json.loads(data, object_pairs_hook=pairs, parse_constant=invalid_constant)
 
 
-def _archive_members(archive: Path) -> tuple[dict[str, bytes], list[str]]:
+def _archive_members(archive: ArchiveSource) -> tuple[dict[str, bytes], list[str]]:
     errors: list[str] = []
     members: dict[str, bytes] = {}
     try:
@@ -864,7 +865,7 @@ def _validate_dicom_seg(
     return {"foreground": foreground, "volume_mm3": volume_mm3}, errors
 
 
-def lesion_volume_archive_summary(archive: Path, source_root: Path) -> dict[str, Any]:
+def lesion_volume_archive_summary(archive: ArchiveSource, source_root: Path) -> dict[str, Any]:
     members, errors = _archive_members(archive)
     evidence: dict[str, Any] = {}
     if "evidence.json" in members:

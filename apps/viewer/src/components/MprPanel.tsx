@@ -13,6 +13,15 @@ import {
 } from '../dicom';
 import { formatMprPatientPoint, type MprPatientPoint } from '../mpr';
 import type { ManualSegmentationStats } from '../lesionVolume';
+import {
+  LESION_VOLUME_REVIEW_ATTESTATION,
+  LESION_VOLUME_REVIEW_ROLES,
+  buildLesionVolumeReviewArchive,
+  type AcquisitionSuitability,
+  type LesionVolumeReviewChecklist,
+  type LesionVolumeReviewDecision,
+  type LesionVolumeReviewerRole,
+} from '../lesionVolumeReview';
 
 type Props = {
   series: DicomSeries;
@@ -24,6 +33,28 @@ const orientationLabels: Array<{ id: MprOrientation; label: string }> = [
   { id: 'coronal', label: 'Coronal' },
   { id: 'sagittal', label: 'Sagittal' },
 ];
+
+const reviewChecklistLabels: Array<[keyof LesionVolumeReviewChecklist, string]> = [
+  ['original_images_reviewed', 'Original source images reviewed'],
+  ['full_boundary_reviewed', 'Complete boundary reviewed, not selected slices only'],
+  ['all_three_planes_reviewed', 'Boundary traversed in axial, coronal, and sagittal planes'],
+  ['source_overlay_reviewed', 'Mask overlay checked against source pixels'],
+  ['motion_considered', 'Motion and other image artifacts considered'],
+  ['partial_volume_considered', 'Partial-volume effects considered'],
+  ['treatment_effect_considered', 'Treatment effect and non-tumor tissue considered'],
+  ['acquisition_protocol_considered', 'Sequence and acquisition protocol considered'],
+];
+
+const emptyReviewChecklist = (): LesionVolumeReviewChecklist => ({
+  original_images_reviewed: false,
+  full_boundary_reviewed: false,
+  all_three_planes_reviewed: false,
+  source_overlay_reviewed: false,
+  motion_considered: false,
+  partial_volume_considered: false,
+  treatment_effect_considered: false,
+  acquisition_protocol_considered: false,
+});
 
 export function MprPanel({ series, onClose }: Props) {
   const axialRef = useRef<HTMLDivElement>(null);
@@ -46,6 +77,22 @@ export function MprPanel({ series, onClose }: Props) {
   );
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState('');
+  const [reviewerName, setReviewerName] = useState('');
+  const [reviewerRole, setReviewerRole] = useState<LesionVolumeReviewerRole | ''>('');
+  const [reviewerOrganization, setReviewerOrganization] = useState('');
+  const [reviewDecision, setReviewDecision] =
+    useState<LesionVolumeReviewDecision>('revision_requested');
+  const [acquisitionSuitability, setAcquisitionSuitability] =
+    useState<AcquisitionSuitability>('uncertain');
+  const [representedTissue, setRepresentedTissue] = useState('');
+  const [inclusionCriteria, setInclusionCriteria] = useState('');
+  const [exclusionCriteria, setExclusionCriteria] = useState('');
+  const [reviewNote, setReviewNote] = useState('');
+  const [reviewChecklist, setReviewChecklist] =
+    useState<LesionVolumeReviewChecklist>(emptyReviewChecklist);
+  const [reviewAttested, setReviewAttested] = useState(false);
+  const [reviewExporting, setReviewExporting] = useState(false);
+  const [reviewExportStatus, setReviewExportStatus] = useState('');
   const eligibility = assessMprEligibility(series);
   const evidenceEligibility = assessLesionVolumeEligibility(series);
 
@@ -141,6 +188,52 @@ export function MprPanel({ series, onClose }: Props) {
       setExportStatus(error instanceof Error ? error.message : 'Unable to export local evidence.');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const downloadBoundaryReview = async () => {
+    const controller = controllerRef.current;
+    if (!controller || !reviewerRole) return;
+    setReviewExporting(true);
+    setReviewExportStatus('Re-reading exact source bytes and binding the current boundary review…');
+    try {
+      const evidenceArchive = await controller.exportSegmentationEvidence(
+        regionLabel,
+        targetDefinition,
+      );
+      const archive = await buildLesionVolumeReviewArchive({
+        evidenceArchive,
+        reviewerName,
+        reviewerRole,
+        reviewerOrganization,
+        decision: reviewDecision,
+        acquisitionSuitability,
+        representedTissue,
+        inclusionCriteria,
+        exclusionCriteria,
+        note: reviewNote,
+        checklist: reviewChecklist,
+        attested: reviewAttested,
+      });
+      const ownedBytes = new Uint8Array(archive.bytes.byteLength);
+      ownedBytes.set(archive.bytes);
+      const url = URL.createObjectURL(new Blob([ownedBytes.buffer], { type: 'application/zip' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = archive.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setReviewExportStatus(
+        archive.record.review_status === 'accepted_for_discussion'
+          ? 'Exported self-attested boundary review for discussion only · future pairing still requires a separate review'
+          : `Exported ${archive.record.review_status.replaceAll('_', ' ')} boundary record · no future pairing eligibility`,
+      );
+    } catch (error) {
+      setReviewExportStatus(
+        error instanceof Error ? error.message : 'Unable to export the local boundary review.',
+      );
+    } finally {
+      setReviewExporting(false);
     }
   };
 
@@ -281,6 +374,159 @@ export function MprPanel({ series, onClose }: Props) {
           </button>
         </div>
         {exportStatus && <output className="mpr-export-status">{exportStatus}</output>}
+        <details className="mpr-boundary-review">
+          <summary>Qualified boundary review record</summary>
+          <p>
+            This form is for a clinician or medical physicist who has reviewed the complete
+            painted boundary on the original local source images. Identity and credentials are
+            self-asserted, not authenticated. Acceptance means suitable for discussion only.
+          </p>
+          <div className="mpr-review-fields">
+            <label>
+              Reviewer name
+              <input
+                value={reviewerName}
+                maxLength={120}
+                onChange={(event) => setReviewerName(event.target.value)}
+              />
+            </label>
+            <label>
+              Qualified role
+              <select
+                value={reviewerRole}
+                onChange={(event) =>
+                  setReviewerRole(event.target.value as LesionVolumeReviewerRole | '')
+                }
+              >
+                <option value="">Select role</option>
+                {LESION_VOLUME_REVIEW_ROLES.map((role) => (
+                  <option value={role} key={role}>{role.replaceAll('_', ' ')}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Organization (optional)
+              <input
+                value={reviewerOrganization}
+                maxLength={160}
+                onChange={(event) => setReviewerOrganization(event.target.value)}
+              />
+            </label>
+            <label>
+              Boundary decision
+              <select
+                value={reviewDecision}
+                onChange={(event) =>
+                  setReviewDecision(event.target.value as LesionVolumeReviewDecision)
+                }
+              >
+                <option value="revision_requested">Revision requested</option>
+                <option value="rejected">Rejected</option>
+                <option value="accepted_for_discussion">Accepted for discussion</option>
+              </select>
+            </label>
+            <label>
+              Acquisition suitability
+              <select
+                value={acquisitionSuitability}
+                onChange={(event) =>
+                  setAcquisitionSuitability(event.target.value as AcquisitionSuitability)
+                }
+              >
+                <option value="uncertain">Uncertain</option>
+                <option value="not_suitable">Not suitable</option>
+                <option value="suitable">Suitable</option>
+              </select>
+            </label>
+            <label className="mpr-review-wide">
+              Represented tissue
+              <textarea
+                rows={2}
+                maxLength={500}
+                value={representedTissue}
+                onChange={(event) => setRepresentedTissue(event.target.value)}
+              />
+            </label>
+            <label className="mpr-review-wide">
+              Inclusion criteria
+              <textarea
+                rows={2}
+                maxLength={1000}
+                value={inclusionCriteria}
+                onChange={(event) => setInclusionCriteria(event.target.value)}
+              />
+            </label>
+            <label className="mpr-review-wide">
+              Exclusion criteria
+              <textarea
+                rows={2}
+                maxLength={1000}
+                value={exclusionCriteria}
+                onChange={(event) => setExclusionCriteria(event.target.value)}
+              />
+            </label>
+            <label className="mpr-review-wide">
+              Review note (optional)
+              <textarea
+                rows={2}
+                maxLength={2000}
+                value={reviewNote}
+                onChange={(event) => setReviewNote(event.target.value)}
+              />
+            </label>
+          </div>
+          <fieldset className="mpr-review-checklist">
+            <legend>Boundary review checklist</legend>
+            {reviewChecklistLabels.map(([key, label]) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={reviewChecklist[key]}
+                  onChange={(event) =>
+                    setReviewChecklist((current) => ({
+                      ...current,
+                      [key]: event.target.checked,
+                    }))
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+          <label className="mpr-review-attestation">
+            <input
+              type="checkbox"
+              checked={reviewAttested}
+              onChange={(event) => setReviewAttested(event.target.checked)}
+            />
+            {LESION_VOLUME_REVIEW_ATTESTATION}
+          </label>
+          <button
+            disabled={
+              Boolean(status) ||
+              !evidenceEligibility.eligible ||
+              reviewExporting ||
+              segmentationStats.foregroundVoxels === 0 ||
+              !regionLabel.trim() ||
+              !targetDefinition.trim() ||
+              !reviewerName.trim() ||
+              !reviewerRole ||
+              !representedTissue.trim() ||
+              !inclusionCriteria.trim() ||
+              !exclusionCriteria.trim() ||
+              (reviewDecision === 'accepted_for_discussion' &&
+                (acquisitionSuitability !== 'suitable' ||
+                  Object.values(reviewChecklist).some((value) => value !== true))) ||
+              !reviewAttested
+            }
+            onClick={() => void downloadBoundaryReview()}
+          >
+            {reviewExporting ? 'Building review archive…' : 'Export boundary review archive'}
+          </button>
+          {reviewExportStatus && (
+            <output className="mpr-export-status">{reviewExportStatus}</output>
+          )}
+        </details>
       </div>
       <div className="mpr-link-note">
         <strong>One patient-space point, three planes.</strong> With Linked crosshairs selected,
@@ -317,10 +563,11 @@ export function MprPanel({ series, onClose }: Props) {
       </div>
       <p className="mpr-footnote">
         These planes are reconstructed locally from one source series. A painted region is only a
-        reviewer-defined lesion ROI draft; it does not establish tumor identity, included tissue,
+        person-painted manual region draft; it does not establish tumor identity, included tissue,
         longitudinal alignment, or treatment response. Export rehashes exact source instances and
         includes an uncompressed DICOM SEG plus a strict local evidence sidecar for independent
-        validation.
+        validation. A separate self-attested boundary review can qualify that one timepoint for
+        discussion, but cannot link it to another scan or calculate treatment response.
       </p>
     </section>
   );

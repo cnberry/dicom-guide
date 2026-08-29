@@ -1569,7 +1569,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       )}
 
       <footer>
-        <span>ScanView 0.1 · local-first prototype</span>
+        <span>ScanView 0.3 · local-first prototype</span>
         <span>Every automated result is unreviewed until a qualified clinician accepts it.</span>
       </footer>
     </main>

@@ -251,12 +251,17 @@ explicit measurement pair --> comparison ----+                              |
                                                                              +--> amended comparison (new ZIP, unreviewed)
 ```
 
-The manual single-series evidence path is intentionally not longitudinal:
+The manual single-series evidence and boundary-review path is intentionally not
+longitudinal:
 
 ```text
 strict native source grid --> person-painted binary ROI --> DICOM SEG-format + sidecar
                                                                   |
                                                                   +--> exact-source local validation
+                                                                  |
+                                                                  +--> self-attested qualified boundary review
+                                                                          |
+                                                                          +--> nested evidence + printable record
 
 lesion identity / cross-exam link / percent change / response: unavailable
 ```

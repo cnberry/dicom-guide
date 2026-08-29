@@ -42,6 +42,12 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   JSON sidecar, and independently rehash the supplied sources and recompute voxel count
   and volume locally. Every result remains computed, unreviewed, with boundary
   uncertainty not quantified and all longitudinal/diagnostic conclusions locked.
+- Separate manual-boundary review archives: a self-attested qualified clinician or
+  medical physicist can record represented tissue, inclusion/exclusion criteria,
+  acquisition suitability, and a complete three-plane checklist while the mask is
+  visible. The four-file archive embeds the exact DICOM SEG evidence and a printable
+  page; independent validation reopens both the nested evidence and original source
+  bytes. Acceptance means discussion-only and still cannot link scans or compute response.
 - Window/level, pan, zoom, reset, DICOM patient-orientation labels, and manual
   length/bidirectional/elliptical ROI measurement tools.
 - Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
@@ -109,7 +115,7 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   clinical conclusion—and native DICOM remains authoritative.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
-- Versioned measurement, key-image, manual ROI volume, consultation-key-image,
+- Versioned measurement, key-image, manual ROI volume, manual ROI review, consultation-key-image,
   consultation-packet, comparison, visit-packet, review-record,
   navigation-intent, viewer-state, rigid-registration, and registration-QA JSON
   Schemas; committed tests use synthetic data only.
@@ -150,8 +156,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.2.0.zip
-cd scanview-offline-0.2.0
+unzip release/scanview-offline-0.3.0.zip
+cd scanview-offline-0.3.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -205,6 +211,8 @@ python3 -m venv .venv
 .venv/bin/scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
 .venv/bin/scanview-agent validate-lesion-volume \
   '/path/to/scanview-lesion-volume.zip' '/path/to/copied/DICOM'
+.venv/bin/scanview-agent validate-lesion-volume-review \
+  '/path/to/scanview-lesion-volume-review.zip' '/path/to/copied/DICOM'
 .venv/bin/scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
   --output scanview-visit-packet.zip
 .venv/bin/scanview-agent validate-visit-packet scanview-visit-packet.zip
@@ -575,6 +583,28 @@ DICOM SEG-format profile and native geometry, and recomputed the mask hash, voxe
 count, and arithmetic volume. V1 has no acceptance or clinical-approval mechanism and
 cannot link lesions, compute longitudinal change, classify response, diagnose, or
 produce a clinical conclusion. The ZIP remains sensitive and patient-identifiable.
+
+While the painted mask is visible in MPR, open **Qualified boundary review record**.
+This form is only for a clinician or medical physicist who has inspected the complete
+boundary on the original source images. It records the represented tissue,
+inclusion/exclusion criteria, acquisition suitability, all-three-plane and artifact
+checks, a decision, and the fixed self-attestation. **Accepted for discussion** requires
+every checklist item, suitable acquisition, and a locally derived opaque patient
+context. Reviewer identity and credentials remain self-asserted and unverified.
+
+The downloaded review archive contains exactly `review.json`, `evidence.zip`,
+`review.html`, and `README.txt`. Validate it independently against the exact source:
+
+```bash
+.venv/bin/scanview-agent validate-lesion-volume-review \
+  '/safe/local/scanview-lesion-volume-review.zip' '/safe/local/DICOM/root'
+```
+
+Validation reopens the nested DICOM SEG evidence, rehashes every source object, checks
+the review/page/file bindings, and withholds the volume if anything changed. Even an
+accepted record authorizes only one-timepoint boundary and volume discussion; lesion
+linkage, longitudinal change, percentage change, response classification, diagnosis,
+and clinical conclusions remain false and require a later separate pairing review.
 
 ## Prepare a neutral MRI/CT consultation packet
 

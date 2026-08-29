@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.2.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.3.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -24,9 +24,9 @@ DICOM catalog is built. The launched agent interface is the same loopback bearer
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-exact v0.2.0 artifact has passed no-index install, runtime, synthetic source-bound SEG
-validation, tamper refusal, and loopback launch on macOS arm64 and Strawberry Linux
-x86_64; signing/notarization remains pending.
+exact v0.3.0 artifact has passed no-index install, runtime, synthetic source-bound SEG
+and qualified boundary-review validation, source-tamper refusal, and loopback launch
+on macOS arm64 and Strawberry Linux x86_64; signing/notarization remains pending.
 
 ## Local artifacts
 
@@ -174,6 +174,36 @@ that two exports represent the same lesion. Invalid evidence returns no computed
 volume and `evidence_use: none`. The ZIP remains sensitive and patient-identifiable
 because its DICOM object and pixels retain clinical context even though the JSON uses
 opaque IDs.
+
+## Manual ROI boundary-review archives
+
+The browser can wrap the current freshly rehashed manual ROI evidence in a separate
+four-member archive: `review.json`, nested `evidence.zip`, script-free `review.html`,
+and `README.txt`. The human form records one self-attested qualified role, represented
+tissue, inclusion/exclusion criteria, acquisition suitability, a decision, and eight
+complete-boundary checks while the source overlay is visible. Reviewer identity and
+credentials are explicitly `self_asserted_unverified`.
+
+Agents validate the outer record, nested DICOM SEG evidence, and live source together:
+
+```bash
+scanview-agent validate-lesion-volume-review \
+  '/safe/local/scanview-lesion-volume-review.zip' '/safe/local/DICOM/root'
+```
+
+The independent validator enforces exact archive shape, strict JSON, bounded text,
+file hashes, a script/external-resource/event-handler-free static page, exact
+source-snapshot equality, and the complete nested source/geometry/mask/arithmetic
+validation. `accepted_for_discussion` additionally requires suitable acquisition,
+all checklist values, and a non-missing opaque patient context. It permits only
+`reviewed_volume_for_discussion` and eligibility as input to a future separate pairing
+review. It never grants longitudinal linkage, percentage change, response
+classification, diagnosis, clinical conclusion, identity authentication, or
+medical-record sign-off. Invalid evidence returns no volume and `evidence_use: none`.
+
+The privacy-minimized summary omits reviewer name, organization, tissue definition,
+criteria, notes, source IDs, and hashes. The full ZIP remains sensitive and
+patient-identifiable and must stay local.
 
 ## Clinician consultation-packet archives
 

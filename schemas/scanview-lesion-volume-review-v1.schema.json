@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-lesion-volume-review-v1.schema.json",
+  "title": "ScanView local manual ROI boundary review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "review_id",
+    "created_at",
+    "review_status",
+    "local_only",
+    "sensitive",
+    "deidentified",
+    "source_snapshot",
+    "reviewer",
+    "review",
+    "attestation",
+    "permitted_uses",
+    "files",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "artifact_type": { "const": "scanview.lesion-volume-review" },
+    "review_id": { "type": "string", "pattern": "^review_[0-9a-f-]{36}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "review_status": {
+      "enum": ["accepted_for_discussion", "revision_requested", "rejected"]
+    },
+    "local_only": { "const": true },
+    "sensitive": { "const": true },
+    "deidentified": { "const": false },
+    "source_snapshot": { "$ref": "#/$defs/sourceSnapshot" },
+    "reviewer": { "$ref": "#/$defs/reviewer" },
+    "review": { "$ref": "#/$defs/review" },
+    "attestation": {
+      "const": "I attest that I personally reviewed the complete manual boundary on the original local source images within the scope of my stated role. ScanView has not verified my identity or credentials."
+    },
+    "permitted_uses": { "$ref": "#/$defs/permittedUses" },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_archive", "review_page", "readme"],
+      "properties": {
+        "evidence_archive": {
+          "$ref": "#/$defs/file",
+          "properties": { "filename": { "const": "evidence.zip" } }
+        },
+        "review_page": {
+          "$ref": "#/$defs/file",
+          "properties": { "filename": { "const": "review.html" } }
+        },
+        "readme": {
+          "$ref": "#/$defs/file",
+          "properties": { "filename": { "const": "README.txt" } }
+        }
+      }
+    },
+    "limitations": {
+      "const": [
+        "Reviewer identity, role, and credentials are self-asserted and are not authenticated by ScanView.",
+        "Acceptance means suitable for discussion only; it is not clinical validation, medical-record sign-off, or regulatory clearance.",
+        "The underlying source evidence remains a manually painted native-grid draft and its boundary uncertainty is not quantified.",
+        "This review applies to one exact source series and does not establish that another scan contains the same lesion or tissue component.",
+        "Differences in acquisition, motion, partial-volume effects, enhancement, edema, necrosis, and treatment effect can alter a boundary or volume.",
+        "No longitudinal change, percentage change, treatment-response category, diagnosis, or clinical conclusion is authorized.",
+        "Original DICOM images and the clinical medical record remain authoritative."
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "review_status": { "const": "accepted_for_discussion" } } },
+      "then": {
+        "properties": {
+          "review": {
+            "properties": {
+              "decision": { "const": "accepted_for_discussion" },
+              "acquisition_suitability": { "const": "suitable" },
+              "checklist": {
+                "properties": {
+                  "original_images_reviewed": { "const": true },
+                  "full_boundary_reviewed": { "const": true },
+                  "all_three_planes_reviewed": { "const": true },
+                  "source_overlay_reviewed": { "const": true },
+                  "motion_considered": { "const": true },
+                  "partial_volume_considered": { "const": true },
+                  "treatment_effect_considered": { "const": true },
+                  "acquisition_protocol_considered": { "const": true }
+                }
+              }
+            }
+          },
+          "source_snapshot": {
+            "properties": {
+              "patient_context_id": { "$ref": "#/$defs/opaqueId" }
+            }
+          },
+          "permitted_uses": {
+            "properties": {
+              "reviewed_volume_for_discussion": { "const": true },
+              "eligible_for_future_pairing_review": { "const": true }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "review_status": { "const": "revision_requested" } } },
+      "then": {
+        "properties": {
+          "review": { "properties": { "decision": { "const": "revision_requested" } } },
+          "permitted_uses": {
+            "properties": {
+              "reviewed_volume_for_discussion": { "const": false },
+              "eligible_for_future_pairing_review": { "const": false }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "review_status": { "const": "rejected" } } },
+      "then": {
+        "properties": {
+          "review": { "properties": { "decision": { "const": "rejected" } } },
+          "permitted_uses": {
+            "properties": {
+              "reviewed_volume_for_discussion": { "const": false },
+              "eligible_for_future_pairing_review": { "const": false }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|(?:study|series|instance|frame|patient)_[0-9a-f]{20})$"
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "bytes", "sha256"],
+      "properties": {
+        "filename": { "type": "string" },
+        "bytes": { "type": "integer", "minimum": 1, "maximum": 167772160 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sourceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_artifact_id",
+        "patient_context_id",
+        "study_id",
+        "series_id",
+        "frame_of_reference_id",
+        "modality",
+        "source_set_sha256",
+        "mask_pixel_sha256",
+        "foreground_voxel_count",
+        "volume_mm3",
+        "volume_ml",
+        "boundary_uncertainty"
+      ],
+      "properties": {
+        "evidence_artifact_id": {
+          "type": "string",
+          "pattern": "^seg_[0-9a-f-]{36}$"
+        },
+        "patient_context_id": {
+          "oneOf": [{ "$ref": "#/$defs/opaqueId" }, { "type": "null" }]
+        },
+        "study_id": { "$ref": "#/$defs/opaqueId" },
+        "series_id": { "$ref": "#/$defs/opaqueId" },
+        "frame_of_reference_id": { "$ref": "#/$defs/opaqueId" },
+        "modality": { "enum": ["MR", "CT"] },
+        "source_set_sha256": { "$ref": "#/$defs/sha256" },
+        "mask_pixel_sha256": { "$ref": "#/$defs/sha256" },
+        "foreground_voxel_count": { "type": "integer", "minimum": 1 },
+        "volume_mm3": { "type": "number", "exclusiveMinimum": 0 },
+        "volume_ml": { "type": "number", "exclusiveMinimum": 0 },
+        "boundary_uncertainty": { "const": "not_quantified" }
+      }
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "role", "organization", "identity_verification"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": {
+          "enum": [
+            "radiologist",
+            "neuro_oncologist",
+            "neurosurgeon",
+            "medical_physicist",
+            "other_qualified_clinician"
+          ]
+        },
+        "organization": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 160 },
+            { "type": "null" }
+          ]
+        },
+        "identity_verification": { "const": "self_asserted_unverified" }
+      }
+    },
+    "checklist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_images_reviewed",
+        "full_boundary_reviewed",
+        "all_three_planes_reviewed",
+        "source_overlay_reviewed",
+        "motion_considered",
+        "partial_volume_considered",
+        "treatment_effect_considered",
+        "acquisition_protocol_considered"
+      ],
+      "properties": {
+        "original_images_reviewed": { "type": "boolean" },
+        "full_boundary_reviewed": { "type": "boolean" },
+        "all_three_planes_reviewed": { "type": "boolean" },
+        "source_overlay_reviewed": { "type": "boolean" },
+        "motion_considered": { "type": "boolean" },
+        "partial_volume_considered": { "type": "boolean" },
+        "treatment_effect_considered": { "type": "boolean" },
+        "acquisition_protocol_considered": { "type": "boolean" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "acquisition_suitability",
+        "planes_reviewed",
+        "represented_tissue",
+        "inclusion_criteria",
+        "exclusion_criteria",
+        "note",
+        "checklist"
+      ],
+      "properties": {
+        "decision": {
+          "enum": ["accepted_for_discussion", "revision_requested", "rejected"]
+        },
+        "acquisition_suitability": {
+          "enum": ["suitable", "uncertain", "not_suitable"]
+        },
+        "planes_reviewed": {
+          "const": ["axial", "coronal", "sagittal"]
+        },
+        "represented_tissue": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "inclusion_criteria": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "exclusion_criteria": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "note": { "type": "string", "maxLength": 2000 },
+        "checklist": { "$ref": "#/$defs/checklist" }
+      }
+    },
+    "permittedUses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_boundary_discussion",
+        "reviewed_volume_for_discussion",
+        "eligible_for_future_pairing_review",
+        "longitudinal_link",
+        "percent_change",
+        "response_classification",
+        "diagnosis",
+        "clinical_conclusion"
+      ],
+      "properties": {
+        "source_boundary_discussion": { "const": true },
+        "reviewed_volume_for_discussion": { "type": "boolean" },
+        "eligible_for_future_pairing_review": { "type": "boolean" },
+        "longitudinal_link": { "const": false },
+        "percent_change": { "const": false },
+        "response_classification": { "const": false },
+        "diagnosis": { "const": false },
+        "clinical_conclusion": { "const": false }
+      }
+    }
+  }
+}

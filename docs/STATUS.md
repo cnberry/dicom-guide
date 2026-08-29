@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 22:38 PDT
+Last updated: 2026-08-28 23:23 PDT
 
 ## Data transfer
 
@@ -56,6 +56,15 @@ Last updated: 2026-08-28 22:38 PDT
   rebuilds the dense binary mask, and recomputes its hash, voxel count, and volume.
   V1 has no acceptance path and locks lesion linkage, percent change, response,
   diagnosis, and clinical conclusions.
+- A separate one-timepoint qualified boundary-review workflow now wraps the exact
+  source-bound evidence. It records a self-attested reviewer role, acquisition
+  suitability, represented tissue, inclusion/exclusion criteria, all-three-plane
+  review, eight explicit boundary checks, a fixed attestation, and an accept/revise/
+  reject decision. Acceptance permits discussion of that one reviewed boundary and
+  future pairing-review eligibility only; identity remains unverified and every
+  longitudinal, response, diagnostic, and clinical-conclusion permission stays false.
+  The independent agent validator recursively revalidates the nested DICOM SEG and
+  live source bytes, checks the static review page and exact record, and fails closed.
 - Validated DICOM patient-orientation labels implemented; labels are withheld rather
   than guessed when Image Orientation (Patient) is missing or malformed.
 - Follow-up auto-selection removed; same-exam pairings are explicitly incompatible
@@ -204,7 +213,7 @@ Last updated: 2026-08-28 22:38 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 21 contracts without breaking lightweight
+  UI-embedded wheel together with all 22 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -221,7 +230,7 @@ Last updated: 2026-08-28 22:38 PDT
 
 ## Verification
 
-- Python agent tests: 171 passing, including cross-patient and legacy-context
+- Python agent tests: 181 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -249,9 +258,12 @@ Last updated: 2026-08-28 22:38 PDT
   modality/study/instance gates, Unicode label safety, aggregate decoded-size limits,
   source-anchor tamper detection, live-source mutation refusal, privacy-minimized
   failures, authenticated exact-origin transport, owner-only/non-overwriting CLI
-  output, and deterministic presentation; deterministic offline-bundle shape,
+  output, and deterministic presentation; source-bound manual ROI evidence plus
+  qualified boundary-review shape, recursive source/evidence binding, exact static
+  record presentation, permission locks, malformed-input fail-closed behavior, and
+  privacy-minimized summaries; deterministic offline-bundle shape,
   pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
-- Viewer tests: 104 passing, including patient-context and local-only enforcement,
+- Viewer tests: 108 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, exact neutral two-view consultation transport/sidecar,
@@ -269,37 +281,40 @@ Last updated: 2026-08-28 22:38 PDT
   sampling, mask-zero opacity/swipe leakage refusal and standalone matte behavior,
   chronology/source-separation refusal, encoded/predecode/decoded and render-dimension
   caps, ordinary-viewer state retention across mode switches, and rejected/malformed/
-  legacy reviewed-context refusal.
-- All 21 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
+  legacy reviewed-context refusal; source-bound manual ROI evidence generation and
+  the complete one-timepoint boundary-review decision/attestation workflow.
+- All 22 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
   schemas remain as historical contracts while generation and display require v2.
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- UI-embedded staged Python wheel build: passing; the 3,023,709-byte v0.2.0 wheel contains the
-  registration host/runner/review/display module, viewer-state server module, viewer
-  entry point, all 11 built UI/worker/codec files (10,150,713 bytes uncompressed), and
-  all 21 JSON Schemas (190,951 bytes). A fresh isolated installation resolved its
-  embedded UI and schemas without the source checkout; temporary release, installation,
-  and installer-log artifacts were moved to recoverable Trash.
-- Offline runtime bundle v0.2.0 build plus macOS arm64 and Strawberry Linux x86_64 smoke tests:
-  passing. The deterministic 5,417,751-byte ZIP contains nine fixed-timestamp members:
-  `bundle.json` plus eight hash-manifested payloads, including the 3,023,709-byte
+- UI-embedded staged Python wheel build: passing; the 3,037,143-byte v0.3.0 wheel contains
+  the registration host/runner/review/display module, viewer-state server module,
+  source-bound manual ROI and boundary-review validators, viewer entry point, all 11
+  built UI/worker/codec files (10,166,351 bytes uncompressed), and all 22 JSON Schemas
+  (201,661 bytes). A fresh isolated installation resolved its embedded UI and schemas
+  without the source checkout.
+- Offline runtime bundle v0.3.0 build plus macOS arm64 and Strawberry Linux x86_64 smoke tests:
+  passing. The deterministic 5,431,433-byte ZIP contains nine fixed-timestamp members:
+  `bundle.json` plus eight hash-manifested payloads, including the 3,037,143-byte
   embedded ScanView wheel and
   pinned 2,376,822-byte `pydicom` 3.0.2 wheel. A fresh extraction verified, installed
   with `PIP_NO_INDEX=1`, `--no-index`, and `--require-hashes`, then rechecked both
-  versions, the embedded UI, all 21 schemas, both consultation contracts, and explicit
+  versions, the embedded UI, all 22 schemas, the consultation and manual ROI review
+  contracts, and explicit
   `runtime_network_required: false` and
   `external_dicom_processing_api_required: false` runtime assertions. A second build
   from the same wheels was byte-identical. The retained ZIP SHA-256 is
-  `90fd9fe87d680a8d68d621252d82d3638fff22343a9c9670aa89e957160f598e`. Its packaged
-  launcher indexed three synthetic MR instances and served health/manifest over
+  `3f5677d9ab825f4e8aef61b5c50a9f73b224b2bf02556c8fc3b82d43ce0aaffb`; the embedded
+  wheel SHA-256 is
+  `6af1997f3c4939d07e1b1c2180af09147619befe6b6e8e73632a4f981f3fdd58`. Its packaged
+  launcher indexed the 12-instance synthetic MR series and served its manifest over
   loopback. The exact final ZIP also verified and installed offline on Strawberry
-  Ubuntu 26.04 x86_64, reported all 21 schemas with both network/API requirements
-  false, validated the real-adapter synthetic SEG, and failed closed after one source
-  byte was changed. The current patient-free v0.2.0 ZIP and historical v0.1.0 ZIP are
-  retained in the ignored local `release/` directory; synthetic sources, extracted
-  runtimes, staging directories, and the duplicate build were moved to recoverable
-  Trash.
+  Ubuntu 26.04 x86_64, reported all 22 schemas with both network/API requirements
+  false, recursively validated the browser-created 0.908 mL boundary-review archive,
+  and failed closed after one exact source byte was changed. No Mila data was sent.
+  The current patient-free v0.3.0 ZIP, prior v0.2.0 ZIP, and historical v0.1.0 ZIP are
+  retained in the ignored local `release/` directory.
 - Registration execution test: synthetic version-gated-engine success and failure
   paths pass, including required expected-launcher hash, strict engine report, parsed
   scalar NRRDs/fixed-space geometry, finite proper-rigid transform, owner-only modes,
@@ -367,6 +382,18 @@ Last updated: 2026-08-28 22:38 PDT
   4.0 mm³ / 0.004 mL, and kept every clinical/longitudinal lock false. The exact same
   artifact passed on macOS and Strawberry; changing one source byte failed nonzero,
   withheld all computed volume fields, and set evidence use to `none`. No Mila data
+  was transferred to Strawberry.
+- Manual-boundary-review production gate: a patient-free 12-slice, 64×64 synthetic
+  MR series loaded through the production launcher and rendered all three MPR planes.
+  Browser paint produced 454 native-grid voxels / 0.908 mL. The complete qualified
+  form kept export locked until reviewer fields, accepted/suitable decisions, all
+  eight checks, and the fixed attestation were present. Its exact four-member review
+  archive passed the independent source-recursive validator on macOS and Strawberry,
+  reported self-asserted/unverified identity and future pairing-review eligibility,
+  and kept longitudinal link, percent change, response classification, diagnosis,
+  and clinical conclusion false. Appending one byte to the exact synthetic source
+  caused nonzero refusal, withheld the volume, and set evidence use to `none` on both
+  platforms. The corrected MPR startup produced no browser errors, and no Mila data
   was transferred to Strawberry.
 - Synthetic browser smoke test: two canvases render; all five viewer controls activate.
 - Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
@@ -509,9 +536,10 @@ Last updated: 2026-08-28 22:38 PDT
   identity, or replaces review in the clinical imaging system.
 - Clinical-organization identity authentication, digital signatures, and medical-
   record sign-off remain. The current review chain is self-attested and explicitly
-  unverified. Elliptical ROI is a 2D manual draft; the new binary ROI is a source-bound
-  computed, unreviewed region draft, not reviewed tumor segmentation or clinical
-  volume measurement.
+  unverified. Elliptical ROI is a 2D manual draft. A source-bound binary ROI can now
+  receive a separate qualified, self-attested boundary-review record for one-timepoint
+  discussion, but this is still not authenticated clinical sign-off, a proven tumor
+  segmentation, or a longitudinal clinical volume comparison.
 - Bearer reads of live viewer state do not yet have an append-only access audit.
   Any future audit must exclude tokens, payloads, and patient content.
 - Signed/notarized macOS/Linux release packaging remains pending. The wheel, offline

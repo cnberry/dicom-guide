@@ -78,6 +78,15 @@ quality-system, and regulatory review.
   V1 stays `draft_unreviewed`, has no acceptance transition, and cannot unlock a
   longitudinal link, percentage change, response classification, diagnosis, or
   clinical conclusion.
+- A manual ROI boundary review is a separate sensitive four-file archive and never
+  mutates or upgrades the v1 source evidence. A qualified role is self-asserted, not
+  authenticated. Acceptance requires suitable acquisition, the complete eight-item
+  boundary checklist, all three planes, represented tissue and inclusion/exclusion
+  criteria, and an opaque patient context. It means acceptable for discussion only.
+  Independent validation reopens the nested evidence and live DICOM sources; any
+  source, mask, snapshot, file, HTML-safety, or permission change fails closed. Even
+  a valid accepted review cannot link timepoints, compute change, classify response,
+  diagnose, or create a clinical conclusion.
 - Rigid registration invokes a version-gated local Slicer 5.12.3/BRAINSFit process.
   The release computed revision is 34627; the enforced runtime repository revision is
   `9034c71`. The official macOS package and this host's installed copy were
@@ -221,6 +230,11 @@ are established.
   protocol, motion, treatment effect, and lesion identity remain unreviewed. Matching
   labels, codes, or Tracking IDs across exports do not establish the same lesion, and
   v1 deliberately performs no longitudinal arithmetic.
+- A separate accepted boundary review can document what a self-attested qualified
+  reviewer intended to include at one timepoint. It does not make the software or
+  volume clinically validated, authenticate that person, prove the represented tissue,
+  or establish the same target on a later scan. A future comparison must validate two
+  exact accepted records and perform a new explicit cross-timepoint linkage review.
 
 ## Agent output contract
 
@@ -247,6 +261,12 @@ state as “source/format/arithmetic checks passed; clinical review pending,” 
 finding, tumor measurement, clinical validation, or conclusion. Invalid evidence has
 `evidence_use: none` and no computed values. Validation is read-only and cannot approve
 or change the artifact.
+
+The lesion-volume-review validator may repeat the nested
+`computed_unreviewed_volume_ml` only after both layers and the live sources validate.
+Agents must pair it with `identity_verification: self_asserted_unverified` and
+`evidence_use: single_timepoint_reviewed_for_discussion_only`. They must not shorten
+that state to “clinically reviewed,” “approved tumor volume,” or “response evidence.”
 
 The browser pairing editor uses the same constraints and requires strictly ordered
 acquisition dates, a human-selected measurement at each timepoint, and a bounded

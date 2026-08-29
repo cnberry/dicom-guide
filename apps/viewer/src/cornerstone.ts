@@ -578,7 +578,7 @@ const buildDicomSeg = async ({
   dataset.SeriesDescription = 'ScanView unreviewed manual lesion ROI';
   dataset.Manufacturer = 'ScanView local';
   dataset.ManufacturerModelName = 'ScanView';
-  dataset.SoftwareVersions = '0.2.0';
+  dataset.SoftwareVersions = '0.3.0';
   const segmentItem = Array.isArray(dataset.SegmentSequence)
     ? dataset.SegmentSequence[0]
     : dataset.SegmentSequence;
@@ -658,6 +658,8 @@ export const createMprViewports = async (
     await setVolumesForViewports(engine, [{ volumeId }], viewportIds);
 
     if (evidenceEligibility.eligible) {
+      await sourceLoaded;
+      if (sourceLoadError) throw sourceLoadError;
       if (volume.numVoxels > MAX_MANUAL_LABELMAP_VOXELS) {
         throw new Error('This source exceeds the 64 Mi-voxel manual segmentation safety bound.');
       }

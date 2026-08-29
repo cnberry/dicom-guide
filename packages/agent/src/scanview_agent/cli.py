@@ -24,6 +24,7 @@ from .consultation_packets import (
 )
 from .key_images import key_image_archive_summary
 from .lesion_volumes import lesion_volume_archive_summary
+from .lesion_volume_reviews import lesion_volume_review_summary
 from .measurements import (
     build_measurement_comparison,
     measurement_comparison_summary,
@@ -156,6 +157,20 @@ def parser() -> argparse.ArgumentParser:
         "source_root",
         type=Path,
         help="Local DICOM root used to rehash and verify every referenced source instance",
+    )
+
+    validate_lesion_volume_review = commands.add_parser(
+        "validate-lesion-volume-review",
+        help=(
+            "Validate a self-attested manual ROI boundary review, its nested "
+            "DICOM SEG evidence, and every exact native source instance"
+        ),
+    )
+    validate_lesion_volume_review.add_argument("archive", type=Path)
+    validate_lesion_volume_review.add_argument(
+        "source_root",
+        type=Path,
+        help="Local DICOM root used to rehash the nested evidence source set",
     )
 
     assemble_visit_packet = commands.add_parser(
@@ -493,6 +508,11 @@ def main() -> None:
             raise SystemExit(1)
     elif args.command == "validate-lesion-volume":
         summary = lesion_volume_archive_summary(args.archive, args.source_root)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-lesion-volume-review":
+        summary = lesion_volume_review_summary(args.archive, args.source_root)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

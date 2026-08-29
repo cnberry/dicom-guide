@@ -34,6 +34,11 @@ result into a medical conclusion.
   native MR/CT series, with a DICOM SEG-format export, versioned sidecar, exact source
   rehashing, independent mask/volume recomputation, and no clinical-approval or
   longitudinal authority.
+- Separate source-revalidated manual ROI boundary-review archives with a qualified-role
+  human form, represented-tissue and inclusion/exclusion definitions, suitable-
+  acquisition and complete three-plane gates, a script-free printable page, and an
+  independent privacy-minimized validator. Acceptance is self-attested and for
+  discussion only; it cannot establish a cross-timepoint link or response.
 - Physically linked, visible LPS crosshairs within one MPR volume, with canonical
   planes protected from oblique rotation and slab-thickness manipulation.
 - Source-linked local key-image archives with display provenance, permanent review
@@ -109,7 +114,8 @@ result into a medical conclusion.
 - Manual single-series binary DICOM SEG-format export plus a source-bound sidecar is
   implemented; SEG import, DICOM SR, a protected derivative store, and external
   conformance testing remain future work.
-- Review acceptance, lesion identity/linkage, and manual/semi-automatic
+- Single-timepoint manual-boundary review is implemented. Cross-timepoint lesion
+  identity/linkage, longitudinal volume-change evidence, and manual/semi-automatic
   component-specific tumor segmentation remain future work.
 
 ### Research only
@@ -175,3 +181,8 @@ result into a medical conclusion.
     validation recomputes only marked-voxel geometry arithmetic, leaves boundary
     uncertainty unquantified, keeps the artifact unreviewed, and cannot establish
     tumor identity, longitudinal linkage, response, diagnosis, or clinical approval.
+19. **Manual boundary-review separation:** a review record embeds and revalidates the
+    exact source-bound evidence, labels reviewer identity/credentials self-asserted and
+    unverified, requires complete three-plane/acquisition/tissue-definition gates for
+    discussion-only acceptance, and cannot authorize lesion linkage, change arithmetic,
+    response classification, diagnosis, or a clinical conclusion.

@@ -19,6 +19,11 @@ from pydicom.uid import (
 )
 
 from scanview_agent.lesion_volumes import lesion_volume_archive_summary
+from scanview_agent.lesion_volume_reviews import (
+    ATTESTATION as REVIEW_ATTESTATION,
+    LIMITATIONS as REVIEW_LIMITATIONS,
+    lesion_volume_review_summary,
+)
 
 
 def _sha256(value: bytes) -> str:
@@ -259,6 +264,7 @@ def _build_bundle(tmp_path: Path, positions: list[float] | None = None) -> tuple
         "sensitive": True,
         "deidentified": False,
         "source": {
+            "patient_context_id": "0000000000000004",
             "study_id": "0000000000000001",
             "series_id": "0000000000000002",
             "frame_of_reference_id": "0000000000000003",
@@ -555,4 +561,323 @@ def test_rejects_extra_archive_member(tmp_path: Path) -> None:
     assert not summary["valid"]
     assert summary["errors"] == [
         "archive must contain exactly evidence.json, segmentation.dcm, and README.txt"
+    ]
+
+
+def _build_review_bundle(
+    tmp_path: Path,
+    *,
+    decision: str = "accepted_for_discussion",
+) -> tuple[Path, Path, dict, dict]:
+    evidence_archive, source_root, evidence = _build_bundle(tmp_path)
+    evidence_bytes = evidence_archive.read_bytes()
+    accepted = decision == "accepted_for_discussion"
+    visible_decision = decision.replace("_", " ")
+    review_page = (
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<title>Manual ROI review</title></head><body>"
+        "<h1>SELF-ATTESTED REVIEW FOR DISCUSSION ONLY · IDENTITY NOT VERIFIED · "
+        "NOT A DIAGNOSIS · NO LONGITUDINAL OR RESPONSE CONCLUSION</h1>"
+        f"<p>{visible_decision}</p><p>Synthetic Reviewer</p><p>neuro oncologist</p>"
+        "<p>Synthetic enhancing-tissue discussion region.</p>"
+        "<p>Include contiguous synthetic signal.</p>"
+        "<p>Exclude synthetic vessels, edema, and cavity.</p></body></html>\n"
+    ).encode()
+    readme = b"Sensitive local manual ROI boundary review.\n"
+    checklist = {
+        "original_images_reviewed": accepted,
+        "full_boundary_reviewed": accepted,
+        "all_three_planes_reviewed": accepted,
+        "source_overlay_reviewed": accepted,
+        "motion_considered": accepted,
+        "partial_volume_considered": accepted,
+        "treatment_effect_considered": accepted,
+        "acquisition_protocol_considered": accepted,
+    }
+    record = {
+        "schema_version": "1.0.0",
+        "artifact_type": "scanview.lesion-volume-review",
+        "review_id": "review_12345678-1234-4abc-8def-1234567890ab",
+        "created_at": "2026-08-28T13:00:00.000Z",
+        "review_status": decision,
+        "local_only": True,
+        "sensitive": True,
+        "deidentified": False,
+        "source_snapshot": {
+            "evidence_artifact_id": evidence["artifact_id"],
+            "patient_context_id": evidence["source"].get("patient_context_id"),
+            "study_id": evidence["source"]["study_id"],
+            "series_id": evidence["source"]["series_id"],
+            "frame_of_reference_id": evidence["source"]["frame_of_reference_id"],
+            "modality": evidence["source"]["modality"],
+            "source_set_sha256": evidence["source"]["source_set_sha256"],
+            "mask_pixel_sha256": evidence["measurement"]["mask_pixel_sha256"],
+            "foreground_voxel_count": evidence["measurement"]["foreground_voxel_count"],
+            "volume_mm3": evidence["measurement"]["volume_mm3"],
+            "volume_ml": evidence["measurement"]["volume_ml"],
+            "boundary_uncertainty": evidence["measurement"]["boundary_uncertainty"],
+        },
+        "reviewer": {
+            "name": "Synthetic Reviewer",
+            "role": "neuro_oncologist",
+            "organization": "Synthetic clinic",
+            "identity_verification": "self_asserted_unverified",
+        },
+        "review": {
+            "decision": decision,
+            "acquisition_suitability": "suitable" if accepted else "uncertain",
+            "planes_reviewed": ["axial", "coronal", "sagittal"],
+            "represented_tissue": "Synthetic enhancing-tissue discussion region.",
+            "inclusion_criteria": "Include contiguous synthetic signal.",
+            "exclusion_criteria": "Exclude synthetic vessels, edema, and cavity.",
+            "note": "Synthetic review only.",
+            "checklist": checklist,
+        },
+        "attestation": REVIEW_ATTESTATION,
+        "permitted_uses": {
+            "source_boundary_discussion": True,
+            "reviewed_volume_for_discussion": accepted,
+            "eligible_for_future_pairing_review": accepted,
+            "longitudinal_link": False,
+            "percent_change": False,
+            "response_classification": False,
+            "diagnosis": False,
+            "clinical_conclusion": False,
+        },
+        "files": {
+            "evidence_archive": {
+                "filename": "evidence.zip",
+                "bytes": len(evidence_bytes),
+                "sha256": _sha256(evidence_bytes),
+            },
+            "review_page": {
+                "filename": "review.html",
+                "bytes": len(review_page),
+                "sha256": _sha256(review_page),
+            },
+            "readme": {
+                "filename": "README.txt",
+                "bytes": len(readme),
+                "sha256": _sha256(readme),
+            },
+        },
+        "limitations": REVIEW_LIMITATIONS,
+    }
+    review_archive = tmp_path / "lesion-volume-review.zip"
+    with zipfile.ZipFile(review_archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr("review.json", json.dumps(record, indent=2) + "\n")
+        bundle.writestr("evidence.zip", evidence_bytes)
+        bundle.writestr("review.html", review_page)
+        bundle.writestr("README.txt", readme)
+    return review_archive, source_root, record, evidence
+
+
+def _replace_review_member(
+    archive: Path,
+    destination: Path,
+    *,
+    record: dict | None = None,
+    replacements: dict[str, bytes] | None = None,
+) -> Path:
+    replacements = replacements or {}
+    with zipfile.ZipFile(archive) as original, zipfile.ZipFile(
+        destination, "w", compression=zipfile.ZIP_DEFLATED
+    ) as changed:
+        for name in ("review.json", "evidence.zip", "review.html", "README.txt"):
+            if name == "review.json" and record is not None:
+                changed.writestr(name, json.dumps(record, indent=2) + "\n")
+            else:
+                changed.writestr(name, replacements.get(name, original.read(name)))
+    return destination
+
+
+def test_validates_self_attested_boundary_review_and_exact_nested_source(
+    tmp_path: Path,
+) -> None:
+    archive, source_root, record, _ = _build_review_bundle(tmp_path)
+    schema = json.loads(
+        (
+            Path(__file__).parents[3]
+            / "schemas"
+            / "scanview-lesion-volume-review-v1.schema.json"
+        ).read_text()
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(record)
+    summary = lesion_volume_review_summary(archive, source_root)
+
+    assert summary == {
+        "valid": True,
+        "errors": [],
+        "schema_version": "1.0.0",
+        "artifact_type": "scanview.lesion-volume-review",
+        "review_status": "accepted_for_discussion",
+        "identity_verification": "self_asserted_unverified",
+        "source_validated": True,
+        "boundary_review_self_attested": True,
+        "reviewed_volume_for_discussion": True,
+        "eligible_for_future_pairing_review": True,
+        "computed_unreviewed_volume_ml": pytest.approx(0.00225),
+        "longitudinal_link": False,
+        "percent_change": False,
+        "response_classification": False,
+        "diagnosis": False,
+        "clinical_conclusion": False,
+        "evidence_use": "single_timepoint_reviewed_for_discussion_only",
+    }
+    serialized = json.dumps(summary)
+    assert "Synthetic Reviewer" not in serialized
+    assert "Synthetic clinic" not in serialized
+    assert str(source_root) not in serialized
+    assert record["source_snapshot"]["study_id"] not in serialized
+
+
+def test_validates_revision_record_without_pairing_eligibility(tmp_path: Path) -> None:
+    archive, source_root, _, _ = _build_review_bundle(
+        tmp_path, decision="revision_requested"
+    )
+    summary = lesion_volume_review_summary(archive, source_root)
+    assert summary["valid"]
+    assert summary["review_status"] == "revision_requested"
+    assert not summary["reviewed_volume_for_discussion"]
+    assert not summary["eligible_for_future_pairing_review"]
+    assert summary["evidence_use"] == "single_timepoint_revision_or_rejection_only"
+
+
+def test_rejects_review_when_exact_nested_source_changes(tmp_path: Path) -> None:
+    archive, source_root, _, _ = _build_review_bundle(tmp_path)
+    with (source_root / "source-0.dcm").open("ab") as stream:
+        stream.write(b"changed")
+    summary = lesion_volume_review_summary(archive, source_root)
+    assert not summary["valid"]
+    assert "nested lesion-volume evidence is invalid against the exact source" in summary["errors"]
+    assert summary["computed_unreviewed_volume_ml"] is None
+    assert summary["evidence_use"] == "none"
+
+
+def test_rejects_snapshot_or_permission_escalation(tmp_path: Path) -> None:
+    archive, source_root, record, _ = _build_review_bundle(tmp_path)
+    record["source_snapshot"]["volume_ml"] = 99
+    record["permitted_uses"]["percent_change"] = True
+    changed = _replace_review_member(
+        archive, tmp_path / "escalated-review.zip", record=record
+    )
+    summary = lesion_volume_review_summary(changed, source_root)
+    assert not summary["valid"]
+    assert "source_snapshot does not match the exact nested evidence" in summary["errors"]
+    assert "permitted_uses do not match the review decision or safety locks" in summary["errors"]
+
+
+def test_rejects_accepted_review_with_incomplete_boundary_checklist(tmp_path: Path) -> None:
+    archive, source_root, record, _ = _build_review_bundle(tmp_path)
+    record["review"]["checklist"]["full_boundary_reviewed"] = False
+    changed = _replace_review_member(
+        archive, tmp_path / "incomplete-review.zip", record=record
+    )
+    summary = lesion_volume_review_summary(changed, source_root)
+    assert not summary["valid"]
+    assert "acceptance for discussion requires every checklist item" in summary["errors"]
+
+
+def test_rejects_accepted_review_without_opaque_patient_context(tmp_path: Path) -> None:
+    archive, source_root, record, _ = _build_review_bundle(tmp_path)
+    record["source_snapshot"]["patient_context_id"] = None
+    changed = _replace_review_member(
+        archive, tmp_path / "missing-patient-context-review.zip", record=record
+    )
+    summary = lesion_volume_review_summary(changed, source_root)
+    assert not summary["valid"]
+    assert (
+        "acceptance for future pairing review requires an opaque patient context"
+        in summary["errors"]
+    )
+
+
+def test_rejects_external_review_page_even_when_hash_is_updated(tmp_path: Path) -> None:
+    archive, source_root, record, _ = _build_review_bundle(tmp_path)
+    page = b'<!doctype html><html><body><a href="https://example.test">external</a></body></html>'
+    record["files"]["review_page"] = {
+        "filename": "review.html",
+        "bytes": len(page),
+        "sha256": _sha256(page),
+    }
+    changed = _replace_review_member(
+        archive,
+        tmp_path / "external-page-review.zip",
+        record=record,
+        replacements={"review.html": page},
+    )
+    summary = lesion_volume_review_summary(changed, source_root)
+    assert not summary["valid"]
+    assert "review.html must be a script-free self-contained local page" in summary["errors"]
+
+
+def test_malformed_reviewer_fails_closed_without_an_exception(tmp_path: Path) -> None:
+    archive, source_root, record, _ = _build_review_bundle(tmp_path)
+    record["reviewer"] = []
+    changed = _replace_review_member(
+        archive, tmp_path / "malformed-reviewer.zip", record=record
+    )
+
+    summary = lesion_volume_review_summary(changed, source_root)
+
+    assert not summary["valid"]
+    assert "reviewer is invalid" in summary["errors"]
+    assert "review.html does not present the exact review record" in summary["errors"]
+    assert summary["evidence_use"] == "none"
+
+
+def test_malformed_nested_evidence_fails_closed_without_an_exception(
+    tmp_path: Path,
+) -> None:
+    archive, source_root, record, _ = _build_review_bundle(tmp_path)
+    with zipfile.ZipFile(archive) as outer:
+        original_evidence = outer.read("evidence.zip")
+    malformed_stream = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(original_evidence)) as original, zipfile.ZipFile(
+        malformed_stream, "w", compression=zipfile.ZIP_DEFLATED
+    ) as malformed:
+        malformed.writestr("evidence.json", "{}\n")
+        malformed.writestr("segmentation.dcm", original.read("segmentation.dcm"))
+        malformed.writestr("README.txt", original.read("README.txt"))
+    malformed_evidence = malformed_stream.getvalue()
+    record["files"]["evidence_archive"] = {
+        "filename": "evidence.zip",
+        "bytes": len(malformed_evidence),
+        "sha256": _sha256(malformed_evidence),
+    }
+    changed = _replace_review_member(
+        archive,
+        tmp_path / "malformed-evidence.zip",
+        record=record,
+        replacements={"evidence.zip": malformed_evidence},
+    )
+
+    summary = lesion_volume_review_summary(changed, source_root)
+
+    assert not summary["valid"]
+    assert "nested lesion-volume evidence is invalid against the exact source" in summary["errors"]
+    assert summary["computed_unreviewed_volume_ml"] is None
+    assert summary["evidence_use"] == "none"
+
+
+def test_rejects_duplicate_review_fields_and_extra_archive_member(tmp_path: Path) -> None:
+    archive, source_root, _, _ = _build_review_bundle(tmp_path)
+    with zipfile.ZipFile(archive) as original:
+        duplicate_json = b'{"schema_version":"1.0.0",' + original.read("review.json")[1:]
+    duplicate = _replace_review_member(
+        archive,
+        tmp_path / "duplicate-review.zip",
+        replacements={"review.json": duplicate_json},
+    )
+    summary = lesion_volume_review_summary(duplicate, source_root)
+    assert not summary["valid"]
+    assert "review.json is not strict valid UTF-8 JSON" in summary["errors"]
+
+    with zipfile.ZipFile(archive, "a") as changed:
+        changed.writestr("unexpected.txt", "no")
+    summary = lesion_volume_review_summary(archive, source_root)
+    assert not summary["valid"]
+    assert summary["errors"] == [
+        "review archive must contain exactly review.json, evidence.zip, review.html, and README.txt"
     ]

@@ -15,6 +15,8 @@ scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
 scanview-agent validate-lesion-volume \
   '/path/to/scanview-lesion-volume.zip' '/path/to/copied/DICOM'
+scanview-agent validate-lesion-volume-review \
+  '/path/to/scanview-lesion-volume-review.zip' '/path/to/copied/DICOM'
 scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
   --output scanview-visit-packet.zip
 scanview-agent validate-visit-packet scanview-visit-packet.zip
@@ -65,8 +67,10 @@ For offline transfer and installation on macOS or Linux, run
 wheel, pinned pure-Python `pydicom` 3.0.2, hash-locked local requirements, and
 verifier/install/launch scripts. The installer invokes pip only with `--no-index` and
 `--require-hashes`, and every launch checks the bundle and installed runtime before
-indexing DICOM. Python 3.11+ remains a prerequisite; publisher signing and Linux
-execution verification remain separate gates.
+indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.3.0 bundle has passed
+offline install, runtime checks, source-bound boundary-review validation, tamper
+refusal, and loopback launch on both macOS arm64 and Strawberry Linux x86_64;
+publisher signing remains pending.
 The server has no source-write or delete endpoint. The unified viewer's derivative
 POSTs accept exact bounded transports: two timepoint key-image bundles for a visit
 packet, one neutral MRI plus one neutral CT key-image bundle for a consultation
@@ -119,6 +123,16 @@ only explicitly named `computed_unreviewed_*` values. `source_validated_pending_
 means byte/format/geometry/arithmetic checks passed; it is not boundary review, DICOM
 conformance certification, clinical validation, diagnosis, or treatment-response
 authority. The command is read-only and cannot approve or unlock an artifact.
+
+`validate-lesion-volume-review` validates a separate four-member one-timepoint
+boundary-review archive against the exact local DICOM root. It recursively revalidates
+the nested source-bound evidence and DICOM SEG, verifies the script-free review page
+and exact visible record, and enforces the fixed review decision and permission locks.
+An accepted record can permit discussion of that reviewed boundary and eligibility
+for a future pairing review only. Reviewer identity is always self-asserted and
+unverified; longitudinal linkage, percent change, response classification, diagnosis,
+and clinical conclusion remain false. Invalid or changed source evidence withholds
+the volume and fails closed with `evidence_use: none`.
 
 `viewer-link` creates a versioned, sensitive local navigation intent from exact
 opaque catalog IDs. It verifies series/instance membership, permits only a plain
