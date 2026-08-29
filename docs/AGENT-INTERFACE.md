@@ -811,7 +811,55 @@ approve compatibility, prove chronology or same-lesion identity, accept registra
 hydrate measurements, or generate a conclusion. Existing compatibility and evidence
 export gates run normally after navigation.
 
-## Opt-in live viewer state
+## Codex-first live viewer control
+
+The focused side-panel viewer has no embedded chat. A repo-owned Codex skill uses a
+separate short-lived command/observation bridge:
+
+```bash
+export SCANVIEW_AGENT_TOKEN='<ephemeral token printed by scanview-agent launch>'
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py state
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py series
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py show \
+  --series-id 'series_…' --instance-id 'instance_…' \
+  --view native --tool window --reset
+```
+
+`GET /v1/viewer-control` requires bearer authorization and returns the latest command
+plus a browser observation only while its heartbeat is no older than five seconds.
+`POST /v1/viewer-control` requires the same bearer and exact media type
+`application/vnd.scanview.viewer-control+json`. Each command contains a fresh bounded
+command ID, exact live-catalog series/instance, `native` or `mpr` mode, an allowed
+display tool, optional finite DICOM LPS point, and reset flag. The server assigns a
+monotonic in-memory revision; last accepted command wins.
+
+The browser polls and applies each revision once. It alone may post
+`/v1/viewer-control/observation`, using the distinct HttpOnly browser session, exact
+loopback Origin, and the same media type. An applied observation contains command
+provenance, interaction source (`agent` or `person`), render status, exact series and
+nearest native instance/position, view, tool, and a pinned LPS point. A native command
+must report its exact requested instance. For MPR, the command instance is a source-
+series anchor and the LPS point is the precise target; the resulting nearest native
+slice can differ after volume reconstruction or clamping. Agents must wait for the
+same command/revision and `render_status: ready` before claiming success.
+
+The state has no pixels, source text, direct identifiers, measurement, finding,
+diagnosis, response, or clinical conclusion. It is sensitive, not de-identified, and
+never persisted. Fixed permissions authorize only view navigation, patient-point
+focus, display-tool selection, and reset. They forbid source mutation, measurement
+creation, diagnosis, response classification, and clinical conclusions.
+
+`skills/scanview-control/SKILL.md` is the normative Codex workflow. Its helper also
+reads the manifest, minimized exact-instance metadata, and—only when required for
+strictly local analysis—one protected DICOM object. Do not send any source object,
+pixel, screenshot, coordinate, source text, path, or bearer credential to an external
+service.
+
+## Retained opt-in live viewer state
+
+This older evidence-workspace contract remains implemented for compatibility and
+tests, but its opt-in control is intentionally absent from the focused side-panel UI.
+It applies only when another retained workspace deliberately publishes it.
 
 An agent can inspect what the unified viewer is currently showing without scraping
 the UI. The person must first choose **Agent state: off** so it becomes **Agent state:
@@ -1054,6 +1102,7 @@ It binds only to `127.0.0.1`, prints a random bearer token, and exposes:
 ```text
 GET /v1/health
 GET /v1/manifest
+GET /v1/viewer-control
 GET /v1/viewer-state
 GET /v1/comparison-candidates
 GET /v1/presentation-states
@@ -1068,6 +1117,8 @@ GET /v1/registration-qa/files/{fixed.nrrd|moving.nrrd|registered-moving.nrrd|reg
 GET /v1/reviewed-registration/display
 GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd|registered-moving-coverage.nrrd}
 GET /v1/instances/{opaque_id}
+POST /v1/viewer-control
+POST /v1/viewer-control/observation
 POST /v1/viewer-state
 POST /v1/visit-packets
 POST /v1/consultation-packets
@@ -1075,7 +1126,10 @@ POST /v1/comparison-reviews
 POST /v1/registration-reviews
 ```
 
-There is no source write, overwrite, or delete endpoint. The viewer-state POST is a
+There is no source write, overwrite, or delete endpoint. The viewer-control command
+is a bounded bearer-agent memory write and the observation route is a distinct
+same-origin browser-session memory write; neither creates a file or derivative. The
+viewer-state POST is a
 memory-only session publication/clear route: exact loopback Origin, private browser
 session, exact media type, 16 KiB limit, strict fields, catalog validation, publisher
 revocation, and a 30-second TTL apply. The three evidence POSTs are stateless derivative

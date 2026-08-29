@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
-import { AgentChatPanel } from './components/AgentChatPanel';
 import { MeasurementWorkspace } from './components/MeasurementWorkspace';
 import { MprPanel } from './components/MprPanel';
 import { LesionVolumeComparisonPanel } from './components/LesionVolumeComparisonPanel';
@@ -15,6 +14,7 @@ import {
 } from './cornerstone';
 import {
   assessCompatibility,
+  assessMprEligibility,
   formatDicomDate,
   getLinkStrategy,
   isConsultationSourcePair,
@@ -80,8 +80,14 @@ import {
   type ResolvedSourceSegmentationCatalog,
   type SourceSegment,
 } from './sourceSegmentations';
-import { buildAgentChatContext } from './agentChatContext';
-import type { MprPatientPoint } from './mpr';
+import { formatMprPatientPoint, type MprPatientPoint } from './mpr';
+import {
+  buildViewerControlObservation,
+  fetchViewerControl,
+  publishViewerControlObservation,
+  sourceIndexForPatientPoint,
+  type ViewerControlTool,
+} from './viewerControlService';
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
@@ -103,6 +109,39 @@ const maxPastedMeasurementBytes = 2_000_000;
 // intentionally narrowed to one-series review. Comparison will replace this gate only
 // after its alignment and measurement safeguards are ready.
 const focusedInterfaceEnabled = true;
+
+const defaultFocusedSeries = (items: DicomSeries[]): DicomSeries | undefined =>
+  [...items]
+    .filter((item) => assessMprEligibility(item).eligible)
+    .sort((left, right) => right.instances.length - left.instances.length)[0] ?? items[0];
+
+const instanceCenterPatientPoint = (
+  series: DicomSeries,
+  index: number,
+): MprPatientPoint | undefined => {
+  const instance = series.instances[index];
+  const position = instance?.imagePosition;
+  const orientation = series.geometry.orientation;
+  const spacing = series.geometry.pixelSpacing;
+  const rows = series.geometry.rows;
+  const columns = series.geometry.columns;
+  if (
+    position?.length !== 3 ||
+    orientation?.length !== 6 ||
+    spacing?.length !== 2 ||
+    !Number.isFinite(rows) ||
+    !Number.isFinite(columns)
+  ) {
+    return undefined;
+  }
+  const row = orientation.slice(0, 3);
+  const column = orientation.slice(3, 6);
+  const columnOffset = ((columns! - 1) / 2) * spacing[1];
+  const rowOffset = ((rows! - 1) / 2) * spacing[0];
+  return [0, 1, 2].map(
+    (axis) => position[axis] + row[axis] * columnOffset + column[axis] * rowOffset,
+  ) as MprPatientPoint;
+};
 
 const SeriesSelect = ({
   label,
@@ -160,6 +199,17 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const [synchronized, setSynchronized] = useState(true);
   const [activeTool, setActiveTool] = useState<ViewerTool>('window');
   const [patientPoint, setPatientPoint] = useState<MprPatientPoint>();
+  const [requestedMprPoint, setRequestedMprPoint] = useState<MprPatientPoint>();
+  const [mprTool, setMprTool] = useState<ViewerControlTool>('crosshairs');
+  const [viewerRenderStatus, setViewerRenderStatus] =
+    useState<'loading' | 'ready' | 'error'>('loading');
+  const [appliedAgentCommand, setAppliedAgentCommand] =
+    useState<{ commandId: string; revision: number }>();
+  const lastViewerControlRevisionRef = useRef(0);
+  const viewerObservationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [viewerControlMessage, setViewerControlMessage] = useState(
+    'Codex control uses the authenticated local API.',
+  );
   const [resetNonce, setResetNonce] = useState(0);
   const [importState, setImportState] = useState<ImportState>();
   const [importMessage, setImportMessage] = useState('No scan folder loaded');
@@ -588,14 +638,15 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         return;
       }
       setSeries(catalog.series);
+      const defaultSeries = defaultFocusedSeries(catalog.series);
       const catalogMessage = catalog.series.length
         ? `${catalog.studyCount} studies · ${catalog.series.length} renderable series · ${catalog.instanceCount.toLocaleString()} indexed instances · local loopback service · no upload`
         : `${catalog.studyCount} studies · no renderable MR/CT pixel series · local loopback service`;
       sourceSummaryRef.current = catalogMessage;
       setImportMessage(catalogMessage);
-      setBaselineId(catalog.series[0]?.id);
+      setBaselineId(defaultSeries?.id);
       setFollowupId(undefined);
-      setBaselineIndex(Math.floor((catalog.series[0]?.instances.length ?? 1) / 2));
+      setBaselineIndex(Math.floor((defaultSeries?.instances.length ?? 1) / 2));
       setFollowupIndex(0);
       setBaselinePresentationState(undefined);
       setFollowupPresentationState(undefined);
@@ -767,9 +818,10 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       : 'No readable DICOM image series found.';
     sourceSummaryRef.current = importedMessage;
     setImportMessage(importedMessage);
-    setBaselineId(imported[0]?.id);
+    const defaultSeries = defaultFocusedSeries(imported);
+    setBaselineId(defaultSeries?.id);
     setFollowupId(undefined);
-    setBaselineIndex(Math.floor((imported[0]?.instances.length ?? 1) / 2));
+    setBaselineIndex(Math.floor((defaultSeries?.instances.length ?? 1) / 2));
     setFollowupIndex(0);
     setSourceReady(true);
   };
@@ -1430,6 +1482,122 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     }
   };
 
+  const notePersonInteraction = useCallback(() => {
+    setAppliedAgentCommand(undefined);
+    setViewerControlMessage('Local viewer changed by the person. Codex can read the new state.');
+  }, []);
+
+  useEffect(() => {
+    if (!active || series.length === 0) return;
+    let effectActive = true;
+    const poll = async () => {
+      try {
+        const response = await fetchViewerControl();
+        if (!effectActive) return;
+        const command = response.command;
+        if (!command || command.revision <= lastViewerControlRevisionRef.current) return;
+        const selected = series.find((item) => item.id === command.series_id);
+        const selectedIndex = selected?.instances.findIndex(
+          (item) => item.instanceId === command.instance_id,
+        );
+        if (!selected || selectedIndex === undefined || selectedIndex < 0) return;
+        lastViewerControlRevisionRef.current = command.revision;
+        setAppliedAgentCommand({ commandId: command.command_id, revision: command.revision });
+        setViewerRenderStatus('loading');
+        setBaselinePresentationState(undefined);
+        setBaselineId(selected.id);
+        setBaselineIndex(selectedIndex);
+        if (command.view_mode === 'mpr') {
+          setMprTool(command.tool);
+          const requestedPoint =
+            command.patient_point_lps_mm ?? instanceCenterPatientPoint(selected, selectedIndex);
+          setRequestedMprPoint(requestedPoint);
+          setPatientPoint(requestedPoint);
+          setMprSeriesId(selected.id);
+        } else {
+          setActiveTool(command.tool as ViewerTool);
+          setRequestedMprPoint(undefined);
+          setMprSeriesId(undefined);
+          setPatientPoint(command.patient_point_lps_mm ?? undefined);
+        }
+        if (command.reset_view) setResetNonce((value) => value + 1);
+        setViewerControlMessage(
+          `Codex control applied · revision ${command.revision.toLocaleString()}`,
+        );
+      } catch {
+        if (effectActive) {
+          setViewerControlMessage(
+            'Codex control API is unavailable until the local viewer is relaunched.',
+          );
+        }
+      }
+    };
+    void poll();
+    const interval = window.setInterval(() => void poll(), 500);
+    return () => {
+      effectActive = false;
+      window.clearInterval(interval);
+    };
+  }, [active, series]);
+
+  const viewerControlObservation = useMemo(
+    () =>
+      buildViewerControlObservation({
+        series: baseline,
+        index: baselineIndex,
+        viewMode: mprSeries ? 'mpr' : 'native',
+        nativeTool: activeTool,
+        mprTool,
+        patientPoint,
+        renderStatus: viewerRenderStatus,
+        appliedCommand: appliedAgentCommand,
+      }),
+    [
+      activeTool,
+      appliedAgentCommand,
+      baseline,
+      baselineIndex,
+      mprSeries,
+      mprTool,
+      patientPoint,
+      viewerRenderStatus,
+    ],
+  );
+
+  useEffect(() => {
+    if (!active || !viewerControlObservation) return;
+    let effectActive = true;
+    const publish = async () => {
+      const queued = viewerObservationQueueRef.current
+        .catch(() => undefined)
+        .then(() => publishViewerControlObservation(viewerControlObservation));
+      viewerObservationQueueRef.current = queued.catch(() => undefined);
+      try {
+        await queued;
+        if (effectActive) {
+          setViewerControlMessage((message) =>
+            message.startsWith('Codex control applied')
+              ? message
+              : 'Codex control ready · exact local state is available',
+          );
+        }
+      } catch {
+        if (effectActive) {
+          setViewerControlMessage(
+            'Codex control API is unavailable until the local viewer is relaunched.',
+          );
+        }
+      }
+    };
+    const initial = window.setTimeout(() => void publish(), 100);
+    const heartbeat = window.setInterval(() => void publish(), 2_000);
+    return () => {
+      effectActive = false;
+      window.clearTimeout(initial);
+      window.clearInterval(heartbeat);
+    };
+  }, [active, viewerControlObservation]);
+
   if (focusedInterfaceEnabled) {
     const studyCount = new Set(series.map((item) => item.studyId)).size;
     const sourceStatus = importState
@@ -1437,12 +1605,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       : series.length
         ? `${studyCount} ${studyCount === 1 ? 'study' : 'studies'} · ${series.length} series · local only`
         : 'No folder open';
-    const agentChatContext = buildAgentChatContext({
-      series: baseline,
-      index: baselineIndex,
-      viewMode: mprSeries ? 'mpr' : 'native',
-      patientPoint,
-    });
+    const mprEligibility = assessMprEligibility(baseline);
 
     return (
       <main className="simple-app">
@@ -1488,7 +1651,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
             <i className={`status-dot ${series.length ? 'ready' : ''}`} />
             {sourceStatus}
           </span>
-          <span>Comparison comes later, after alignment and measurement checks.</span>
+          <span>{viewerControlMessage}</span>
         </div>
 
         <div className="simple-workspace">
@@ -1509,17 +1672,59 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     value={baselineId}
                     series={series}
                     onChange={(id) => {
+                      notePersonInteraction();
                       const selected = series.find((item) => item.id === id);
                       setBaselinePresentationState(undefined);
                       setMprSeriesId(undefined);
                       setPatientPoint(undefined);
+                      setRequestedMprPoint(undefined);
+                      setViewerRenderStatus('loading');
                       setBaselineId(id);
                       setBaselineIndex(Math.floor((selected?.instances.length ?? 1) / 2));
                       setMeasurementComparisonDraft(undefined);
                     }}
                   />
-                  {!mprSeries && (
-                    <div className="simple-tools" aria-label="Image tools">
+                  <div className="simple-control-groups">
+                    <div className="simple-view-switch" role="group" aria-label="Image view">
+                      <button
+                        className={!mprSeries ? 'active' : ''}
+                        aria-pressed={!mprSeries}
+                        onClick={() => {
+                          notePersonInteraction();
+                          if (mprSeries && baseline && patientPoint) {
+                            setBaselineIndex(
+                              sourceIndexForPatientPoint(baseline, baselineIndex, patientPoint),
+                            );
+                          }
+                          setPatientPoint(undefined);
+                          setRequestedMprPoint(undefined);
+                          setViewerRenderStatus('loading');
+                          setMprSeriesId(undefined);
+                        }}
+                      >
+                        Single
+                      </button>
+                      <button
+                        className={mprSeries ? 'active' : ''}
+                        aria-pressed={Boolean(mprSeries)}
+                        disabled={!mprEligibility.eligible}
+                        title={mprEligibility.reason}
+                        onClick={() => {
+                          notePersonInteraction();
+                          setPatientPoint(undefined);
+                          setRequestedMprPoint(undefined);
+                          setViewerRenderStatus('loading');
+                          if (baseline) setMprSeriesId(baseline.id);
+                        }}
+                      >
+                        3-plane
+                      </button>
+                    </div>
+                    {!mprEligibility.eligible && (
+                      <span className="mpr-unavailable">3-plane unavailable: {mprEligibility.reason}</span>
+                    )}
+                    {!mprSeries && (
+                      <div className="simple-tools" aria-label="Image tools">
                       {(
                         [
                           ['window', 'Window'],
@@ -1531,13 +1736,44 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                           key={tool}
                           className={activeTool === tool ? 'active' : ''}
                           aria-pressed={activeTool === tool}
-                          onClick={() => setActiveTool(tool)}
+                          onClick={() => {
+                            notePersonInteraction();
+                            setActiveTool(tool);
+                          }}
                         >
                           {label}
                         </button>
                       ))}
-                      <button onClick={() => setResetNonce((value) => value + 1)}>Reset</button>
-                    </div>
+                        <button
+                          onClick={() => {
+                            notePersonInteraction();
+                            setResetNonce((value) => value + 1);
+                          }}
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pinned-point-bar" aria-live="polite">
+                  <span>
+                    {patientPoint
+                      ? `Pinned · ${formatMprPatientPoint(patientPoint)} LPS`
+                      : mprSeries
+                        ? 'Crosshairs will publish one persistent patient-space point.'
+                        : 'Click the image to pin a point for Codex.'}
+                  </span>
+                  {patientPoint && !mprSeries && (
+                    <button
+                      onClick={() => {
+                        notePersonInteraction();
+                        setPatientPoint(undefined);
+                      }}
+                    >
+                      Clear point
+                    </button>
                   )}
                 </div>
 
@@ -1546,8 +1782,22 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     series={mprSeries}
                     simple
                     onPatientPointChange={setPatientPoint}
+                    requestedPatientPoint={requestedMprPoint}
+                    requestedTool={mprTool}
+                    resetNonce={resetNonce}
+                    onToolChange={setMprTool}
+                    onRenderStatusChange={setViewerRenderStatus}
+                    onPersonInteraction={notePersonInteraction}
+                    controlRevision={appliedAgentCommand?.revision}
                     onClose={() => {
+                      if (baseline && patientPoint) {
+                        setBaselineIndex(
+                          sourceIndexForPatientPoint(baseline, baselineIndex, patientPoint),
+                        );
+                      }
                       setPatientPoint(undefined);
+                      setRequestedMprPoint(undefined);
+                      setViewerRenderStatus('loading');
                       setMprSeriesId(undefined);
                     }}
                   />
@@ -1560,25 +1810,28 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                       series={baseline}
                       index={baselineIndex}
                       onIndexChange={(index) => {
+                        notePersonInteraction();
                         setPatientPoint(undefined);
+                        setViewerRenderStatus('loading');
                         updateIndex('baseline', index);
                       }}
                       activeTool={activeTool}
                       resetNonce={resetNonce}
                       interactionLocked={false}
                       simple
-                      onPatientPointChange={setPatientPoint}
-                      onOpenMpr={() => {
-                        setPatientPoint(undefined);
-                        if (baseline) setMprSeriesId(baseline.id);
+                      patientPoint={patientPoint}
+                      onPatientPointChange={(point) => {
+                        notePersonInteraction();
+                        setPatientPoint(point);
                       }}
+                      onRenderStatusChange={setViewerRenderStatus}
+                      controlRevision={appliedAgentCommand?.revision}
                     />
                   </div>
                 )}
               </>
             )}
           </div>
-          <AgentChatPanel context={agentChatContext} seriesDescription={baseline?.description} />
         </div>
       </main>
     );

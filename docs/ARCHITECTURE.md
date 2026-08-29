@@ -196,6 +196,11 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    (plus in-memory `blob:`/`data:` assets where required).
    Loading a different folder clears annotations, decoded-image cache, and file
    registry before the new imaging session begins.
+   The focused default is a compact Codex side-panel visualization surface, not a
+   second conversation client. It offers one native pane or three MPR panes. A native
+   click pins a visible LPS point; MPR uses one linked patient-space crosshair.
+   Browser observations heartbeat the exact applied source/view/tool/render state to
+   the loopback control service, with no pixels or source text.
    A versioned agent navigation fragment is never sent to the server. The viewer
    consumes it once, clears it immediately, validates an exact allowlist and local
    catalog membership, then applies both requested panes atomically. Navigation does
@@ -224,7 +229,14 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
 4. **Local API:** binds to loopback only, uses an ephemeral bearer token for agents
    and an HttpOnly same-origin session for the browser, returns only opaque IDs and
    an allowlisted metadata contract, and has no source write/delete API. Its
-   derivative POSTs accept bounded outer ZIPs from an exact local Origin. Visit input
+   viewer-control bridge keeps one latest command and observation in memory. Bearer
+   agents may select an exact live-catalog source, native/MPR view, allowed display
+   tool, optional finite LPS point, and reset. Only the browser session may publish
+   the applied observation; its five-second freshness gate prevents Codex from
+   claiming a stale view. Native targets remain instance-exact, while MPR reports the
+   exact nearest native slice at the rendered patient-space point. The bridge grants
+   no mutation, measurement, diagnostic, response, or clinical-conclusion authority.
+   Derivative POSTs accept bounded outer ZIPs from an exact local Origin. Visit input
    contains only `baseline.zip` and `followup.zip`; review input adds only
    `comparison.json`; consultation input contains only neutral `view-a.zip` and
    `view-b.zip`; consultation-board input contains only a strict label manifest and

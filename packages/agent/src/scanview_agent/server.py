@@ -93,6 +93,16 @@ from .viewer_state import (
     utc_now,
     validate_viewer_state,
 )
+from .viewer_control import (
+    MAX_REQUEST_BYTES as MAX_VIEWER_CONTROL_BYTES,
+    MEDIA_TYPE as VIEWER_CONTROL_MEDIA_TYPE,
+    OBSERVATION_TTL_SECONDS as VIEWER_CONTROL_OBSERVATION_TTL_SECONDS,
+    SCHEMA_VERSION as VIEWER_CONTROL_SCHEMA_VERSION,
+    response as viewer_control_response,
+    utc_now as viewer_control_utc_now,
+    validate_command as validate_viewer_control_command,
+    validate_observation as validate_viewer_control_observation,
+)
 
 
 REVIEWED_REGISTRATION_BUNDLE_FILES = (
@@ -110,6 +120,7 @@ def _agent_audit_operation(path: str) -> str | None:
     exact = {
         "/v1/manifest": "manifest_read",
         "/v1/viewer-state": "viewer_state_read",
+        "/v1/viewer-control": "viewer_control_read",
         "/v1/comparison-candidates": "comparison_candidates_read",
         "/v1/longitudinal-readiness": "longitudinal_readiness_read",
         "/v1/presentation-states": "presentation_states_read",
@@ -290,6 +301,11 @@ class ScanViewServer(ThreadingHTTPServer):
     viewer_state_received_at: str | None
     viewer_state_received_monotonic: float | None
     viewer_state_revoked_publishers: set[str]
+    viewer_control_lock: threading.Lock
+    viewer_control_revision: int
+    viewer_control_command: dict[str, Any] | None
+    viewer_control_observation: dict[str, Any] | None
+    viewer_control_observation_received_monotonic: float | None
     registration_bundle: Path | None
     registration_context: dict[str, Any] | None
     registration_review: Path | None
@@ -459,6 +475,51 @@ class ScanViewServer(ThreadingHTTPServer):
                 age_seconds=age,
             )
 
+    def set_viewer_control_command(self, command: dict[str, Any]) -> dict[str, Any]:
+        with self.viewer_control_lock:
+            self.viewer_control_revision += 1
+            issued = {
+                **command,
+                "revision": self.viewer_control_revision,
+                "issued_at": viewer_control_utc_now(),
+            }
+            self.viewer_control_command = issued
+            return dict(issued)
+
+    def validate_and_publish_viewer_control_observation(
+        self, value: Any
+    ) -> dict[str, Any]:
+        with self.viewer_control_lock:
+            observation = validate_viewer_control_observation(
+                value,
+                self.catalog,
+                current_command=self.viewer_control_command,
+            )
+            self.viewer_control_observation = observation
+            self.viewer_control_observation_received_monotonic = time.monotonic()
+            return dict(observation)
+
+    def viewer_control_response(self) -> dict[str, Any]:
+        with self.viewer_control_lock:
+            age = (
+                time.monotonic() - self.viewer_control_observation_received_monotonic
+                if self.viewer_control_observation_received_monotonic is not None
+                else None
+            )
+            return viewer_control_response(
+                command=(
+                    dict(self.viewer_control_command)
+                    if self.viewer_control_command is not None
+                    else None
+                ),
+                observation=(
+                    dict(self.viewer_control_observation)
+                    if self.viewer_control_observation is not None
+                    else None
+                ),
+                observation_age_seconds=age,
+            )
+
 
 class Handler(BaseHTTPRequestHandler):
     server: ScanViewServer
@@ -497,8 +558,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _audit_bearer_get(self, path: str) -> bool:
         operation = _agent_audit_operation(path)
+        return operation is None or self._audit_bearer_operation(operation)
+
+    def _audit_bearer_operation(self, operation: str) -> bool:
         audit = self.server.agent_access_audit
-        if operation is None or audit is None or not self._bearer_authorized():
+        if audit is None or not self._bearer_authorized():
             return True
         try:
             audit.record(operation)
@@ -619,6 +683,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/v1/viewer-state":
             self._send_json(self.server.viewer_state_response())
+            return
+        if path == "/v1/viewer-control":
+            self._send_json(self.server.viewer_control_response())
             return
         if path == "/v1/comparison-candidates":
             self._send_json(suggest_pairs(self.server.catalog))
@@ -765,6 +832,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if path == "/v1/viewer-control":
+            self._handle_viewer_control_command_post()
+            return
+        if path == "/v1/viewer-control/observation":
+            self._handle_viewer_control_observation_post()
+            return
         if path == "/v1/agent-consultation-plans/validate":
             self._handle_agent_consultation_plan_post()
             return
@@ -1497,6 +1570,93 @@ class Handler(BaseHTTPRequestHandler):
             }
         )
 
+    def _read_viewer_control_json(self) -> Any | None:
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != VIEWER_CONTROL_MEDIA_TYPE:
+            self._send_json(
+                {"error": "unsupported_media_type"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+            )
+            return None
+        try:
+            content_length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send_json({"error": "content_length_required"}, HTTPStatus.LENGTH_REQUIRED)
+            return None
+        if content_length <= 0 or content_length > MAX_VIEWER_CONTROL_BYTES:
+            self._send_json({"error": "request_too_large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+            return None
+        body = self.rfile.read(content_length)
+        if len(body) != content_length:
+            self._send_json({"error": "incomplete_request"}, HTTPStatus.BAD_REQUEST)
+            return None
+        try:
+            return json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json({"error": "invalid_json"}, HTTPStatus.UNPROCESSABLE_ENTITY)
+            return None
+
+    def _handle_viewer_control_command_post(self) -> None:
+        if not self._authorized():
+            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
+            return
+        if not self._bearer_authorized():
+            self._send_json({"error": "bearer_agent_required"}, HTTPStatus.FORBIDDEN)
+            return
+        if not self._audit_bearer_operation("viewer_control_command"):
+            return
+        value = self._read_viewer_control_json()
+        if value is None:
+            return
+        try:
+            command = validate_viewer_control_command(value, self.server.catalog)
+        except (TypeError, ValueError) as error:
+            self._send_json(
+                {"error": "invalid_viewer_control", "detail": str(error)},
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+            return
+        issued = self.server.set_viewer_control_command(command)
+        self._send_json(
+            {
+                "schema_version": VIEWER_CONTROL_SCHEMA_VERSION,
+                "accepted": True,
+                "revision": issued["revision"],
+                "command_id": issued["command_id"],
+                "viewer_connected": self.server.viewer_control_response()["viewer_connected"],
+            }
+        )
+
+    def _handle_viewer_control_observation_post(self) -> None:
+        if not self._authorized():
+            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
+            return
+        if not self._browser_authorized():
+            self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
+            return
+        if not self._same_origin():
+            self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
+            return
+        value = self._read_viewer_control_json()
+        if value is None:
+            return
+        try:
+            self.server.validate_and_publish_viewer_control_observation(value)
+        except (TypeError, ValueError) as error:
+            self._send_json(
+                {"error": "invalid_viewer_observation", "detail": str(error)},
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+            return
+        self._send_json(
+            {
+                "schema_version": VIEWER_CONTROL_SCHEMA_VERSION,
+                "accepted": True,
+                "viewer_connected_for_seconds": int(
+                    VIEWER_CONTROL_OBSERVATION_TTL_SECONDS
+                ),
+            }
+        )
+
 
 def create_server(
     catalog: dict[str, Any],
@@ -1699,6 +1859,11 @@ def create_server(
     server.viewer_state_received_at = None
     server.viewer_state_received_monotonic = None
     server.viewer_state_revoked_publishers = set()
+    server.viewer_control_lock = threading.Lock()
+    server.viewer_control_revision = 0
+    server.viewer_control_command = None
+    server.viewer_control_observation = None
+    server.viewer_control_observation_received_monotonic = None
     server.registration_bundle = resolved_registration
     server.registration_context = cached_registration_context
     server.registration_review = resolved_registration_review

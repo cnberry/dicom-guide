@@ -42,6 +42,9 @@ type Props = {
   interactionLocked?: boolean;
   simple?: boolean;
   onPatientPointChange?: (point?: MprPatientPoint) => void;
+  patientPoint?: MprPatientPoint;
+  onRenderStatusChange?: (status: 'loading' | 'ready' | 'error') => void;
+  controlRevision?: number;
 };
 
 type CanvasPresentationOverlay = {
@@ -106,6 +109,9 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     interactionLocked = false,
     simple = false,
     onPatientPointChange,
+    patientPoint,
+    onRenderStatusChange,
+    controlRevision,
   }: Props,
   ref,
 ) {
@@ -119,21 +125,16 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
   presentationStateErrorRef.current = onPresentationStateError;
   const patientPointChangeRef = useRef(onPatientPointChange);
   patientPointChangeRef.current = onPatientPointChange;
-  const lastPointerUpdateRef = useRef(0);
+  const renderStatusChangeRef = useRef(onRenderStatusChange);
+  renderStatusChangeRef.current = onRenderStatusChange;
   const [status, setStatus] = useState('Choose a series');
   const [keyImageState, setKeyImageState] = useState<'idle' | 'working' | 'saved' | 'error'>(
     'idle',
   );
   const [keyImageError, setKeyImageError] = useState('');
   const [sourceOverlay, setSourceOverlay] = useState<CanvasPresentationOverlay>();
+  const [pinnedCanvasPoint, setPinnedCanvasPoint] = useState<[number, number]>();
   const presentationLocked = interactionLocked || Boolean(presentationState);
-
-  useEffect(
-    () => () => {
-      patientPointChangeRef.current?.(undefined);
-    },
-    [],
-  );
 
   useEffect(() => {
     const element = elementRef.current;
@@ -147,6 +148,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     let ownedEngine: RenderingEngine | undefined;
     let ownedTools: ViewportToolController | undefined;
     setStatus('Loading pixels locally…');
+    renderStatusChangeRef.current?.('loading');
     setKeyImageState('idle');
     setKeyImageError('');
     engineRef.current?.destroy();
@@ -173,9 +175,11 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
         restoreMeasurementEvidencePacket(`viewport-${id}`, series.id, measurementPacket);
         applySourcePresentation(viewport, series, presentationStateRef.current);
         setStatus('');
+        renderStatusChangeRef.current?.('ready');
       })
       .catch((error: unknown) => {
         setStatus(error instanceof Error ? error.message : 'Unable to render this series.');
+        renderStatusChangeRef.current?.('error');
       });
 
     const observer = new ResizeObserver(() => engineRef.current?.resize(true, false));
@@ -214,9 +218,68 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     if (!viewport || !series) return;
     const boundedIndex = Math.max(0, Math.min(index, series.instances.length - 1));
     if (viewport.getCurrentImageIdIndex() !== boundedIndex) {
-      viewport.setImageIdIndex(boundedIndex).then(() => viewport.render());
+      renderStatusChangeRef.current?.('loading');
+      viewport
+        .setImageIdIndex(boundedIndex)
+        .then(() => {
+          viewport.render();
+          renderStatusChangeRef.current?.('ready');
+        })
+        .catch(() => renderStatusChangeRef.current?.('error'));
     }
   }, [index, series]);
+
+  useEffect(() => {
+    if (!controlRevision || !series) return;
+    const viewport = viewportRef.current;
+    const tools = toolsRef.current;
+    const boundedIndex = Math.max(0, Math.min(index, series.instances.length - 1));
+    if (!viewport || !tools || viewport.getCurrentImageIdIndex() !== boundedIndex) return;
+    try {
+      tools.setPrimaryTool(activeTool);
+      viewport.render();
+      renderStatusChangeRef.current?.('ready');
+    } catch {
+      renderStatusChangeRef.current?.('error');
+    }
+  }, [activeTool, controlRevision, index, series]);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    const update = () => {
+      const viewport = viewportRef.current;
+      if (!viewport || !patientPoint) {
+        setPinnedCanvasPoint(undefined);
+        return;
+      }
+      try {
+        const canvas = viewport.worldToCanvas(patientPoint as Types.Point3);
+        if (
+          canvas.length === 2 &&
+          canvas.every(Number.isFinite) &&
+          canvas[0] >= 0 &&
+          canvas[0] <= element.clientWidth &&
+          canvas[1] >= 0 &&
+          canvas[1] <= element.clientHeight
+        ) {
+          setPinnedCanvasPoint([canvas[0], canvas[1]]);
+        } else {
+          setPinnedCanvasPoint(undefined);
+        }
+      } catch {
+        setPinnedCanvasPoint(undefined);
+      }
+    };
+    element.addEventListener(Enums.Events.IMAGE_RENDERED, update);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    update();
+    return () => {
+      element.removeEventListener(Enums.Events.IMAGE_RENDERED, update);
+      observer.disconnect();
+    };
+  }, [patientPoint, series?.id, index]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -470,18 +533,20 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
               GSPS display active · supported subset · creator not authenticated
             </span>
           )}
-          <button
-            className="key-image-button"
-            disabled={!mprEligibility.eligible || Boolean(status) || presentationLocked}
-            title={
-              presentationLocked
-                ? 'Clear all active source-carried GSPS states before opening MPR.'
-                : mprEligibility.reason
-            }
-            onClick={onOpenMpr}
-          >
-            {simple ? '3-plane view' : 'Open MPR'}
-          </button>
+          {onOpenMpr && (
+            <button
+              className="key-image-button"
+              disabled={!mprEligibility.eligible || Boolean(status) || presentationLocked}
+              title={
+                presentationLocked
+                  ? 'Clear all active source-carried GSPS states before opening MPR.'
+                  : mprEligibility.reason
+              }
+              onClick={onOpenMpr}
+            >
+              {simple ? '3-plane view' : 'Open MPR'}
+            </button>
+          )}
           {!simple && (
             <>
               <button
@@ -529,11 +594,9 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
       </div>
       <div
         className="dicom-viewport"
-        onPointerMove={(event) => {
+        onClick={(event) => {
           const viewport = viewportRef.current;
           if (!series || !viewport || presentationLocked) return;
-          if (event.timeStamp - lastPointerUpdateRef.current < 60) return;
-          lastPointerUpdateRef.current = event.timeStamp;
           const rect = event.currentTarget.getBoundingClientRect();
           try {
             const world = viewport.canvasToWorld([
@@ -544,10 +607,9 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
               patientPointChangeRef.current?.([...world] as MprPatientPoint);
             }
           } catch {
-            patientPointChangeRef.current?.(undefined);
+            return;
           }
         }}
-        onPointerLeave={() => patientPointChangeRef.current?.(undefined)}
         onWheel={(event) => {
           if (!series || presentationLocked) return;
           event.preventDefault();
@@ -558,6 +620,13 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
           ref={elementRef}
           className={`cornerstone-host ${presentationLocked ? 'presentation-locked' : ''}`}
         />
+        {pinnedCanvasPoint && (
+          <div
+            className="native-point-marker"
+            style={{ left: pinnedCanvasPoint[0], top: pinnedCanvasPoint[1] }}
+            aria-label="Pinned patient-space point"
+          />
+        )}
         {presentationState && sourceOverlay && (
           <svg
             className="presentation-state-overlay"

@@ -18,15 +18,21 @@ result into a medical conclusion.
 
 ### Phase 1 — focused in-depth review (current)
 
-- Split the workspace into an independently scrolling image area on the left and a
-  persistent agent conversation area on the right.
+- Keep conversation in Codex and make the website a compact visualization surface
+  intended for the Codex side panel. Do not duplicate chat in the viewer.
 - Default to one explicitly selected series and one authoritative native DICOM pane.
 - Expose only Window, Pan, Zoom, Reset, slice navigation, and optional geometry-gated
   axial/coronal/sagittal MPR. Native and MPR presentations are mutually exclusive;
   the three MPR panes stack vertically in the image area.
-- Derive versioned agent context from exact opaque series/source identity, stack
-  position, view mode, and pointer or crosshair LPS coordinates without including
-  screenshots, pixels, paths, or direct identifiers.
+- Publish a versioned short-lived browser observation containing exact opaque
+  series/source identity, stack position, view mode, display tool, render state, and
+  a pinned or crosshair LPS point without screenshots, pixels, source text, paths, or
+  direct identifiers.
+- Accept narrow bearer-authenticated, catalog-validated Codex commands for exact
+  series/instance selection, native/MPR mode, patient-space focus, display tools, and
+  reset. Confirm the matching applied revision before reporting success.
+- Maintain a repository-owned Codex skill and local client for view control, catalog
+  inspection, minimized metadata, and deliberately requested exact DICOM retrieval.
 - Keep all source reading, decoding, and reconstruction local. The focused interface
   must perform no analytics, telemetry, cloud processing, or external API call.
 - Keep advanced evidence and agent contracts implemented but outside the primary
@@ -34,26 +40,20 @@ result into a medical conclusion.
 - Present **Compare over time** as a distinct mode, disabled until the next phase's
   measurement and alignment gates are implemented and tested.
 
-### Phase 1B — consented agent conversation (next)
+### Phase 1B — Codex control boundary (implemented; hardening continues)
 
-- Keep the composer visibly disabled until the local connector is healthy; never
-  present placeholder text as a model response or imply that an agent is connected.
-- Add an explicit per-session opt-in that binds the conversation to the existing
-  authenticated loopback browser session. Keep messages bounded, memory-only,
-  revocable, and non-persistent by default.
-- Let the agent request exact source metadata and local pixel/geometry queries by
-  opaque instance reference through a narrow local tool boundary. Do not send DICOM
-  files, pixel arrays, screenshots, filesystem paths, or unnecessary identifiers to
-  an external service. DICOM reading and computation remain local even if a later
-  language-model conversation is enabled.
-- Show the person which series, source image, view, and LPS point are attached to each
-  message. Source changes or session expiry must invalidate stale references.
-- Separate agent observations, person statements, local computations, and clinical
-  conclusions in both the UI and the message contract. The agent may help formulate
-  questions but may not silently convert image context into a diagnosis or response
-  assessment.
-- Add adversarial authorization, stale-source, prompt-size, privacy, no-network-
-  fallback, and browser interaction tests before enabling Send.
+- Keep the command/observation bridge loopback-only, memory-only, bounded, and
+  separated by authority: bearer agents issue commands; the HttpOnly same-origin
+  browser session alone publishes applied render state.
+- Let Codex request exact source metadata and DICOM objects by opaque reference through
+  a narrow local tool boundary. Never send DICOM files, pixel arrays, screenshots,
+  filesystem paths, coordinates, source text, or credentials to external services.
+- Make person intent durable within a viewing session: a native click pins a visible
+  point until the source changes, and MPR exposes one precise shared LPS crosshair.
+- Separate source observations, local computations, tentative interpretations, and
+  clinician conclusions in the skill instructions and future agent outputs.
+- Continue adversarial authorization, stale-source, source-change, coordinate,
+  privacy, no-network-fallback, and macOS/Linux browser tests as the bridge expands.
 
 ### Phase 2 — accurate comparison over time (next)
 

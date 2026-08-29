@@ -88,6 +88,11 @@ wheel with the built UI under `scanview_agent/ui` and all versioned contracts un
 schemas from the source checkout. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
 and the API from one loopback origin. It establishes an
 HttpOnly browser session, while agents continue to use the printed bearer token.
+The focused viewer also exposes a memory-only control bridge: bearer agents issue
+exact catalog-validated navigation/display commands, and the separate same-origin
+browser session reports the resulting rendered state. Codex should use the repository
+workflow in `skills/scanview-control/SKILL.md`; it authorizes no source mutation,
+measurement, diagnosis, response classification, or external DICOM processing.
 For offline transfer and installation on macOS or Linux, run
 `scripts/build_offline_bundle.py`. Its non-overwriting ZIP includes the embedded-asset
 wheel, pinned pure-Python `pydicom` 3.0.2, hash-locked local requirements, and

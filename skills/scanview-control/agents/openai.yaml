@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScanView Control"
+  short_description: "Inspect and drive the local DICOM viewer"
+  default_prompt: "Use $scanview-control to inspect the active local scan and drive ScanView to exact source images or MPR points."

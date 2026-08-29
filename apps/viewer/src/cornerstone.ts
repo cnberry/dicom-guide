@@ -88,6 +88,7 @@ export type MprViewportController = {
   subscribeToNormalizedPoint: (
     listener: (point: NormalizedMprPoint) => void,
   ) => () => void;
+  setPatientPoint: (point: MprPatientPoint) => void;
   setNormalizedPoint: (point: NormalizedMprPoint) => void;
   reset: () => void;
   setBrushSize: (size: number) => void;
@@ -874,6 +875,23 @@ export const createMprViewports = async (
             ToolEnums.Events.CROSSHAIR_TOOL_CENTER_CHANGED,
             onCenterChanged,
           );
+      },
+      setPatientPoint: (point) => {
+        if (point.length !== 3 || !point.every(Number.isFinite)) {
+          throw new Error('Patient-space location must contain three finite LPS coordinates.');
+        }
+        const index = volume.imageData?.worldToIndex(point as Types.Point3);
+        if (
+          !index ||
+          index.length !== 3 ||
+          !index.every(
+            (value, axis) =>
+              Number.isFinite(value) && value >= -0.5 && value <= volume.dimensions[axis] - 0.5,
+          )
+        ) {
+          throw new Error('Patient-space location is outside this local volume.');
+        }
+        crosshairs.setToolCenter([point[0], point[1], point[2]], true);
       },
       setNormalizedPoint: (point) => {
         if (

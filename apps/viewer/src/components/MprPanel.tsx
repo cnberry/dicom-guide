@@ -38,6 +38,13 @@ type Props = {
   onClose: () => void;
   simple?: boolean;
   onPatientPointChange?: (point?: MprPatientPoint) => void;
+  requestedPatientPoint?: MprPatientPoint;
+  requestedTool?: Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom'>;
+  resetNonce?: number;
+  onRenderStatusChange?: (status: 'loading' | 'ready' | 'error') => void;
+  onToolChange?: (tool: Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom'>) => void;
+  onPersonInteraction?: () => void;
+  controlRevision?: number;
 };
 
 const orientationLabels: Array<{ id: MprOrientation; label: string }> = [
@@ -103,6 +110,13 @@ export function MprPanel({
   onClose,
   simple = false,
   onPatientPointChange,
+  requestedPatientPoint,
+  requestedTool,
+  resetNonce = 0,
+  onRenderStatusChange,
+  onToolChange,
+  onPersonInteraction,
+  controlRevision,
 }: Props) {
   const axialRef = useRef<HTMLDivElement>(null);
   const coronalRef = useRef<HTMLDivElement>(null);
@@ -110,7 +124,17 @@ export function MprPanel({
   const controllerRef = useRef<MprViewportController | undefined>(undefined);
   const patientPointChangeRef = useRef(onPatientPointChange);
   patientPointChangeRef.current = onPatientPointChange;
+  const requestedPatientPointRef = useRef(requestedPatientPoint);
+  requestedPatientPointRef.current = requestedPatientPoint;
+  const requestedToolRef = useRef(requestedTool);
+  requestedToolRef.current = requestedTool;
+  const renderStatusChangeRef = useRef(onRenderStatusChange);
+  renderStatusChangeRef.current = onRenderStatusChange;
+  const toolChangeRef = useRef(onToolChange);
+  toolChangeRef.current = onToolChange;
   const [activeTool, setActiveTool] = useState<MprTool>('crosshairs');
+  const activeToolRef = useRef<MprTool>('crosshairs');
+  activeToolRef.current = activeTool;
   const [patientPoint, setPatientPoint] = useState<MprPatientPoint>();
   const [status, setStatus] = useState('Building local volume from source slices…');
   const [brushSize, setBrushSize] = useState(12);
@@ -153,6 +177,37 @@ export function MprPanel({
     patientPointChangeRef.current?.(patientPoint);
   }, [patientPoint]);
 
+  useEffect(() => {
+    if (requestedTool) setActiveTool(requestedTool);
+  }, [requestedTool]);
+
+  useEffect(() => {
+    const controller = controllerRef.current;
+    if (!controller || !requestedPatientPoint) return;
+    try {
+      controller.setPatientPoint(requestedPatientPoint);
+    } catch {
+      renderStatusChangeRef.current?.('error');
+    }
+  }, [requestedPatientPoint]);
+
+  useEffect(() => {
+    if (resetNonce > 0) controllerRef.current?.reset();
+  }, [resetNonce]);
+
+  useEffect(() => {
+    if (!controlRevision) return;
+    const controller = controllerRef.current;
+    if (!controller) return;
+    try {
+      controller.setPrimaryTool(requestedTool ?? activeToolRef.current);
+      if (requestedPatientPoint) controller.setPatientPoint(requestedPatientPoint);
+      renderStatusChangeRef.current?.('ready');
+    } catch {
+      renderStatusChangeRef.current?.('error');
+    }
+  }, [controlRevision, requestedPatientPoint, requestedTool]);
+
   useEffect(
     () => () => {
       patientPointChangeRef.current?.(undefined);
@@ -185,6 +240,7 @@ export function MprPanel({
     let unsubscribeSegmentationStats: (() => void) | undefined;
     setPatientPoint(undefined);
     setStatus('Building local volume from source slices…');
+    renderStatusChangeRef.current?.('loading');
     void createMprViewports(
       `scanview-mpr-${series.id}-${crypto.randomUUID()}`,
       elements,
@@ -207,18 +263,24 @@ export function MprPanel({
           return;
         }
         controllerRef.current = controller;
+        controller.setPrimaryTool(requestedToolRef.current ?? activeToolRef.current);
         unsubscribePatientPoint = controller.subscribeToPatientPoint(setPatientPoint);
         unsubscribeSegmentationStats = controller.subscribeToSegmentationStats(
           setSegmentationStats,
         );
         if (!readonlySourceSegmentation) controller.setBrushSize(brushSize);
+        if (requestedPatientPointRef.current) {
+          controller.setPatientPoint(requestedPatientPointRef.current);
+        }
         setStatus('');
+        renderStatusChangeRef.current?.('ready');
         if (readonlySourceSegmentation) onReadonlyReady?.();
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         const message = error instanceof Error ? error.message : 'Unable to build this local volume.';
         setStatus(message);
+        renderStatusChangeRef.current?.('error');
         if (readonlySourceSegmentation) onReadonlyError?.(message);
       });
     const observer = new ResizeObserver(() => controllerRef.current?.resize());
@@ -241,6 +303,11 @@ export function MprPanel({
 
   useEffect(() => {
     controllerRef.current?.setPrimaryTool(activeTool);
+    if (['crosshairs', 'window', 'pan', 'zoom'].includes(activeTool)) {
+      toolChangeRef.current?.(
+        activeTool as Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom'>,
+      );
+    }
   }, [activeTool]);
 
   useEffect(() => {
@@ -406,15 +473,31 @@ export function MprPanel({
                 className={activeTool === tool ? 'active' : ''}
                 aria-pressed={activeTool === tool}
                 disabled={Boolean(status)}
-                onClick={() => setActiveTool(tool)}
+                onClick={() => {
+                  onPersonInteraction?.();
+                  setActiveTool(tool);
+                }}
               >
                 {label}
               </button>
             ))}
-            <button disabled={Boolean(status)} onClick={() => controllerRef.current?.reset()}>
+            <button
+              disabled={Boolean(status)}
+              onClick={() => {
+                onPersonInteraction?.();
+                controllerRef.current?.reset();
+              }}
+            >
               Reset
             </button>
-            <button onClick={onClose}>Close</button>
+            <button
+              onClick={() => {
+                onPersonInteraction?.();
+                onClose();
+              }}
+            >
+              Close
+            </button>
           </div>
         </div>
         <div className="mpr-link-note">
@@ -430,6 +513,7 @@ export function MprPanel({
               <div
                 ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}
                 className="mpr-host"
+                onPointerDown={onPersonInteraction}
               />
               {status && <div className="mpr-status">{status}</div>}
             </article>

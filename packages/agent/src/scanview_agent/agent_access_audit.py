@@ -23,6 +23,8 @@ TIMESTAMP = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z
 OPERATIONS = (
     "manifest_read",
     "viewer_state_read",
+    "viewer_control_read",
+    "viewer_control_command",
     "comparison_candidates_read",
     "longitudinal_readiness_read",
     "presentation_states_read",

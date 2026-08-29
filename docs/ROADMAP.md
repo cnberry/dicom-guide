@@ -779,14 +779,35 @@
    confirmed the split, precise native pointer context, three vertical MPR panes,
    exact MPR source resolution, and independent left scrolling with chat fixed.
 
+## Completed in the thirty-seventh milestone
+
+1. Removed embedded chat and converted **In-depth review** into a compact Codex side-
+   panel visualization surface with explicit Single/3-plane switches and no duplicate
+   conversation UI.
+2. Replaced transient native hover context with a visible pinned patient-space point.
+   Added agent-addressable MPR point/tool/reset control and precise applied-render
+   observations, including the nearest exact native source slice.
+3. Added a bounded memory-only `/v1/viewer-control` bridge. Bearer agents can issue
+   catalog-validated navigation/display commands; only the HttpOnly same-origin
+   browser session can publish applied observations. Mutation, measurement, diagnosis,
+   response, and clinical-conclusion authority remain fixed false.
+4. Added the repo-owned `scanview-control` Codex skill, strict loopback client, API
+   reference, skill metadata, and root agent routing. It can inspect state/catalog,
+   control native/MPR display, read minimized metadata, and deliberately retrieve one
+   exact DICOM object for local-only analysis.
+5. Passed 144 viewer tests, TypeScript typecheck, production build, the full Python
+   suite, focused control/auth tests, skill validation, and production-browser E2E.
+   A real local skill command changed the 57-series copied-scan viewer to MPR and
+   received the matching `ready` revision with exact patient coordinates.
+
 ## Immediate
 
 1. Use **In-depth review** for one series at a time. Treat the three-plane view as a
    local reconstruction for navigation and confirm medical interpretations with the
    clinical imaging system and a qualified clinician.
-2. Implement the authenticated, consented, session-only agent connector described in
-   `docs/PLAN.md`. Keep Send disabled until the connector can expose exact local
-   source queries without uploading DICOM/pixels or implying clinical authority.
+2. Use the `scanview-control` skill for exact local state and visualization control.
+   Add new analysis operations only as narrow, tested local tools; never upload DICOM,
+   pixels, screenshots, source text, coordinates, or credentials.
 3. Specify the measurement-grade **Compare over time** protocol before enabling its
    UI: exact timepoints, comparable sequence/tissue definitions, DICOM calibration,
    alignment state, repeatability/uncertainty, review responsibility, and explicit
@@ -822,10 +843,10 @@
 
 ## Next milestone
 
-1. Implement the bounded local agent-chat connector and source-query boundary while
-   preserving explicit consent, exact context display, session revocation, local DICOM
-   computation, and no screenshot/pixel upload. Enable Send only after its negative
-   privacy and authorization gates pass.
+1. Harden and commission the Codex control skill on macOS and Strawberry Linux. Add
+   narrow local pixel/geometry inspection operations, source-change invalidation, and
+   repeatable browser-command tests without expanding clinical authority or adding an
+   external DICOM-processing dependency.
 2. Design and implement the locked shell for **Compare over time** around the Phase 2
    measurement state machine in `docs/PLAN.md`. Begin with exact source/timepoint
    pairing and calibrated same-method observations; add uncertainty/repeatability and
@@ -857,7 +878,7 @@
 ## Viewer backlog
 
 1. Add a local rotatable 3D volume for one explicitly selected geometry-qualified
-   series after the basic viewer and chat connector are stable. Link it to the same
+   series after the basic viewer and Codex control boundary are stable. Link it to the same
    patient-space point as MPR, bound its work, label it derived, and keep native/MPR
    geometry authoritative for measurement. Do not combine series in 3D until a
    reviewed registration makes that relationship explicit.

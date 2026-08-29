@@ -7,17 +7,17 @@ CT studies over time. It is being built for two audiences at once:
 - software agents that need a structured, source-traceable, read-only interface.
 
 The current default reads copied DICOM files locally, groups them into studies and
-series, and presents one selected series in a focused native Cornerstone3D viewer.
-The workspace is split horizontally: an independently scrolling image area on the
-left and persistent agent chat on the right. The image area shows either one native
-pane or three vertically stacked axial/coronal/sagittal MPR panes. Controls remain
-deliberately small: Window, Pan, Zoom, Reset, slice navigation, and the three-plane
-entry point.
+series, and presents one selected series in a focused Cornerstone3D surface intended
+to stay open in the Codex side panel. It shows either one native pane or three stacked
+axial/coronal/sagittal MPR panes. Controls remain deliberately small: Window, Pan,
+Zoom, Reset, slice navigation, point pinning, and the three-plane switch.
 
-The chat shell already tracks the exact local series, source image, stack position,
-view mode, and pointer/crosshair LPS location without copying a screenshot. Its
-composer is intentionally disabled and labeled **Connector next**: no OpenAI model
-or external service is currently connected, and no DICOM or pixel data is uploaded.
+Conversation stays in Codex instead of being duplicated in the website. A repository
+skill and authenticated loopback control API let Codex read the exact visible series,
+source image, stack position, rendered state, and pinned/crosshair DICOM LPS point;
+select an exact native or MPR target; and change display tools. The bridge is
+memory-only and sends no DICOM, pixel data, screenshots, source text, or coordinates
+to an external DICOM-processing service.
 
 **Compare over time** is a separate planned mode and is intentionally disabled. It
 will be enabled only after exact timepoint pairing, calibrated measurements,
@@ -42,15 +42,18 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 
 ## Current capabilities
 
-- Focused split-screen single-series interface with one native image pane or three
-  vertically stacked MPR panes on the left and persistent agent chat on the right;
-  no measurement, export, packet, readiness, SEG/GSPS, consultation, or agent-state
-  panels appear in the default workspace.
-- Versioned, session-only chat context with exact opaque series/source identity,
-  stack position, view mode, and pointer/crosshair LPS coordinates. It contains no
-  pixels, source text, or direct identifiers; the friendly series description is a
-  local display label only. The composer stays disabled until the authenticated,
-  consented local connector is implemented.
+- Focused side-panel single-series interface with one native image pane or three
+  vertically stacked MPR panes; no embedded chat, measurement, export, packet,
+  readiness, SEG/GSPS, consultation, or legacy agent-state panels appear in the
+  default workspace.
+- Versioned, session-only Codex control state with exact opaque series/source identity,
+  stack position, view mode, render status, display tool, and pinned/crosshair LPS
+  coordinates. Browser observations contain no pixels, source text, direct
+  identifiers, measurements, diagnosis, or response conclusion.
+- A repo-owned `skills/scanview-control` skill and strict local client for listing
+  series, reading active state, opening an exact source in native or MPR view,
+  controlling display tools, querying minimized instance metadata, and retrieving an
+  exact DICOM object only when local analysis requires it.
 - Separate visible but locked time-comparison mode, with measurement and alignment
   requirements documented before implementation.
 - Local folder import; no upload, analytics, fonts, or telemetry.
@@ -458,6 +461,7 @@ The server exposes:
 
 - `GET /v1/health` (no token required)
 - `GET /v1/manifest`
+- `GET /v1/viewer-control` (fresh exact rendered state plus the latest command)
 - `GET /v1/viewer-state` (opt-in, expiring browser session state)
 - `GET /v1/comparison-candidates`
 - `GET /v1/presentation-states` (source-bound GSPS display catalog; annotation text
@@ -473,6 +477,8 @@ The server exposes:
 - `GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd|registered-moving-coverage.nrrd}`
   (accepted-review browser session only)
 - `GET /v1/instances/{opaque_id}`
+- `POST /v1/viewer-control` (bearer-agent navigation/display command; memory only)
+- `POST /v1/viewer-control/observation` (same-origin browser heartbeat; memory only)
 - `POST /v1/viewer-state` (same-origin browser publication/clear; memory only)
 - `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
 - `POST /v1/consultation-packets` (same-origin browser session; in-memory derivative only)
@@ -485,8 +491,10 @@ All endpoints except health require authentication. The unified browser uses a
 same-origin HttpOnly session cookie instead of exposing the printed bearer token to
 application JavaScript. QA preview pixels and review submission specifically require
 that browser session; a bearer-authorized agent can read only the minimized QA status.
-All POSTs additionally require the exact local origin and bounded route-specific
-content. The viewer-state route accepts at most 16 KiB of strict JSON and keeps only
+Browser-session POSTs require the exact local origin and bounded route-specific
+content. The viewer-control command POST instead requires the bearer-agent capability,
+uses a strict 8 KiB JSON contract, and refuses browser authorization alone. The
+viewer-state route accepts at most 16 KiB of strict JSON and keeps only
 the latest 30-second publication in memory. Visit-packet
 input contains only the two timepoint key-image archives. Consultation input contains
 only two neutral MR/CT key-image archives. Comparison-review input
@@ -640,43 +648,39 @@ are never sent to the HTTP server. Opaque IDs remain sensitive and potentially
 linkable; this navigation is not pair approval, registration, review, or a medical
 conclusion.
 
-## Share the current view with a local agent
+## Control the side-panel viewer from Codex
 
-In the unified workspace, choose **Agent state: off** to opt in. The button visibly
-changes to **Agent state: on**. A bearer-authorized local agent can then read the
-short-lived state:
+Launch ScanView, keep its one-time browser URL open in the Codex side panel, and give
+the printed bearer token only to the local Codex session. Repository agents are routed
+through `skills/scanview-control/SKILL.md`; the helper can inspect or change the view
+without screenshots or UI scraping:
 
 ```bash
-curl --fail --silent \
-  -H 'Authorization: Bearer <token printed by the launcher>' \
-  http://127.0.0.1:8765/v1/viewer-state
+export SCANVIEW_AGENT_TOKEN='<ephemeral token from the launcher>'
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py state
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py series
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py show \
+  --series-id 'series_…' --instance-id 'instance_…' \
+  --view mpr --tool crosshairs --reset
 ```
 
-Do not put the bearer token in shared scripts, shell history, screenshots, or logs.
-The response conforms to `schemas/scanview-viewer-state-v2.schema.json`. It contains
-opaque local Image A/Image B series/instance IDs and stack positions, the declared
-`consult_prep` or `longitudinal_review` workspace and its exact reference or timepoint
-roles, tool/link state, an optional opaque MPR series ID, measurement count, and
-whether a longitudinal comparison draft exists. Consult Prep requires neutral
-`reference`/`reference` roles and forbids a comparison draft.
+Do not put the token in committed files, shared scripts, screenshots, or logs. Commands
+use bearer authorization; browser observations use the separate HttpOnly session and
+exact loopback Origin. The server validates every target against the live catalog,
+assigns a monotonic in-memory revision, and accepts success only after the browser
+reports the same command and `render_status: ready`. Native commands require the exact
+source instance. MPR commands use a patient-space target and report the exact nearest
+native source slice at the rendered crosshair.
 
-If a supported source DICOM SEG is visibly open on the active native MPR grid, the
-state may additionally include only the opaque SEG object ID, segment number,
-referenced series ID, and source-SEG catalog-content SHA-256. Fixed flags say the
-display is read-only, no mask pixels are shared, creator identity and accuracy are
-not verified, clinical meaning is not assessed, and ScanView added no interpretation.
-The server joins that reference to the separately guarded source-SEG catalog and
-returns `source_changed` after any guarded input changes. It never includes pixels,
-mask bytes/hash, source descriptions/text, labels/codes, algorithm fields, dates,
-volume, measurement values/geometry/labels, paths, or direct patient identifiers.
+The bridge authorizes navigation, point focus, display-tool selection, and reset only.
+It cannot mutate DICOM, create measurements, diagnose, classify response, or produce a
+clinical conclusion. `GET /v1/manifest`, minimized instance metadata, and protected
+`GET /v1/instances/{id}` provide local source access when needed; DICOM parsing and
+pixel analysis must remain on this computer.
 
-Every posted field is checked against the local manifest and, when applicable, the
-guarded source-SEG catalog. All navigation, source mutation, SEG mask reading or
-interpretation, diagnosis, response-classification, and clinical-conclusion
-permissions are fixed false. Turning sharing off clears and revokes that tab's
-ephemeral publisher; closing the page also clears it, and missed cleanup still expires
-within 30 seconds. This state is navigation context, not an imaging observation,
-pairing decision, clinical review, or medical conclusion.
+The older `/v1/viewer-state` evidence-workspace contract remains implemented for
+compatibility and tests, but its opt-in controls are intentionally absent from the
+focused side-panel surface.
 
 When a supported source DICOM SEG is open, expand **Qualified source-SEG boundary
 review record** to create a distinct review artifact. The browser posts only the
