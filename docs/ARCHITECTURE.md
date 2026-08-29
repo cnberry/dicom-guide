@@ -448,7 +448,7 @@ is not an MVP feature and is never allowed between CT and MRI.
   `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
   payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
   and `--require-hashes`; every launch verifies the bundle and probes installed
-  versions, UI, all 29 schemas, consultation contracts, agent consultation-plan,
+  versions, UI, all 30 schemas, consultation contracts, agent consultation-plan,
   source-segmentation validation, manual ROI review/comparison, native-boundary
   display, agent-access
   audit, and longitudinal-readiness support
@@ -456,6 +456,10 @@ is not an MVP feature and is never allowed between CT and MRI.
 - Trust boundary: the offline manifest detects payload corruption but is not publisher
   authentication. Python 3.11+ is supplied by the host and is not covered by the
   bundle. The builder may fetch the pinned wheel; installation and runtime do not.
+- Interoperability boundary: pinned highdicom and dcmqi environments are independent,
+  patient-free test oracles only. dcmqi writer/reader processes run under
+  OS-enforced external-network isolation. Neither project enters the runtime bundle
+  or provides an external processing service.
 - Next: produce signed/notarized macOS and Linux distributions; optional Orthanc
   remains separate.
 - Later: Tauri/Electron or a packaged interpreter after both platform smoke tests.

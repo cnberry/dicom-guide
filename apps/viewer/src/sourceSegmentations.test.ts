@@ -59,7 +59,7 @@ const digest = async (bytes: Uint8Array): Promise<string> => {
 const artifact = async (): Promise<SourceSegmentationCatalog> => {
   const mask = new Uint8Array([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
   return {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     artifact_type: 'scanview.source-segmentation-catalog',
     generated_at: '2026-08-29T12:00:00Z',
     catalog_content_sha256: 'a'.repeat(64),
@@ -97,6 +97,7 @@ const artifact = async (): Promise<SourceSegmentationCatalog> => {
         referenced_instance_ids: [ids.instances[0], ids.instances[1]],
       },
       referenced_instance_count: 2,
+      spatial_location_evidence: 'explicit_yes_and_exact_native_geometry',
       grid: {
         relationship: 'exact_native_source_grid',
         dimensions: [3, 2, 2],
@@ -171,6 +172,21 @@ describe('strict source-carried DICOM SEG catalog', () => {
     expect(
       readSourceSegmentationCatalog(completeSeriesReference, [sourceSeries()]),
     ).toBeDefined();
+
+    const optionalSpatialTag = await artifact();
+    optionalSpatialTag.segmentations[0].spatial_location_evidence =
+      'optional_tag_absent_exact_native_geometry';
+    expect(
+      readSourceSegmentationCatalog(optionalSpatialTag, [sourceSeries()]),
+    ).toBeDefined();
+
+    const invalidSpatialEvidence = await artifact();
+    Object.assign(invalidSpatialEvidence.segmentations[0], {
+      spatial_location_evidence: 'unverified',
+    });
+    expect(
+      readSourceSegmentationCatalog(invalidSpatialEvidence, [sourceSeries()]),
+    ).toBeUndefined();
 
     const altered = structuredClone(input);
     altered.segmentations[0].segments[0].computed_volume_ml = 4;

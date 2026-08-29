@@ -44,9 +44,12 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   satisfy ScanView's strict DICOM full-image rule. Creator identity and source-text
   meaning are not assessed.
 - Conservative local source-carried DICOM SEG import: uncompressed binary masks with
-  explicit source references, `SpatialLocationsPreserved=YES`, a supported two-
-  dimension multi-frame organization, one exact regular single-frame MR/CT grid, and
-  bounded catalog-wide decode/mask budgets are decoded locally. Browser-session mask
+  exact per-frame source references, a supported two-dimension multi-frame
+  organization, one exact regular single-frame MR/CT grid, and bounded catalog-wide
+  decode/mask budgets are decoded locally. DICOM's optional Spatial Locations
+  Preserved value may be `YES` or absent after all native identity and geometry
+  checks pass; explicit `NO`, `REORIENTED_ONLY`, or any other value fails closed.
+  Browser-session mask
   bytes are independently rehashed and reordered by exact source identity to the
   physical Cornerstone volume. Bearer agents may read the sensitive local catalog but
   never mask bytes. Passing this narrow profile is not full DICOM conformance
@@ -210,8 +213,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.11.0.zip
-cd scanview-offline-0.11.0
+unzip release/scanview-offline-0.12.0.zip
+cd scanview-offline-0.12.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -226,6 +229,16 @@ Building the bundle may download the pinned dependency unless `--pydicom-wheel` 
 supplied, but installation, viewing, indexing, comparison, and evidence generation
 are offline. The integrity manifest is corruption evidence, not publisher signing or
 clinical authentication. Output is non-overwriting.
+
+The retained owner-only v0.12.0 ZIP is 5,535,669 bytes with SHA-256
+`71712961f15de19aea17a48d315099fde60b5f564458ef29c062f8fc6c4fa614`.
+It was built twice byte-identically and passed a fresh no-index install, 30-schema
+runtime check, owner-only dcmqi-created source-SEG CLI validation, loopback
+authorization/browser-mask/source-change gates, and production-browser display on
+macOS arm64. The exact runtime contains neither dcmqi, highdicom, nor NumPy and
+requires no network or external DICOM-processing API. Strawberry Linux verification
+is pending because its configured SSH public key was refused on 2026-08-29; no
+patient data was transferred.
 
 The retained owner-only v0.11.0 ZIP is 5,532,095 bytes with SHA-256
 `4fb920ce93ab1459eb3953644162121a02539ba82e7de5881bbc0fc35b345aaf`.
@@ -264,6 +277,22 @@ It generates patient-free DICOM, disables socket connections during generation a
 validation, and proves byte-identical dense-mask reconstruction between highdicom and
 ScanView. These packages are not included in the offline runtime and are never used on
 Mila data.
+
+The optional v0.12 interoperability gate independently commissions NCI/QIICR dcmqi
+1.5.6 revision `60d63dc` as both writer and reader:
+
+```bash
+python3 -m venv /private/tmp/scanview-dcmqi-interop
+/private/tmp/scanview-dcmqi-interop/bin/python -m pip install \
+  -e './packages/agent[dcmqi-interop]'
+/private/tmp/scanview-dcmqi-interop/bin/python \
+  scripts/verify_dcmqi_source_segmentation.py
+```
+
+The dcmqi executables run inside macOS `sandbox-exec` or a Linux bubblewrap
+private-network namespace, and the gate fails if isolation is unavailable. It uses
+and deletes patient-free data only, proves dcmqi-to-dcmqi and dcmqi-to-ScanView
+byte-identical mask reconstruction, and does not add dcmqi to the offline runtime.
 
 ## Run the folder-picker viewer
 

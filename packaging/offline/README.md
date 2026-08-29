@@ -24,7 +24,7 @@ sh launch.sh '/absolute/path/to/DICOM' --agent-audit-log \
 Set `SCANVIEW_PYTHON=/absolute/path/to/python3` when the required interpreter is
 not named `python3`. Installation uses only the included wheels with `--no-index`
 and `--require-hashes`. Every launch rechecks the installed versions, embedded UI,
-all 29 schemas, consultation contracts, agent consultation-plan validation, strict
+all 30 schemas, consultation contracts, agent consultation-plan validation, strict
 source-bound GSPS presentation-state and DICOM SEG extraction/validation, manual ROI
 review/comparison, native-boundary display, the agent-access audit contract, and
 longitudinal-readiness reporting before
@@ -35,10 +35,10 @@ Keep this directory and its
 `.scanview-runtime` private because local browser sessions and generated evidence may
 be sensitive.
 
-The repository's optional highdicom/NumPy interoperability environment is deliberately
-not included here. It is a patient-free build/test oracle only; runtime DICOM parsing,
-mask reconstruction, and display continue to use the included ScanView/pydicom code
-with no external processing API or network fallback.
+The repository's optional highdicom/NumPy and dcmqi interoperability environments are
+deliberately not included here. They are patient-free build/test oracles only; runtime
+DICOM parsing, mask reconstruction, and display continue to use the included
+ScanView/pydicom code with no external processing API or network fallback.
 
 `bundle.json` and `verify.py` detect payload corruption or changes after the bundle
 was built. They are not a publisher signature, code-signing identity, medical-record

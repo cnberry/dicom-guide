@@ -149,6 +149,39 @@ This is independent implementation evidence for the supported profile, not full 
 conformance certification. A real vendor-produced fixture and comparison in a clinical
 system or established viewer such as 3D Slicer or Weasis remain future gates.
 
+## Independent dcmqi interoperability used in v0.12
+
+[QIICR dcmqi](https://github.com/QIICR/dcmqi) is the NCI/QIICR BSD-3-Clause command-line
+conversion project for quantitative DICOM objects. The official
+[dcmqi 1.5.6 Python distribution](https://pypi.org/project/dcmqi/) publishes
+macOS and Linux wheels containing the converters; the commissioned executables report
+revision `60d63dc`, tag `v1.5.6`. The
+[`itkimage2segimage` guide](https://qiicr.gitbook.io/dcmqi-guide/opening/cmd_tools/seg/itkimage2segimage)
+documents creation of DICOM SEG from a label image and source DICOM, while the
+[`segimage2itkimage` guide](https://qiicr.gitbook.io/dcmqi-guide/opening/cmd_tools/seg/segimage2itkimage)
+documents independent extraction back to image data. dcmqi is used only as a
+patient-free development oracle and is absent from the offline runtime.
+
+The dcmqi-produced fixture exposed a second interoperability assumption: its
+otherwise exact native-grid per-frame source references omit Spatial Locations
+Preserved. In the current DICOM
+[General Reference module](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_c.12.4.html)
+and [functional-group macro](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.7.6.16.2.html),
+the attribute is Type 3, so it is optional. Source-SEG catalog v2 therefore records
+whether the evidence was explicit `YES` or optional-tag absence. Absence never
+relaxes the independent SOP class/instance, source hash, exact frame position, matrix,
+orientation, spacing, regular-grid, and bounded-decode checks; explicit `NO`,
+`REORIENTED_ONLY`, or any other value is refused.
+
+The exact gate runs the writer and reader under OS-enforced external-network
+isolation, first proves an external connection is denied, and uses only a deleted
+temporary patient-free dataset. The dcmqi round trip, fixed reference implementation,
+and ScanView each reconstruct the same 98,304-byte mask, 3,083 marked voxels,
+3.946240 mL, and SHA-256
+`81946112b1311f1ee9ff4fe1d61f86d36ce82d076122b39b9d4e7a8e46cf82bb`.
+This supplies a second independent project check, not full conformance, clinical
+validation, creator authentication, or tumor/response interpretation.
+
 ## Manual ROI DICOM SEG profile
 
 DICOM defines Segmentation objects as pixel classifications derived from referenced

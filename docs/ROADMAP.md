@@ -654,6 +654,36 @@
    x86_64. Both runtimes excluded highdicom/NumPy, required no external DICOM API,
    and reproduced the strict catalog/authentication/mask/source-change behavior.
 
+## Completed in the thirty-second milestone
+
+1. Added a second independent patient-free SEG interoperability gate with exact
+   NCI/QIICR dcmqi 1.5.6 revision `60d63dc` and pydicom 3.0.2. dcmqi is an optional
+   test dependency only and never enters the ScanView runtime or processes Mila data.
+2. Ran dcmqi's writer and reader inside macOS `sandbox-exec` deny-all-network
+   isolation, with a separate blocked-network probe before DICOM conversion. The
+   Linux path requires bubblewrap with a private network namespace and fails closed
+   when that isolation is unavailable.
+3. Independently generated and read a 24-source/11-frame sparse binary SEG, then
+   required the dcmqi round trip, fixed reference mask, and ScanView import to agree
+   on all 98,304 bytes, 3,083 marked voxels, 3.946240 mL, and SHA-256
+   `81946112b1311f1ee9ff4fe1d61f86d36ce82d076122b39b9d4e7a8e46cf82bb`.
+4. Corrected the earlier assumption that Spatial Locations Preserved must be present.
+   The current DICOM General Reference module defines it as optional. ScanView now
+   accepts `YES` or absence only after all exact source identity and native-geometry
+   guards pass, records the evidence path in source-SEG catalog v2, and refuses
+   explicit `NO`, `REORIENTED_ONLY`, or any other value.
+5. Passed patient-free production-browser QA with the dcmqi object: one supported SEG,
+   zero locked objects, 24 source slices, 11 mapped frames, one 3,083-voxel segment,
+   and visible read-only overlays in all three linked MPR planes without browser
+   warnings or errors.
+6. Built the owner-only v0.12.0 offline ZIP twice byte-identically. A fresh macOS arm64
+   no-index install passed the 30-schema runtime, strict packaged CLI, loopback
+   authorization, browser-only exact mask, and changed-source gates; the runtime
+   contains neither dcmqi, highdicom, nor NumPy and requires no external processing API.
+7. Strawberry Linux v0.12 commissioning remains pending because the configured SSH
+   public key was refused on 2026-08-29. No patient data was transferred; the earlier
+   exact v0.11 Linux gate remains passing.
+
 ## Immediate
 
 1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
@@ -687,13 +717,18 @@
 
 ## Next milestone
 
-1. Import a future same-modality Mila follow-up and complete explicit series pairing,
+1. Test source-SEG v2 against a real vendor-produced or clinical-system-exported
+   patient-free fixture in addition to highdicom and dcmqi, while retaining the
+   conservative fail-closed profile.
+2. Restore authenticated Strawberry access and rerun the exact v0.12 dcmqi,
+   no-index-package, and loopback endpoint gates under Linux bubblewrap.
+3. Import a future same-modality Mila follow-up and complete explicit series pairing,
    separately reviewed ROI boundaries, same-lesion/tissue confirmation, and qualified
    pairing review. Keep the current MRI+CT media out of this longitudinal path.
-2. Add platform signing and notarization without weakening local-only runtime behavior.
-3. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
+4. Add platform signing and notarization without weakening local-only runtime behavior.
+5. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
    configuration.
-4. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
+6. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
 
 ## Registration milestone
 

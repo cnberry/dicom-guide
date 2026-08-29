@@ -52,9 +52,9 @@ def _wheel(
 def _inputs(tmp_path: Path) -> tuple[Path, Path]:
     return (
         _wheel(
-            tmp_path / "scanview_agent-0.11.0-py3-none-any.whl",
+            tmp_path / "scanview_agent-0.12.0-py3-none-any.whl",
             name="scanview-agent",
-            version="0.11.0",
+            version="0.12.0",
         ),
         _wheel(
             tmp_path / "pydicom-3.0.2-py3-none-any.whl",
@@ -96,23 +96,25 @@ def test_offline_bundle_is_exact_deterministic_and_local_only(tmp_path: Path) ->
     first = _build(tmp_path, "first")
     second = _build(tmp_path, "second")
     assert first.read_bytes() == second.read_bytes()
+    assert first.stat().st_mode & 0o777 == 0o600
+    assert second.stat().st_mode & 0o777 == 0o600
 
     with zipfile.ZipFile(first) as archive:
         infos = archive.infolist()
         names = [info.filename for info in infos]
         assert len(names) == len(set(names)) == 9
-        assert all(name.startswith("scanview-offline-0.11.0/") for name in names)
+        assert all(name.startswith("scanview-offline-0.12.0/") for name in names)
         assert all(info.date_time == (2020, 2, 2, 0, 0, 0) for info in infos)
         manifest = json.loads(
-            archive.read("scanview-offline-0.11.0/bundle.json")
+            archive.read("scanview-offline-0.12.0/bundle.json")
         )
         requirements = archive.read(
-            "scanview-offline-0.11.0/requirements.lock"
+            "scanview-offline-0.12.0/requirements.lock"
         ).decode()
-        install = archive.read("scanview-offline-0.11.0/install.sh").decode()
-        launch = archive.read("scanview-offline-0.11.0/launch.sh").decode()
+        install = archive.read("scanview-offline-0.12.0/install.sh").decode()
+        launch = archive.read("scanview-offline-0.12.0/launch.sh").decode()
         runtime_check = archive.read(
-            "scanview-offline-0.11.0/runtime_check.py"
+            "scanview-offline-0.12.0/runtime_check.py"
         ).decode()
 
     assert manifest["supported_platforms"] == ["macos", "linux"]
@@ -126,14 +128,14 @@ def test_offline_bundle_is_exact_deterministic_and_local_only(tmp_path: Path) ->
         "runtime_check.py",
         "verify.py",
         "wheels/pydicom-3.0.2-py3-none-any.whl",
-        "wheels/scanview_agent-0.11.0-py3-none-any.whl",
+        "wheels/scanview_agent-0.12.0-py3-none-any.whl",
     }
     assert requirements.count("--hash=sha256:") == 2
     assert "--no-index" in install and "--require-hashes" in install
     assert "runtime_check.py" in install + launch
     assert '"external_dicom_processing_api_required": False' in runtime_check
     assert "scanview_agent.consultation_boards" in runtime_check
-    assert "schema_count != 29" in runtime_check
+    assert "schema_count != 30" in runtime_check
     assert "scanview_agent.lesion_volume_reviews" in runtime_check
     assert "scanview_agent.lesion_volume_comparisons" in runtime_check
     assert "scanview_agent.lesion_volume_display" in runtime_check
@@ -165,7 +167,7 @@ def test_verifier_accepts_runtime_but_rejects_tamper_and_extra_files(
 
     (root / "README.md").write_bytes(
         zipfile.ZipFile(_build(tmp_path, "fresh")).read(
-            "scanview-offline-0.11.0/README.md"
+            "scanview-offline-0.12.0/README.md"
         )
     )
     (root / "extra.txt").write_text("unsupported")

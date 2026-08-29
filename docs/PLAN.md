@@ -84,15 +84,22 @@ result into a medical conclusion.
   finding, diagnosis, and response authority remain false.
 - Source-carried DICOM SEG read-only display for a deliberately narrow profile:
   guarded uncompressed binary SEG plus exact regular single-frame MR/CT sources,
-  explicit preserved spatial locations, consistent multi-frame dimensions, bounded
+  exact per-frame native source mapping, consistent multi-frame dimensions, bounded
   decoding/masks, independent physical-order and mask-hash validation, and browser-
-  session-only dense mask access. Full DICOM conformance, creator/algorithm identity,
-  boundary accuracy, tissue meaning, diagnosis, and response authority remain absent.
+  session-only dense mask access. Spatial Locations Preserved may be `YES` or absent
+  only after exact identity and geometry proof; explicit negative or unknown values
+  fail closed. Full DICOM conformance, creator/algorithm identity, boundary accuracy,
+  tissue meaning, diagnosis, and response authority remain absent.
 - Independent source-SEG interoperability: an optional pinned highdicom test creates
   a sparse patient-free object, reconstructs it through highdicom's source-instance
   API, and requires identical ScanView dense bytes, hash, count, and native-grid
   arithmetic. The test denies socket connections while handling DICOM and adds no
   runtime dependency or broader clinical permission.
+- A second independent source-SEG interoperability gate pins NCI/QIICR dcmqi as both
+  writer and reader. It runs both executables inside OS-enforced external-network
+  isolation, requires exact dcmqi/reference/ScanView mask equality, exercises the
+  standard's optional Spatial Locations Preserved path, and adds no runtime dependency
+  or broader clinical permission.
 - Source-bound one-MR/one-CT consultation packets for clinician discussion. Neutral
   key-image archives, exact live-catalog position and source-byte rehashing, strict
   cross-study/patient-context gates, static human presentation, privacy-minimized
@@ -282,3 +289,10 @@ result into a medical conclusion.
     Instance References may be a superset of encoded sparse frames; every actual frame
     must still map to one exact referenced source plane. The optional packages must not
     enter the offline runtime or process Mila data.
+28. **Second-project SEG oracle:** an exact pinned NCI/QIICR dcmqi writer and reader
+    must independently round-trip one patient-free binary SEG under OS-enforced
+    external-network isolation. ScanView may accept absent Spatial Locations Preserved
+    only when every source identity, SOP, native position, matrix, orientation,
+    spacing, hash, and bounds guard proves exact mapping; explicit `NO`,
+    `REORIENTED_ONLY`, or any other value must fail closed. dcmqi must not enter the
+    offline runtime or process Mila data.

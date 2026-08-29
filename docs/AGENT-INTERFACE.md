@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.11.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.12.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -19,7 +19,7 @@ sh launch.sh '/safe/local/DICOM/root' --no-open
 ```
 
 Installation invokes pip with `--no-index --require-hashes`; every launch rechecks
-the bundle and installed versions, UI, all 29 schemas, consultation contracts, agent
+the bundle and installed versions, UI, all 30 schemas, consultation contracts, agent
 consultation-plan, GSPS, and source-SEG contracts before any DICOM catalog is built. The launched agent
 interface is the same loopback bearer-
 authorized API documented below. Build-time dependency retrieval is separate from
@@ -61,6 +61,18 @@ outside the offline bundle and uses no patient data. The gate disables socket
 connections, independently creates and reads a sparse SEG, and requires highdicom and
 ScanView to reconstruct identical dense bytes, SHA-256, voxel count, and native-grid
 volume. Exact-artifact macOS/Strawberry evidence is recorded in `docs/STATUS.md`.
+
+The owner-only v0.12.0 artifact is 5,535,669 bytes with SHA-256
+`71712961f15de19aea17a48d315099fde60b5f564458ef29c062f8fc6c4fa614`.
+Its second build was byte-identical. A fresh macOS arm64 extraction passed
+verification, no-index install, the embedded 30-schema runtime, owner-only
+dcmqi-created source-SEG creation/validation, 401/200 catalog authorization,
+`no-store`, bearer mask refusal, browser-session exact mask reconstruction, and
+changed-source 409. The installed artifact contained neither dcmqi, highdicom, nor
+NumPy and declared no runtime network or external DICOM-processing API requirement.
+The optional dcmqi writer/reader gate runs outside the package in an OS-isolated,
+patient-free environment. Strawberry Linux commissioning is pending because its
+configured SSH public key was refused on 2026-08-29; no patient data was transferred.
 
 ## Local artifacts
 
@@ -175,11 +187,13 @@ scanview-agent validate-source-segmentations '/safe/local/DICOM/root' \
   '/safe/private/source-segmentations.json'
 ```
 
-The `scanview.source-segmentation-catalog` v1 artifact accepts only ScanView's
+The `scanview.source-segmentation-catalog` v2 artifact accepts only ScanView's
 narrow native-grid profile: uncompressed Explicit/Implicit VR Little Endian binary
 SEG, one exact regular single-frame MR/CT series, explicit frame source references
-with Spatial Locations Preserved `YES`, segment and plane-position dimensions, and
-bounded text/frame/segment/grid/work/memory. A supported object carries opaque
+with Spatial Locations Preserved `YES` or absent after exact native identity and
+geometry proof, segment and plane-position dimensions, and bounded
+text/frame/segment/grid/work/memory. Explicit negative or unknown spatial-location
+values are refused. A supported object carries opaque
 source relationships, labels/codes, declared algorithm, technical voxel/volume
 arithmetic, source/SEG hashes, and a hash for each dense 0/1 segment mask. It contains
 no mask pixels or paths but remains sensitive and `deidentified: false`. Passing the

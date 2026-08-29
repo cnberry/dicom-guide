@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 04:44 PDT
+Last updated: 2026-08-29 05:13 PDT
 
 ## Data transfer
 
@@ -51,8 +51,11 @@ Last updated: 2026-08-29 04:44 PDT
 - A strict read-only source-carried DICOM SEG path now catalogs a conservative binary,
   uncompressed, exact-native-grid subset. It performs stable no-follow reads, rehashes
   every referenced MR/CT source, validates per-frame derivation/source references,
-  `SpatialLocationsPreserved=YES`, segment/plane dimensions, regular geometry, and
-  aggregate work/memory bounds, then reconstructs bounded dense masks in memory.
+  segment/plane dimensions, regular geometry, and aggregate work/memory bounds, then
+  reconstructs bounded dense masks in memory. DICOM's optional Spatial Locations
+  Preserved attribute may be `YES` or absent only after all exact source and geometry
+  guards pass; explicit negative or unknown values fail closed. Catalog v2 reports
+  which evidence path applied.
 - The browser independently checks catalog privacy and permission constants, physical
   slice ordering, geometry, mask SHA-256, binary values, voxel count, and technical
   native-grid volume before a read-only three-plane display. Browser capability is
@@ -66,6 +69,11 @@ Last updated: 2026-08-29 04:44 PDT
   ScanView accepts that superset while retaining exact per-frame SOP, native-plane,
   source-hash, geometry, and bounds checks. highdicom and NumPy are test-only and are
   absent from the local runtime and offline bundle.
+- A second optional patient-free interoperability gate pins NCI/QIICR dcmqi 1.5.6
+  revision `60d63dc` as an independent writer and reader. Both converters run inside
+  OS-enforced external-network isolation and must reconstruct the same dense mask as
+  ScanView and the fixed reference. dcmqi is absent from the runtime and never
+  processes Mila data.
 - Initial local-first React/TypeScript/Cornerstone3D viewer implemented.
 - Baseline/follow-up pairing, linked stack position, compatibility explanations, and
   registration safety gate implemented.
@@ -305,7 +313,7 @@ Last updated: 2026-08-29 04:44 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 29 contracts without breaking lightweight
+  UI-embedded wheel together with all 30 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -322,6 +330,40 @@ Last updated: 2026-08-29 04:44 PDT
 
 ## Verification
 
+- v0.12.0 independent dcmqi interoperability milestone: passing on macOS arm64. The
+  full Python suite reports 258 tests; the viewer reports 135 tests across 28 files;
+  TypeScript typecheck, production build, Python bytecode compilation, diff hygiene,
+  and all 30 Draft 2020-12 schemas pass. A patient-free gate pinned dcmqi 1.5.6
+  revision `60d63dc` and pydicom 3.0.2, proved external access was denied by macOS
+  `sandbox-exec`, independently wrote and read a sparse 24-source/11-frame binary
+  SEG, and required dcmqi, ScanView, and the fixed reference to reconstruct the same
+  98,304 bytes, 3,083 foreground voxels, 3.946240 mL, and SHA-256
+  `81946112b1311f1ee9ff4fe1d61f86d36ce82d076122b39b9d4e7a8e46cf82bb`.
+- Patient-free production-browser QA opened the dcmqi-created object with one
+  supported SEG, zero locked objects, 24 source slices, 11 mapped frames, and one
+  segment. It rendered the read-only boundary in axial, coronal, and sagittal MPR
+  planes with linked crosshairs, exposed no edit/evidence/export path, and reported
+  no browser warnings or errors.
+- Offline runtime bundle v0.12.0: passing on macOS arm64. The retained owner-only
+  5,535,669-byte ZIP has nine fixed-timestamp members and SHA-256
+  `71712961f15de19aea17a48d315099fde60b5f564458ef29c062f8fc6c4fa614`.
+  It contains the 3,138,673-byte ScanView wheel (SHA-256
+  `532ac041f940689eca554a206b34df76d7989a45ffd302724a9d1796889ac3dd`),
+  11 UI/worker/codec files (10,289,454 uncompressed bytes), all 30 schemas (284,332
+  bytes), and pinned pydicom 3.0.2. A second independent build was byte-identical.
+  A fresh exact-artifact extraction installed with `PIP_NO_INDEX=1`, reported
+  version 0.12.0, embedded UI, 30 schemas, and both runtime-network and external-
+  DICOM-processing-API requirements false; dcmqi, highdicom, and NumPy were absent.
+- The exact packaged macOS gate created and validated an owner-only dcmqi source-SEG
+  catalog, then returned 401 for an unauthenticated catalog, 200 plus `no-store` for
+  an authenticated catalog, 403 for bearer mask access, 200 for browser-session
+  access to the exact 98,304-byte mask/hash/count, and 409 after a source mutation.
+  The server bound only to `127.0.0.1`.
+- Strawberry Linux v0.12 commissioning is pending: `strawberry.local` resolves and
+  answers on SSH, but the configured `~/.ssh/id_ed25519` public key was refused on
+  2026-08-29. No password, host configuration, or remote state was changed; no v0.12
+  software or patient data was transferred. The exact v0.11 Linux gate remains
+  passing, but the new Linux bubblewrap dcmqi path is not yet claimed as tested.
 - v0.11.0 independent highdicom interoperability milestone: passing. The full Python
   suite reports 255 tests; the viewer reports 135 tests across 28 files; TypeScript
   typecheck, production build, Python bytecode compilation, diff hygiene, and all 29
@@ -850,8 +892,9 @@ Last updated: 2026-08-29 04:44 PDT
 - Source-carried SEG support is intentionally a narrow ScanView profile, not full DICOM
   conformance. Fractional/compressed SEG, multiframe sources, resampling, non-native or
   irregular grids, and unsupported reference/dimension forms are refused. The pinned
-  highdicom sparse-reference gate now passes; real vendor-produced fixtures, broader
-  interoperability, and comparison with a clinical imaging system remain.
+  highdicom sparse-reference and dcmqi writer/reader gates now pass on macOS; the
+  dcmqi Linux gate, real vendor-produced fixtures, broader interoperability, and
+  comparison with a clinical imaging system remain.
   A displayed mask, label, code, creator, algorithm, count, or technical volume is not
   a reviewed tumor segmentation, clinical conclusion, or treatment-response result.
 - Different-frame longitudinal exams still use approximate normalized linking until

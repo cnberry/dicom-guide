@@ -135,7 +135,7 @@ Object.assign(dataset, {
   SeriesDescription: 'ScanView unreviewed manual lesion ROI',
   Manufacturer: 'ScanView local',
   ManufacturerModelName: 'ScanView',
-  SoftwareVersions: '0.11.0',
+  SoftwareVersions: '0.12.0',
 });
 const segment = Array.isArray(dataset.SegmentSequence)
   ? dataset.SegmentSequence[0]

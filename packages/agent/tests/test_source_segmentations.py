@@ -286,6 +286,9 @@ def test_builds_multi_segment_read_only_native_masks(tmp_path: Path) -> None:
     assert state["grid"]["dimensions"] == [3, 2, 3]
     assert state["grid"]["voxel_volume_mm3"] == 8.0
     assert state["referenced_instance_count"] == 3
+    assert state["spatial_location_evidence"] == (
+        "explicit_yes_and_exact_native_geometry"
+    )
     assert state["segments"][0]["marked_voxel_count"] == 2
     assert state["segments"][0]["computed_volume_ml"] == 0.016
     assert state["segments"][1]["marked_voxel_count"] == 2
@@ -298,7 +301,7 @@ def test_builds_multi_segment_read_only_native_masks(tmp_path: Path) -> None:
         (
             Path(__file__).resolve().parents[3]
             / "schemas"
-            / "scanview-source-segmentation-catalog-v1.schema.json"
+            / "scanview-source-segmentation-catalog-v2.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(schema)
@@ -315,7 +318,7 @@ def test_builds_multi_segment_read_only_native_masks(tmp_path: Path) -> None:
         load_source=registry_segmentation_source_loader(catalog, registry),
     )
     assert summary == {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "artifact_type": "scanview.source-segmentation-summary",
         "valid": True,
         "errors": [],
@@ -427,13 +430,43 @@ def test_accepts_complete_series_reference_when_empty_planes_are_omitted(
     assert len(masks) == 2
 
 
-def test_requires_explicit_preserved_spatial_locations(tmp_path: Path) -> None:
+def test_accepts_optional_spatial_locations_when_exact_native_geometry_is_proven(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "dicom"
+    _, _, seg_path = _fixture(root)
+    dataset = dcmread(seg_path)
+    for frame in dataset.PerFrameFunctionalGroupsSequence:
+        del frame.DerivationImageSequence[0].SourceImageSequence[
+            0
+        ].SpatialLocationsPreserved
+    dataset.save_as(seg_path, enforce_file_format=True)
+    catalog, registry = build_catalog(root, include_hashes=True)
+
+    artifact, masks, _ = build_source_segmentation_catalog(
+        catalog,
+        registry_segmentation_source_loader(catalog, registry),
+    )
+
+    assert artifact["supported_segmentation_count"] == 1
+    assert artifact["unsupported_segmentation_count"] == 0
+    assert artifact["segmentations"][0]["spatial_location_evidence"] == (
+        "optional_tag_absent_exact_native_geometry"
+    )
+    assert len(masks) == 2
+
+
+@pytest.mark.parametrize("value", ["NO", "REORIENTED_ONLY", "UNKNOWN"])
+def test_refuses_non_native_spatial_location_claims(
+    tmp_path: Path,
+    value: str,
+) -> None:
     root = tmp_path / "dicom"
     _, _, seg_path = _fixture(root)
     dataset = dcmread(seg_path)
     dataset.PerFrameFunctionalGroupsSequence[0].DerivationImageSequence[
         0
-    ].SourceImageSequence[0].SpatialLocationsPreserved = "NO"
+    ].SourceImageSequence[0].SpatialLocationsPreserved = value
     dataset.save_as(seg_path, enforce_file_format=True)
     catalog, registry = build_catalog(root, include_hashes=True)
 
@@ -443,7 +476,7 @@ def test_requires_explicit_preserved_spatial_locations(tmp_path: Path) -> None:
     )
 
     assert artifact["supported_segmentation_count"] == 0
-    assert "explicitly preserve" in artifact["unsupported_segmentations"][0]["reason"]
+    assert "explicitly refuses" in artifact["unsupported_segmentations"][0]["reason"]
     assert masks == {}
 
 

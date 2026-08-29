@@ -22,7 +22,7 @@ from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, Segmenta
 from .catalog import opaque_id
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 ARTIFACT_TYPE = "scanview.source-segmentation-catalog"
 SUMMARY_ARTIFACT_TYPE = "scanview.source-segmentation-summary"
 MAX_SEGMENTATION_BYTES = 256 * 1024 * 1024
@@ -42,7 +42,7 @@ OPAQUE_ID = {
 LIMITATIONS = [
     "These are read-only masks extracted from source-carried DICOM Segmentation objects and rejoined to exact local MR/CT source instances.",
     "ScanView does not authenticate the segmentation creator, verify the algorithm, or assess segment labels and coded properties for identifiers, accuracy, or clinical meaning.",
-    "Only a conservative native-grid subset is displayed: uncompressed binary SEG, one referenced MR/CT series, single-frame sources, exact matrix/orientation/position/spacing, and one explicit source-image reference with Spatial Locations Preserved YES per frame.",
+    "Only a conservative native-grid subset is displayed: uncompressed binary SEG, one referenced MR/CT series, single-frame sources, exact matrix/orientation/position/spacing, and one exact source-image reference per frame. Spatial Locations Preserved may be YES or absent because DICOM defines it as optional; explicit NO, REORIENTED_ONLY, or any other value is refused.",
     "Passing this narrow ScanView import profile is not full DICOM conformance certification; technical marked-voxel counts and native-grid volumes remain unreviewed, unsupported objects fail closed, and original DICOM objects remain authoritative.",
 ]
 
@@ -646,6 +646,7 @@ def _parse_segmentation(
     frames = _decode_binary_frames(dataset, rows, columns, frame_count)
     used: set[tuple[int, int]] = set()
     frame_source_ids: set[str] = set()
+    all_frames_explicitly_preserved = True
     for frame, group in zip(frames, frame_groups, strict=True):
         segment_identification = _functional_item(
             group,
@@ -673,10 +674,15 @@ def _parse_segmentation(
         source_image = _single_item(
             derivation, "SourceImageSequence", "frame source image"
         )
-        if str(getattr(source_image, "SpatialLocationsPreserved", "")) != "YES":
+        spatial_locations_preserved = str(
+            getattr(source_image, "SpatialLocationsPreserved", "")
+        ).strip()
+        if spatial_locations_preserved not in {"", "YES"}:
             raise ValueError(
-                "DICOM SEG frame does not explicitly preserve source spatial locations"
+                "DICOM SEG frame explicitly refuses exact native spatial mapping"
             )
+        if not spatial_locations_preserved:
+            all_frames_explicitly_preserved = False
         if not _code_matches(
             source_image,
             "PurposeOfReferenceCodeSequence",
@@ -837,6 +843,11 @@ def _parse_segmentation(
             "referenced_instance_ids": referenced_ids_in_source_order,
         },
         "referenced_instance_count": len(referenced_ids_in_source_order),
+        "spatial_location_evidence": (
+            "explicit_yes_and_exact_native_geometry"
+            if all_frames_explicitly_preserved
+            else "optional_tag_absent_exact_native_geometry"
+        ),
         "grid": {
             "relationship": "exact_native_source_grid",
             "dimensions": [len(ordered_ids), rows, columns],

@@ -6,10 +6,13 @@
   meanings, algorithms, hashes, and opaque source relationships may be identifying or
   clinically meaningful; the catalog is not de-identified.
 - ScanView supports only a narrow technical import profile: uncompressed binary SEG,
-  one exact regular single-frame MR/CT grid, explicit source mapping with Spatial
-  Locations Preserved `YES`, supported segment/plane dimensions, strict geometry, and
-  bounded work/memory. Unsupported or changed objects display no partial mask. Passing
-  this profile is not full DICOM conformance certification.
+  one exact regular single-frame MR/CT grid, exact per-frame source mapping, supported
+  segment/plane dimensions, strict geometry, and bounded work/memory. DICOM defines
+  Spatial Locations Preserved as optional: `YES` or absence is accepted only after
+  all exact source identity and native-geometry checks pass. Explicit `NO`,
+  `REORIENTED_ONLY`, or any other value is refused. Unsupported or changed objects
+  display no partial mask. Passing this profile is not full DICOM conformance
+  certification.
 - Bearer agents may read the authenticated sensitive catalog but cannot fetch dense
   mask bytes. Masks require the HttpOnly browser session. Both permission classes are
   explicit and bearer operations can be recorded without IDs, paths, labels, geometry,
@@ -34,6 +37,10 @@
 - The independent highdicom gate is patient-free and optional. It disables socket
   connections before DICOM generation/read; highdicom and NumPy are never installed in
   the offline runtime and are never used to process Mila data.
+- The independent dcmqi gate is also patient-free and optional. Both converters and a
+  blocked-network probe run inside OS-enforced external-network isolation; the gate
+  fails when that mechanism is unavailable. dcmqi is never installed in the offline
+  runtime and is never used to process Mila data.
 
 ## DICOM presentation-state safety
 

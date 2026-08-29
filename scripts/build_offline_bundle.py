@@ -19,7 +19,7 @@ from typing import Any, NamedTuple
 
 
 PROJECT_NAME = "scanview-agent"
-PROJECT_VERSION = "0.11.0"
+PROJECT_VERSION = "0.12.0"
 PYDICOM_VERSION = "3.0.2"
 BUNDLE_SCHEMA_VERSION = "1.0.0"
 BUNDLE_ARTIFACT_TYPE = "scanview_offline_runtime_bundle"
@@ -203,6 +203,7 @@ def _archive(bundle_root: Path, output: Path) -> None:
                 info.external_attr = (stat.S_IFREG | mode) << 16
                 info.compress_type = zipfile.ZIP_STORED
                 archive.writestr(info, path.read_bytes())
+        os.chmod(temporary, 0o600, follow_symlinks=False)
         descriptor = os.open(temporary, os.O_RDONLY)
         try:
             os.fsync(descriptor)

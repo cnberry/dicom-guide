@@ -102,6 +102,10 @@ SEG with highdicom 0.28.1, independently reconstructs its dense mask through
 highdicom's source-instance API, and requires ScanView to produce identical bytes,
 hash, count, and volume. highdicom and NumPy are optional test dependencies only and
 are not included in the offline runtime.
+V0.12 adds a second independent writer/reader gate with NCI/QIICR dcmqi 1.5.6
+revision `60d63dc`. Both converters run inside OS-enforced external-network isolation,
+and the exact dcmqi, ScanView, and reference dense masks must agree. dcmqi is an
+optional test dependency only and is not included in the offline runtime.
 The earlier source-bound boundary-review, reviewed volume-comparison, and reviewed
 native-boundary display gates remain covered by the full regression suite and v0.5.0
 cross-platform package evidence;
@@ -146,11 +150,14 @@ diagnosis, response, and conclusion permissions are false. No external API is ca
 
 `source-segmentations` creates an owner-only catalog for a deliberately narrow local
 DICOM SEG profile. It requires uncompressed binary frames, one exact regular single-
-frame MR/CT source grid, explicit per-frame source references with Spatial Locations
-Preserved `YES`, supported segment/plane dimensions, strict geometry, and catalog-wide
-decode/mask budgets. `validate-source-segmentations` rehashes every source and returns
-only aggregate counts. Full DICOM conformance, creator identity, algorithm identity or
-accuracy, boundary accuracy, tissue meaning, diagnosis, and response are not asserted.
+frame MR/CT source grid, exact per-frame source references, supported segment/plane
+dimensions, strict geometry, and catalog-wide decode/mask budgets. DICOM defines
+Spatial Locations Preserved as optional: `YES` or absence is accepted only after all
+native geometry is independently proven exact; `NO`, `REORIENTED_ONLY`, or any other
+value is refused. The v2 catalog reports which evidence path applied.
+`validate-source-segmentations` rehashes every source and returns only aggregate counts.
+Full DICOM conformance, creator identity, algorithm identity or accuracy, boundary
+accuracy, tissue meaning, diagnosis, and response are not asserted.
 The top-level Common Instance Reference may list the complete guarded source series
 when empty SEG planes are omitted; every encoded frame must still resolve through that
 set and its exact source plane.
@@ -175,6 +182,21 @@ Dependency installation may contact a package index, but the gate itself disable
 socket connections before generating or reading DICOM. It uses synthetic data only,
 creates everything under a deleted temporary directory, and adds no runtime network
 or external processing API.
+
+Run the independent dcmqi writer/reader gate separately:
+
+```bash
+python3 -m venv /private/tmp/scanview-dcmqi-interop
+/private/tmp/scanview-dcmqi-interop/bin/python -m pip install \
+  -e './packages/agent[dcmqi-interop]'
+/private/tmp/scanview-dcmqi-interop/bin/python \
+  scripts/verify_dcmqi_source_segmentation.py
+```
+
+The dcmqi executables are pinned exactly and run inside macOS `sandbox-exec` or a
+Linux bubblewrap private network namespace. The gate fails closed when that isolation
+is unavailable. It generates and deletes patient-free data only; dcmqi never processes
+Mila data and never enters the ScanView runtime or offline bundle.
 
 `create-consultation-plan` accepts a strict local request containing 2–8 exact opaque
 series/instance pairs and bounded discussion headings. It rejoins every item to the

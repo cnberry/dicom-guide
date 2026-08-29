@@ -10,7 +10,7 @@ export const SOURCE_SEGMENTATION_MAX_MASK_BYTES = 64 * 1024 * 1024;
 export const SOURCE_SEGMENTATION_LIMITATIONS = [
   'These are read-only masks extracted from source-carried DICOM Segmentation objects and rejoined to exact local MR/CT source instances.',
   'ScanView does not authenticate the segmentation creator, verify the algorithm, or assess segment labels and coded properties for identifiers, accuracy, or clinical meaning.',
-  'Only a conservative native-grid subset is displayed: uncompressed binary SEG, one referenced MR/CT series, single-frame sources, exact matrix/orientation/position/spacing, and one explicit source-image reference with Spatial Locations Preserved YES per frame.',
+  'Only a conservative native-grid subset is displayed: uncompressed binary SEG, one referenced MR/CT series, single-frame sources, exact matrix/orientation/position/spacing, and one exact source-image reference per frame. Spatial Locations Preserved may be YES or absent because DICOM defines it as optional; explicit NO, REORIENTED_ONLY, or any other value is refused.',
   'Passing this narrow ScanView import profile is not full DICOM conformance certification; technical marked-voxel counts and native-grid volumes remain unreviewed, unsupported objects fail closed, and original DICOM objects remain authoritative.',
 ] as const;
 
@@ -61,6 +61,9 @@ export type SourceSegmentation = {
     referenced_instance_ids: string[];
   };
   referenced_instance_count: number;
+  spatial_location_evidence:
+    | 'explicit_yes_and_exact_native_geometry'
+    | 'optional_tag_absent_exact_native_geometry';
   grid: {
     relationship: 'exact_native_source_grid';
     dimensions: [number, number, number];
@@ -78,7 +81,7 @@ export type SourceSegmentation = {
 };
 
 export type SourceSegmentationCatalog = {
-  schema_version: '1.0.0';
+  schema_version: '2.0.0';
   artifact_type: 'scanview.source-segmentation-catalog';
   generated_at: string;
   catalog_content_sha256: string;
@@ -285,6 +288,7 @@ const readState = (
       'display_status',
       'referenced_series',
       'referenced_instance_count',
+      'spatial_location_evidence',
       'grid',
       'frame_count',
       'segment_count',
@@ -317,6 +321,10 @@ const readState = (
     !stringIds(value.referenced_series.referenced_instance_ids, instanceIdPattern, 1, 4096) ||
     !safeInteger(value.referenced_instance_count, 1, 4096) ||
     value.referenced_instance_count !== value.referenced_series.referenced_instance_ids.length ||
+    ![
+      'explicit_yes_and_exact_native_geometry',
+      'optional_tag_absent_exact_native_geometry',
+    ].includes(String(value.spatial_location_evidence)) ||
     !isRecord(value.grid) ||
     !exactKeys(value.grid, [
       'relationship',
@@ -497,7 +505,7 @@ export const readSourceSegmentationCatalog = (
   if (
     !isRecord(value) ||
     !exactKeys(value, keys) ||
-    value.schema_version !== '1.0.0' ||
+    value.schema_version !== '2.0.0' ||
     value.artifact_type !== 'scanview.source-segmentation-catalog' ||
     typeof value.generated_at !== 'string' ||
     !value.generated_at.endsWith('Z') ||
