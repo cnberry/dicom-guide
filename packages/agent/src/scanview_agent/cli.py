@@ -7,6 +7,11 @@ import sys
 from pathlib import Path
 
 from .agent_access_audit import agent_access_audit_summary
+from .agent_consultation_plans import (
+    agent_consultation_plan_summary,
+    build_agent_consultation_plan,
+    load_strict_json,
+)
 from .catalog import build_catalog
 from .comparison import suggest_pairs
 from .comparison_reviews import (
@@ -97,6 +102,21 @@ def parser() -> argparse.ArgumentParser:
     )
     readiness.add_argument("manifest", type=Path)
     readiness.add_argument("--output", "-o", type=Path)
+
+    create_consultation_plan = commands.add_parser(
+        "create-consultation-plan",
+        help="Bind agent-proposed exact native views to a local catalog for human review",
+    )
+    create_consultation_plan.add_argument("manifest", type=Path)
+    create_consultation_plan.add_argument("request", type=Path)
+    create_consultation_plan.add_argument("--output", "-o", type=Path, required=True)
+
+    validate_consultation_plan = commands.add_parser(
+        "validate-consultation-plan",
+        help="Validate an unreviewed agent consultation plan against its exact catalog",
+    )
+    validate_consultation_plan.add_argument("manifest", type=Path)
+    validate_consultation_plan.add_argument("plan", type=Path)
 
     api = commands.add_parser("serve", help="Run the source-read-only loopback agent API")
     api.add_argument("root", type=Path)
@@ -498,6 +518,24 @@ def main() -> None:
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
             argument_parser.error(str(error))
         _write_json(report, args.output)
+    elif args.command == "create-consultation-plan":
+        try:
+            catalog = load_strict_json(args.manifest.read_bytes())
+            request = load_strict_json(args.request.read_bytes())
+            plan = build_agent_consultation_plan(catalog, request)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
+            argument_parser.error(str(error))
+        _write_json(plan, args.output)
+    elif args.command == "validate-consultation-plan":
+        try:
+            catalog = load_strict_json(args.manifest.read_bytes())
+            plan = load_strict_json(args.plan.read_bytes())
+        except (OSError, ValueError) as error:
+            argument_parser.error(str(error))
+        summary = agent_consultation_plan_summary(catalog, plan)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
     elif args.command == "serve":
         catalog, registry = build_catalog(args.root, include_hashes=not args.no_hashes)
         try:

@@ -9,6 +9,7 @@ from importlib.resources import files
 
 from scanview_agent.cli import _viewer_dist
 from scanview_agent.agent_access_audit import ARTIFACT_TYPE as AGENT_AUDIT_ARTIFACT_TYPE
+from scanview_agent.agent_consultation_plans import ARTIFACT_TYPE as AGENT_PLAN_ARTIFACT_TYPE
 from scanview_agent.consultation_boards import ARTIFACT_TYPE as BOARD_ARTIFACT_TYPE
 from scanview_agent.consultation_packets import ARTIFACT_TYPE
 from scanview_agent.lesion_volume_reviews import ARTIFACT_TYPE as ROI_REVIEW_ARTIFACT_TYPE
@@ -18,7 +19,7 @@ from scanview_agent.longitudinal_readiness import ARTIFACT_TYPE as READINESS_ART
 
 
 def main() -> None:
-    if version("scanview-agent") != "0.7.0" or version("pydicom") != "3.0.2":
+    if version("scanview-agent") != "0.8.0" or version("pydicom") != "3.0.2":
         raise SystemExit("installed ScanView runtime versions are invalid")
     if ARTIFACT_TYPE != "clinician_consultation_packet":
         raise SystemExit("installed ScanView consultation contract is unavailable")
@@ -36,17 +37,19 @@ def main() -> None:
         raise SystemExit("installed ScanView agent access audit contract is unavailable")
     if READINESS_ARTIFACT_TYPE != "scanview.longitudinal-readiness":
         raise SystemExit("installed ScanView longitudinal readiness contract is unavailable")
+    if AGENT_PLAN_ARTIFACT_TYPE != "scanview.agent-consultation-plan":
+        raise SystemExit("installed ScanView agent consultation-plan contract is unavailable")
     if not _viewer_dist(None).joinpath("index.html").is_file():
         raise SystemExit("installed ScanView UI is unavailable")
     schemas = list(files("scanview_agent").joinpath("schemas").iterdir())
     schema_count = len([path for path in schemas if path.name.endswith(".json")])
-    if schema_count != 26:
+    if schema_count != 27:
         raise SystemExit("installed ScanView schemas are incomplete")
     print(
         json.dumps(
             {
                 "valid": True,
-                "scanview_agent": "0.7.0",
+                "scanview_agent": "0.8.0",
                 "pydicom": "3.0.2",
                 "embedded_ui": True,
                 "schema_count": schema_count,

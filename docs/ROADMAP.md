@@ -536,6 +536,37 @@
    and Strawberry Linux x86_64 no-index install, runtime, readiness, authorization,
    audit-resume/privacy, and tamper-refusal gates using synthetic DICOM only.
 
+## Completed in the twenty-eighth milestone
+
+1. Added a strict v1 agent consultation-plan artifact for 2–8 ordered exact native
+   MRI/CT sources and bounded discussion headings. Construction and independent
+   validation rejoin every instance to one local catalog, require distinct instances,
+   one opaque patient context, both modalities, and at least two studies.
+2. Bound plans to a canonical content digest that excludes only the catalog's volatile
+   top-level generation time. A fresh unchanged local launch can therefore accept a
+   separately generated plan while any changed source identity, hash, count, metadata,
+   opaque patient context, or other catalog content fails closed.
+3. Added owner-only CLI creation/validation and a bounded, exact-origin, exact-media-
+   type, browser-session-only validation endpoint. Bearer-only access is refused, the
+   endpoint returns a privacy-minimized `no-store` summary, and no plan is persisted.
+   Duplicate JSON fields and non-finite constants are refused.
+4. Added a Consult Prep handoff panel that makes the software agent's unverified and
+   every heading's unreviewed state visible. A person deliberately chooses Image A or
+   Image B for each exact source. Navigation prefills the heading but never auto-opens
+   on validation or adds a consultation-board capture.
+5. Kept every non-navigation permission false: source mutation, automatic capture,
+   chronology, registration, lesion linkage, response, treatment effect, diagnosis,
+   and clinical conclusion. A validated plan is never represented as relevance,
+   author identity, evidence acceptance, or medical advice.
+   The privacy contract explicitly says discussion headings may contain identifiers.
+6. Added the 27th embedded JSON Schema plus adversarial Python, HTTP, TypeScript, and
+   synthetic production-browser coverage. Browser testing caught and corrected the
+   catalog generation-time binding before release packaging.
+7. Released deterministic offline bundle v0.8.0 and passed exact-artifact macOS arm64
+   and Strawberry Linux x86_64 no-index install, 27-schema runtime, CLI plan,
+   browser-session authorization, bearer refusal, and minimized-summary gates using
+   synthetic DICOM only.
+
 ## Immediate
 
 1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
@@ -544,18 +575,21 @@
 2. Use consultation packets or boards only to prepare questions with Mila's
    clinicians; confirm every MRI/CT source view in the clinical imaging system and do
    not treat either artifact as a diagnosis or treatment-response analysis.
-3. Import a future same-modality MRI follow-up, have a person confirm the intended
+3. Treat any agent consultation plan as a local navigation suggestion only. Inspect
+   each native source before adding it to a board, and keep prompts free of unnecessary
+   direct identifiers because plan headings are sensitive and not de-identified.
+4. Import a future same-modality MRI follow-up, have a person confirm the intended
    earlier/later sequences and clinical roles, run the required engine on that pair,
    and complete qualified visual/quantitative QA.
-4. Protect the authenticated local Slicer installation and keep using the recorded
+5. Protect the authenticated local Slicer installation and keep using the recorded
    launcher hash; reauthenticate any replacement before a future patient-specific job.
-5. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
+6. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
    hash; repeat authentication and synthetic commissioning after any replacement.
-6. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
+7. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
    offline bundle, and evaluate whether to include a separately authenticated interpreter.
-7. Design optional authenticated signature integration for clinical organizations;
+8. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
-8. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
+9. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
    on a clinically appropriate same-modality case before any patient-specific reliance.
 
 ## Next milestone

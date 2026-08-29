@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 01:38 PDT
+Last updated: 2026-08-29 02:08 PDT
 
 ## Data transfer
 
@@ -243,6 +243,20 @@ Last updated: 2026-08-29 01:38 PDT
   authenticated `POST /v1/consultation-boards`. The validated result is returned with
   `no-store`; the server writes no patient artifact. A matching CLI path produces
   non-overwriting owner-only output and a privacy-minimized validation summary.
+- Agent consultation-plan v1 provides a strict navigation-only bridge from a software
+  agent to the human Consult Prep workspace. A local request names 2–8 ordered exact
+  opaque series/instance pairs and bounded discussion headings. Creation and validation
+  require distinct instances, one opaque patient context, both MR and CT, at least two
+  studies, and a canonical catalog-content digest that excludes only the volatile
+  top-level generation time. All other source IDs, hashes, counts, and metadata remain
+  bound.
+- The viewer accepts a pasted plan only after strict client parsing and live server
+  rebuilding through a bounded exact-origin, exact-media-type, browser-session-only
+  `POST /v1/agent-consultation-plans/validate`. It then exposes deliberate per-item
+  Image A/B navigation and prefills the unreviewed heading. Validation never opens or
+  captures a source, bearer-only access is refused, no plan is persisted, and agent
+  identity, relevance, chronology, registration, lesion, response, treatment effect,
+  diagnosis, and clinical-conclusion authority remain false.
 - The same consultation contract is available through strict non-overwriting CLI
   assembly/validation and `POST /v1/consultation-packets`. All nested input and output
   ZIP members, JSON keys, digests, source metadata, positions, modalities, study and
@@ -250,6 +264,7 @@ Last updated: 2026-08-29 01:38 PDT
 - Versioned measurement, key-image, consultation-key-image, consultation-packet,
   numeric-comparison, visit-packet,
   comparison-review, navigation-intent, viewer-state, longitudinal-readiness,
+  agent-consultation-plan,
   rigid-registration,
   registration-QA, reviewed-registration-display, source-bound manual ROI volume,
   manual boundary-review, reviewed manual ROI volume-comparison, reviewed native-
@@ -263,7 +278,7 @@ Last updated: 2026-08-29 01:38 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 26 contracts without breaking lightweight
+  UI-embedded wheel together with all 27 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -280,6 +295,34 @@ Last updated: 2026-08-29 01:38 PDT
 
 ## Verification
 
+- v0.8.0 agent consultation-plan milestone: passing. The full Python suite reports
+  221 tests; the viewer reports 125 tests across 26 files; TypeScript typecheck,
+  production build, Python bytecode compilation, diff hygiene, and all 27 Draft
+  2020-12 schemas pass. Plan-specific coverage proves strict request/plan shape,
+  owner-only output, stable catalog-content binding across a changed generation time,
+  refusal of any other catalog change, exact instance ownership, one patient context,
+  both MR and CT, distinct instances/studies, item-count and heading bounds, fixed
+  false permissions, privacy-minimized summaries, exact-origin/media/size/session
+  endpoint gates, duplicate-field/non-finite-number refusal, explicit free-text
+  identifier risk, and browser-folder/server refusal. Production browser QA of the
+  exact packaged UI validated two synthetic proposals, deliberately opened the exact
+  MRI source at slice 2/3, prefilled its unreviewed heading, left the consultation
+  board at 0/8 with no captures, and reported no browser errors.
+- Offline runtime bundle v0.8.0: passing on macOS arm64 and Strawberry Linux x86_64.
+  The retained owner-only 5,489,490-byte ZIP has nine fixed-timestamp members and
+  SHA-256 `9a20a957db8d9a96fe69ac4289bdb230ecb91b39b609634791eb6546f27ba91f`.
+  It contains the 3,093,470-byte ScanView wheel (SHA-256
+  `2754a7803ebdb1ace33255bf736221ae5eded47556486a35ce21bafff32d351f`),
+  11 UI/worker/codec files (10,235,734 uncompressed bytes), all 27 schemas (246,404
+  bytes), and pinned `pydicom` 3.0.2. An independent second build was byte-identical.
+  Fresh extractions installed strictly from included wheels with package-index access
+  disabled and reported the embedded UI, all schemas, and both runtime-network and
+  external-DICOM-processing-API requirements false. On both platforms the packaged
+  CLI created and validated a two-item MR/CT navigation plan with mode-0600 outputs.
+  The Strawberry loopback gate refused bearer-only plan submission with 403 and
+  accepted the same plan through its browser session with 200 and a minimized summary.
+  Only six synthetic DICOM files, a patient-free request, and the patient-free ZIP
+  went to Strawberry; its staging tree was deleted, and no Mila data left this computer.
 - v0.7.0 longitudinal-readiness milestone: passing. The full Python suite reports 210
   tests; the viewer reports 121 tests across 25 files; TypeScript typecheck,
   production build, Python bytecode compilation, diff hygiene, and all 26 Draft

@@ -202,7 +202,13 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    the live hashed catalog, and reads each guarded DICOM descriptor without following
    a final symlink. The exact byte count and SHA-256 are bound into the deterministic
    manifested review page. Computed and interpretation arrays stay empty; source
-   dates have no timepoint meaning. Agent comparisons accept only explicit, distinct-series
+   dates have no timepoint meaning. A separate agent consultation-plan artifact binds
+   2–8 exact opaque series/instance pairs and bounded discussion headings to the stable
+   content of one catalog. A browser-session-only same-origin validator rebuilds the
+   plan from the live catalog before the viewer exposes deliberate per-item navigation.
+   The viewer never auto-opens or captures a proposal, and the plan grants no identity,
+   relevance, chronology, registration, lesion, response, treatment-effect, diagnostic,
+   or clinical-conclusion authority. Agent comparisons accept only explicit, distinct-series
    measurement selections and emit no response label. The browser can feed that path
    through a bounded strict JSON paste, session-only deletion, and a transient working
    lesion label; the label lives only in the exported comparison draft and never
@@ -356,8 +362,9 @@ is not an MVP feature and is never allowed between CT and MRI.
   `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
   payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
   and `--require-hashes`; every launch verifies the bundle and probes installed
-  versions, UI, all 26 schemas, consultation contracts, manual ROI review/comparison,
-  native-boundary display, agent-access audit, and longitudinal-readiness support
+  versions, UI, all 27 schemas, consultation contracts, agent consultation-plan
+  validation, manual ROI review/comparison, native-boundary display, agent-access
+  audit, and longitudinal-readiness support
   before cataloging DICOM.
 - Trust boundary: the offline manifest detects payload corruption but is not publisher
   authentication. Python 3.11+ is supplied by the host and is not covered by the

@@ -20,6 +20,12 @@ from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
 from .agent_access_audit import AgentAccessAudit
+from .agent_consultation_plans import (
+    MAX_PLAN_BYTES as MAX_AGENT_CONSULTATION_PLAN_BYTES,
+    MEDIA_TYPE as AGENT_CONSULTATION_PLAN_MEDIA_TYPE,
+    agent_consultation_plan_summary,
+    load_strict_json,
+)
 from .comparison import suggest_pairs
 from .comparison_reviews import (
     MAX_COMPARISON_REVIEW_TRANSPORT_BYTES,
@@ -654,6 +660,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if path == "/v1/agent-consultation-plans/validate":
+            self._handle_agent_consultation_plan_post()
+            return
         if path == "/v1/viewer-state":
             self._handle_viewer_state_post()
             return
@@ -801,6 +810,58 @@ class Handler(BaseHTTPRequestHandler):
         self._security_headers()
         self.end_headers()
         self.wfile.write(payload)
+
+    def _handle_agent_consultation_plan_post(self) -> None:
+        if not self._browser_authorized():
+            self._send_json(
+                {"error": "browser_session_required"}, HTTPStatus.FORBIDDEN
+            )
+            return
+        if not self._same_origin():
+            self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
+            return
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != AGENT_CONSULTATION_PLAN_MEDIA_TYPE:
+            self._send_json(
+                {"error": "unsupported_media_type"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+            )
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send_json({"error": "content_length_required"}, HTTPStatus.LENGTH_REQUIRED)
+            return
+        if (
+            content_length <= 0
+            or content_length > MAX_AGENT_CONSULTATION_PLAN_BYTES
+        ):
+            self._send_json(
+                {"error": "request_too_large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+            )
+            return
+        body = self.rfile.read(content_length)
+        if len(body) != content_length:
+            self._send_json({"error": "incomplete_request"}, HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            plan = load_strict_json(body)
+        except ValueError:
+            self._send_json(
+                {"error": "invalid_agent_consultation_plan"},
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+            return
+        summary = agent_consultation_plan_summary(self.server.catalog, plan)
+        if not summary["valid"]:
+            self._send_json(
+                {
+                    "error": "invalid_agent_consultation_plan",
+                    "detail": summary["errors"][0],
+                },
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+            return
+        self._send_json(summary)
 
     def _send_registration_qa_file(self, filename: str) -> None:
         self._send_registration_file(

@@ -97,6 +97,12 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   reference views for a clinical conversation. Labels are person-entered discussion
   headings, not findings; every source is reverified locally and the board makes no
   chronology, alignment, lesion, diagnosis, comparison, or response claim.
+- A strict local agent consultation plan can propose 2–8 exact native MRI/CT sources
+  plus bounded discussion headings. The plan is bound to the stable content of one
+  local catalog and is revalidated through the browser session before controls appear.
+  A person must open each source deliberately; validation never authenticates the
+  agent, captures evidence, establishes relevance or chronology, links a lesion, or
+  authorizes a diagnosis, response assessment, treatment-effect claim, or conclusion.
 - Local agent comparison of explicitly selected, distinct-series measurements;
   a bounded working lesion label and numeric changes remain source-linked and never
   become a response verdict. The same workflow is available in the human viewer.
@@ -145,7 +151,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Versioned measurement, key-image, manual ROI volume, manual ROI review, manual ROI
   volume-comparison review, reviewed native-boundary display, consultation-key-image,
   consultation-packet, comparison, visit-packet, review-record,
-  navigation-intent, viewer-state, longitudinal-readiness, agent-access-audit event,
+  navigation-intent, viewer-state, longitudinal-readiness, agent-consultation-plan,
+  agent-access-audit event,
   rigid-registration, and registration-QA JSON
   Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
@@ -185,8 +192,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.7.0.zip
-cd scanview-offline-0.7.0
+unzip release/scanview-offline-0.8.0.zip
+cd scanview-offline-0.8.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'

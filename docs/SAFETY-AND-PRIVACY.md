@@ -64,6 +64,20 @@ quality-system, and regulatory review.
   pixels, and paths; its human form shows only aggregate readiness and missing gates.
   Both keep selection, registration, spatial comparison, lesion linkage, response,
   treatment effect, diagnosis, and clinical conclusion unauthorized.
+- Agent consultation plans are local navigation proposals, not findings or evidence.
+  They must bind to the stable content of the exact local catalog, contain 2–8
+  distinct exact source instances, share one opaque patient context, span both MR and
+  CT and at least two studies, and preserve fixed false permissions. The browser sends
+  a bounded strict plan only to its same-origin browser-session endpoint; bearer access
+  alone is refused, validation returns `no-store`, and the server persists no plan.
+- A valid plan does not authenticate its software author or establish source relevance,
+  chronology, alignment, lesion identity, diagnosis, response, treatment effect, or a
+  conclusion. The viewer never auto-opens or auto-captures an item. A person must
+  choose a pane and source deliberately, inspect the native image, and separately add
+  any consultation-board evidence. Plan headings are unreviewed and may be sensitive;
+  the contract explicitly marks that they may contain identifiers. Direct DICOM
+  identifiers being absent does not make the artifact de-identified. Duplicate JSON
+  fields and non-finite constants are refused rather than interpreted ambiguously.
 - Bearer-access auditing is optional and local. If configured, covered sensitive GETs
   are not routed until a privacy-minimized event has been durably appended. The event
   contains a fixed operation class, sequence/time, authorization state, and hash-chain

@@ -67,6 +67,13 @@ result into a medical conclusion.
   card. Both require valid dates, eligible MR/CT stacks, distinct studies, and one
   opaque patient context before surfacing metadata candidates; all selection,
   registration, lesion, response, diagnosis, and conclusion authority remains false.
+- Stable-catalog-content-bound agent consultation plans for 2–8 exact native MRI/CT
+  source instances and bounded discussion headings. The local CLI creates and checks
+  them; a same-origin browser-session endpoint rejoins every source to the live catalog;
+  the viewer exposes only deliberate per-item navigation and never auto-opens or
+  captures a proposal. Agent identity, source relevance, chronology, registration,
+  lesion linkage, response, treatment effect, diagnosis, and conclusion authority
+  all remain false.
 - Source-bound one-MR/one-CT consultation packets for clinician discussion. Neutral
   key-image archives, exact live-catalog position and source-byte rehashing, strict
   cross-study/patient-context gates, static human presentation, privacy-minimized
@@ -226,3 +233,10 @@ result into a medical conclusion.
     opaque patient-context gates. Missing input is explicit, candidates stay
     unreviewed, and readiness never authorizes selection, registration, lesion
     linkage, response, diagnosis, treatment effect, or a clinical conclusion.
+24. **Agent-to-person proposal separation:** an agent consultation plan is accepted
+    only when its stable catalog-content digest, opaque patient context, MR/CT and
+    distinct-study gates, exact series/instance membership, item order, and fixed
+    permission locks match the live local catalog. Validation grants exact source
+    navigation only. It cannot authenticate an agent, open or capture a source without
+    a person's action, establish relevance or chronology, register images, link a
+    lesion, assess response or treatment effect, diagnose, or create a conclusion.

@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.7.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.8.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -19,17 +19,19 @@ sh launch.sh '/safe/local/DICOM/root' --no-open
 ```
 
 Installation invokes pip with `--no-index --require-hashes`; every launch rechecks
-the bundle and installed versions, UI, schemas, and consultation contract before any
-DICOM catalog is built. The launched agent interface is the same loopback bearer-
+the bundle and installed versions, UI, schemas, consultation contracts, and agent
+consultation-plan contract before any DICOM catalog is built. The launched agent
+interface is the same loopback bearer-
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-exact v0.7.0 artifact has passed no-index install, runtime, longitudinal-readiness,
-privacy-minimized bearer-access audit, audit-tamper refusal, and loopback launch on
-macOS arm64 and Strawberry Linux x86_64. Synthetic source-bound SEG, qualified
+exact v0.8.0 artifact has passed no-index install, runtime, agent consultation-plan
+creation/validation, browser-session endpoint validation, bearer-only endpoint refusal,
+and loopback launch on macOS arm64 and Strawberry Linux x86_64. Longitudinal-readiness,
+privacy-minimized bearer-access audit, audit-tamper refusal, synthetic source-bound SEG, qualified
 boundary review, reviewed volume-
 comparison validation, and reviewed native-boundary display remain covered by the full
-regression suite and the v0.5.0 cross-platform release gate; signing/notarization
+regression suite and earlier cross-platform release gates; signing/notarization
 remains pending.
 
 ## Local artifacts
@@ -83,6 +85,68 @@ metadata candidates that still require human review. The current MRI+CT shape re
 registration, spatial comparison, lesion linking, response classification, treatment-
 effect conclusion, diagnosis, and clinical conclusion false. It is sensitive and
 `deidentified: false` even though direct identifier tags, paths, and pixels are absent.
+
+## Agent-to-person consultation plans
+
+An agent can prepare a navigation-only proposal without constructing a URL or
+changing viewer state. First create a strict request with 2–8 ordered items:
+
+```json
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "scanview.agent-consultation-plan-request",
+  "items": [
+    {
+      "series_id": "series_…",
+      "instance_id": "instance_…",
+      "discussion_heading": "MRI reference — ask which anatomy matters"
+    },
+    {
+      "series_id": "series_…",
+      "instance_id": "instance_…",
+      "discussion_heading": "CT reference — ask what complementary question it answers"
+    }
+  ]
+}
+```
+
+Build and independently validate the sensitive plan against the same exact local
+catalog:
+
+```bash
+scanview-agent create-consultation-plan manifest.json request.json \
+  --output agent-consultation-plan.json
+scanview-agent validate-consultation-plan manifest.json agent-consultation-plan.json
+```
+
+Every item must resolve to the catalog's exact series and instance, all source
+instances must be distinct, one opaque patient context must cover the plan, both MR
+and CT must be present, and at least two source studies are required. The plan binds
+to `catalog_content_sha256`, computed from the entire catalog except its volatile
+top-level `generated_at` value. This lets a separately indexed launch of unchanged
+source content validate while source IDs, hashes, counts, metadata, patient context,
+and every other catalog field remain bound. The output is owner-only, local-only,
+sensitive, and `deidentified: false`; headings may themselves contain sensitive text.
+The machine-readable privacy block therefore fixes
+`discussion_headings_may_contain_identifiers: true`. CLI and local endpoint parsing
+also reject duplicate JSON fields and non-finite constants rather than applying an
+ambiguous last-value-wins interpretation.
+
+In Consult Prep, a person pastes the plan into the viewer. The viewer strictly parses
+the fixed locks, then submits at most 32 KiB with media type
+`application/vnd.scanview.agent-consultation-plan+json` to same-origin,
+browser-session-only `POST /v1/agent-consultation-plans/validate`. The local server
+rebuilds and compares the plan against its live catalog and returns only a
+privacy-minimized `no-store` summary. A bearer token without the browser session is
+refused. The viewer then resolves each exact source locally and presents separate
+“Open in Image A” and “Open in Image B” controls.
+
+Nothing opens automatically. Opening an item only navigates the selected native pane
+to the exact source position and prefills its unreviewed discussion heading. It does
+not add a consultation-board capture. The plan permanently marks the software agent
+unverified and leaves automatic capture, mutation, chronology, registration, lesion
+linkage, response assessment, treatment-effect inference, diagnosis, and clinical
+conclusion unauthorized. A valid plan is not proof that a proposed source is relevant.
 
 ## Measurement evidence packets
 

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-agent-consultation-plan-v1.schema.json",
+  "title": "ScanView agent consultation plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "generated_at",
+    "catalog_content_sha256",
+    "local_only",
+    "privacy",
+    "author",
+    "review_status",
+    "items",
+    "relationship",
+    "clinical_interpretations",
+    "required_human_actions",
+    "permissions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "artifact_type": { "const": "scanview.agent-consultation-plan" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "catalog_content_sha256": { "$ref": "#/$defs/sha256" },
+    "local_only": { "const": true },
+    "privacy": { "$ref": "#/$defs/privacy" },
+    "author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "identity_authenticated"],
+      "properties": {
+        "kind": { "const": "software_agent_unverified" },
+        "identity_authenticated": { "const": false }
+      }
+    },
+    "review_status": { "const": "unreviewed" },
+    "items": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_method",
+        "item_count",
+        "same_patient_context",
+        "modalities_present",
+        "distinct_source_study_count",
+        "distinct_source_instances",
+        "chronology_asserted",
+        "registration_asserted",
+        "lesion_identity_asserted"
+      ],
+      "properties": {
+        "selection_method": { "const": "agent_proposed_exact_native_sources" },
+        "item_count": { "type": "integer", "minimum": 2, "maximum": 8 },
+        "same_patient_context": { "const": true },
+        "modalities_present": { "const": ["MR", "CT"] },
+        "distinct_source_study_count": { "type": "integer", "minimum": 2 },
+        "distinct_source_instances": { "const": true },
+        "chronology_asserted": { "const": false },
+        "registration_asserted": { "const": false },
+        "lesion_identity_asserted": { "const": false }
+      }
+    },
+    "clinical_interpretations": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "required_human_actions": {
+      "const": [
+        "confirm_patient_identity_exam_and_source_in_the_clinical_imaging_system",
+        "decide_whether_each_proposed_view_is_relevant",
+        "review_or_replace_every_discussion_heading",
+        "interpret_images_with_a_qualified_clinician",
+        "record_clinical_conclusions_only_in_the_authorized_medical_record"
+      ]
+    },
+    "permissions": { "$ref": "#/$defs/permissions" },
+    "limitations": {
+      "const": [
+        "The plan contains unreviewed software-agent proposals, not findings or clinical conclusions.",
+        "Exact catalog membership and navigation do not prove that a view is relevant or representative.",
+        "MR and CT are cross-modality consultation references and do not form a longitudinal response pair.",
+        "A person must deliberately inspect and capture each view; this plan cannot create evidence automatically."
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "direct_identifier_tags_excluded",
+        "discussion_headings_may_contain_identifiers",
+        "deidentified",
+        "contains_pixels",
+        "contains_paths"
+      ],
+      "properties": {
+        "classification": { "const": "sensitive_local_medical_data" },
+        "direct_identifier_tags_excluded": { "const": true },
+        "discussion_headings_may_contain_identifiers": { "const": true },
+        "deidentified": { "const": false },
+        "contains_pixels": { "const": false },
+        "contains_paths": { "const": false }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "series_id",
+        "instance_id",
+        "modality",
+        "discussion_heading",
+        "proposal_source",
+        "review_status",
+        "auto_selected"
+      ],
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_0[1-8]$"
+        },
+        "series_id": { "$ref": "#/$defs/series_id" },
+        "instance_id": { "$ref": "#/$defs/instance_id" },
+        "modality": { "enum": ["MR", "CT"] },
+        "discussion_heading": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "proposal_source": { "const": "software_agent_unverified" },
+        "review_status": { "const": "unreviewed" },
+        "auto_selected": { "const": false }
+      }
+    },
+    "series_id": {
+      "type": "string",
+      "pattern": "^series_[0-9a-f]{20}$"
+    },
+    "instance_id": {
+      "type": "string",
+      "pattern": "^instance_[0-9a-f]{20}$"
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact_source_navigation_authorized",
+        "automatic_board_capture_authorized",
+        "source_mutation_authorized",
+        "chronology_authorized",
+        "registration_authorized",
+        "lesion_link_authorized",
+        "response_classification_authorized",
+        "treatment_effect_conclusion_authorized",
+        "diagnosis_authorized",
+        "clinical_conclusion_authorized"
+      ],
+      "properties": {
+        "exact_source_navigation_authorized": { "const": true },
+        "automatic_board_capture_authorized": { "const": false },
+        "source_mutation_authorized": { "const": false },
+        "chronology_authorized": { "const": false },
+        "registration_authorized": { "const": false },
+        "lesion_link_authorized": { "const": false },
+        "response_classification_authorized": { "const": false },
+        "treatment_effect_conclusion_authorized": { "const": false },
+        "diagnosis_authorized": { "const": false },
+        "clinical_conclusion_authorized": { "const": false }
+      }
+    }
+  }
+}

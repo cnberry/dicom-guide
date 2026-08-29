@@ -57,6 +57,11 @@ import {
   readinessRequirementText,
   summarizeLongitudinalReadiness,
 } from './longitudinalReadiness';
+import {
+  loadAgentConsultationPlan,
+  type ResolvedAgentConsultationPlan,
+  type ResolvedAgentConsultationPlanItem,
+} from './agentConsultationPlan';
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
@@ -156,6 +161,14 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     useState<ExportState>('idle');
   const [consultationBoardMessage, setConsultationBoardMessage] = useState(
     'Add 2–8 explicitly labeled MR/CT source views. Labels remain unreviewed discussion headings.',
+  );
+  const [agentConsultationPlanText, setAgentConsultationPlanText] = useState('');
+  const [agentConsultationPlan, setAgentConsultationPlan] =
+    useState<ResolvedAgentConsultationPlan>();
+  const [agentConsultationPlanState, setAgentConsultationPlanState] =
+    useState<ExportState>('idle');
+  const [agentConsultationPlanMessage, setAgentConsultationPlanMessage] = useState(
+    'Paste a locally created agent consultation plan. Nothing opens or captures automatically.',
   );
   const [agentStateSharing, setAgentStateSharing] = useState(false);
   const [agentStateMessage, setAgentStateMessage] = useState(
@@ -531,6 +544,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setConsultationBoardMessage(
       'Add 2–8 explicitly labeled MR/CT source views. Labels remain unreviewed discussion headings.',
     );
+    setAgentConsultationPlanText('');
+    setAgentConsultationPlan(undefined);
+    setAgentConsultationPlanState('idle');
+    setAgentConsultationPlanMessage(
+      'Paste a locally created agent consultation plan. Nothing opens or captures automatically.',
+    );
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     resetLocalImagingSession();
     setImportState({ processed: 0, total: files.length });
@@ -758,6 +777,73 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         error instanceof Error ? error.message : 'Local consultation-packet export failed.',
       );
     }
+  };
+
+  const validateAgentConsultationPlan = async () => {
+    if (agentConsultationPlanState === 'working') return;
+    if (!consultPrepMode) {
+      setAgentConsultationPlanState('error');
+      setAgentConsultationPlanMessage(
+        'Agent consultation plans are available only in the neutral Consult Prep workspace.',
+      );
+      return;
+    }
+    if (!agentConsultationPlanText.trim()) {
+      setAgentConsultationPlanState('error');
+      setAgentConsultationPlanMessage('Paste an agent consultation plan first.');
+      return;
+    }
+    setAgentConsultationPlanState('working');
+    setAgentConsultationPlanMessage(
+      'Checking the plan against this exact local catalog and resolving every native source…',
+    );
+    try {
+      const loaded = await loadAgentConsultationPlan(
+        agentConsultationPlanText,
+        series,
+      );
+      setAgentConsultationPlan(loaded);
+      setAgentConsultationPlanState('saved');
+      setAgentConsultationPlanMessage(
+        `Validated ${loaded.items.length} unreviewed agent proposals. Open each deliberately; nothing has been captured or interpreted.`,
+      );
+    } catch (error) {
+      setAgentConsultationPlan(undefined);
+      setAgentConsultationPlanState('error');
+      setAgentConsultationPlanMessage(
+        error instanceof Error
+          ? error.message
+          : 'The local agent consultation plan could not be validated.',
+      );
+    }
+  };
+
+  const openAgentConsultationPlanItem = (
+    item: ResolvedAgentConsultationPlanItem,
+    slot: 'view_a' | 'view_b',
+  ) => {
+    if (!agentConsultationPlan || !consultPrepMode) return;
+    if (slot === 'view_a') {
+      setBaselineId(item.seriesId);
+      setBaselineIndex(item.instanceIndex);
+    } else {
+      setFollowupId(item.seriesId);
+      setFollowupIndex(item.instanceIndex);
+    }
+    setConsultationBoardLabel(item.discussionHeading);
+    setAgentConsultationPlanState('saved');
+    setAgentConsultationPlanMessage(
+      `Opened ${item.itemId.replace('_', ' ')} in ${slot === 'view_a' ? 'Image A' : 'Image B'} and copied its unreviewed heading into the board form. Inspect the native image before deciding whether to capture it.`,
+    );
+  };
+
+  const clearAgentConsultationPlan = () => {
+    setAgentConsultationPlanText('');
+    setAgentConsultationPlan(undefined);
+    setAgentConsultationPlanState('idle');
+    setAgentConsultationPlanMessage(
+      'Cleared the in-memory plan. Native DICOM and consultation-board captures were not changed.',
+    );
   };
 
   const addConsultationBoardView = async (slot: 'view_a' | 'view_b') => {
@@ -1399,6 +1485,125 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           </section>
           {consultPrepMode && (
             <section
+              className="agent-consultation-plan-panel"
+              aria-labelledby="agent-consultation-plan-heading"
+            >
+              <div className="agent-consultation-plan-heading">
+                <div>
+                  <span className="eyebrow">Agent → person handoff · exact native sources</span>
+                  <h2 id="agent-consultation-plan-heading">
+                    Review an agent-proposed consultation plan
+                  </h2>
+                  <p>
+                    Paste a plan created locally with <code>scanview-agent</code>. The
+                    local service must match its catalog hash and every exact source before
+                    navigation controls appear.
+                  </p>
+                </div>
+                <span className="unreviewed-badge">
+                  {agentConsultationPlan?.items.length ?? 0} proposals
+                </span>
+              </div>
+              <div className="agent-consultation-plan-input">
+                <label>
+                  <span>Agent consultation plan JSON</span>
+                  <textarea
+                    rows={7}
+                    value={agentConsultationPlanText}
+                    placeholder="Paste scanview.agent-consultation-plan JSON"
+                    disabled={agentConsultationPlanState === 'working'}
+                    onChange={(event) => {
+                      setAgentConsultationPlanText(event.target.value);
+                      setAgentConsultationPlan(undefined);
+                      setAgentConsultationPlanState('idle');
+                      setAgentConsultationPlanMessage(
+                        'Plan text changed. Validate it against the exact local catalog before opening a proposal.',
+                      );
+                    }}
+                  />
+                </label>
+                <div className="agent-consultation-plan-actions">
+                  <button
+                    type="button"
+                    className="primary-action"
+                    disabled={
+                      !agentConsultationPlanText.trim() ||
+                      agentConsultationPlanState === 'working' ||
+                      evidenceExportWorking
+                    }
+                    onClick={() => void validateAgentConsultationPlan()}
+                  >
+                    {agentConsultationPlanState === 'working'
+                      ? 'Validating locally…'
+                      : agentConsultationPlan
+                        ? 'Revalidate plan'
+                        : 'Validate local plan'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      (!agentConsultationPlanText && !agentConsultationPlan) ||
+                      agentConsultationPlanState === 'working'
+                    }
+                    onClick={clearAgentConsultationPlan}
+                  >
+                    Clear in-memory plan
+                  </button>
+                </div>
+              </div>
+              {agentConsultationPlan ? (
+                <ol className="agent-consultation-plan-items">
+                  {agentConsultationPlan.items.map((item) => (
+                    <li key={item.itemId}>
+                      <div>
+                        <span className="agent-proposal-label">
+                          {item.itemId.replace('_', ' ')} · software agent unverified ·
+                          unreviewed
+                        </span>
+                        <strong>{item.discussionHeading}</strong>
+                        <span>
+                          {item.modality} · {item.seriesDescription} · exact native slice{' '}
+                          {item.stackPosition} / {item.stackCount}
+                        </span>
+                      </div>
+                      <div className="agent-consultation-plan-item-actions">
+                        <button
+                          type="button"
+                          disabled={evidenceExportWorking}
+                          onClick={() => openAgentConsultationPlanItem(item, 'view_a')}
+                        >
+                          Open in Image A
+                        </button>
+                        <button
+                          type="button"
+                          disabled={evidenceExportWorking}
+                          onClick={() => openAgentConsultationPlanItem(item, 'view_b')}
+                        >
+                          Open in Image B
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+              <p
+                className={agentConsultationPlanState === 'error' ? 'error' : undefined}
+                role={agentConsultationPlanState === 'error' ? 'alert' : 'status'}
+                aria-live="polite"
+              >
+                {agentConsultationPlanMessage}
+              </p>
+              <p className="agent-consultation-plan-safety">
+                A validated plan authorizes exact local navigation only. It does not
+                authenticate the agent, open a view automatically, capture evidence, establish
+                relevance, assign chronology, link a lesion, diagnose, or assess treatment
+                response. A person must inspect each native image and explicitly decide what to
+                retain.
+              </p>
+            </section>
+          )}
+          {consultPrepMode && (
+            <section
               className="consultation-board-panel"
               aria-labelledby="consultation-board-heading"
             >
@@ -1599,7 +1804,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       )}
 
       <footer>
-        <span>ScanView 0.7 · local-first prototype</span>
+        <span>ScanView 0.8 · local-first prototype</span>
         <span>Every automated result is unreviewed until a qualified clinician accepts it.</span>
       </footer>
     </main>

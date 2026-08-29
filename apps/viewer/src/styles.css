@@ -327,6 +327,46 @@ main { min-height: 100vh; }
 .lock-icon { width: 36px; height: 36px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(239,179,101,0.35); color: var(--warn); font: 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .locked-card p { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
 
+.agent-consultation-plan-panel {
+  margin: 0 clamp(24px, 4vw, 64px) 20px;
+  overflow: hidden;
+  border: 1px solid rgba(239, 179, 101, 0.32);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.14);
+}
+.agent-consultation-plan-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 19px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(110deg, rgba(87, 59, 18, 0.34), transparent 58%);
+}
+.agent-consultation-plan-heading h2 { margin: 6px 0 5px; font-size: 18px; letter-spacing: -0.02em; }
+.agent-consultation-plan-heading p { max-width: 800px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+.agent-consultation-plan-heading code { color: var(--warn); }
+.agent-consultation-plan-input { display: grid; grid-template-columns: minmax(260px, 1fr) auto; align-items: end; gap: 16px; padding: 16px 19px; }
+.agent-consultation-plan-input label { display: grid; gap: 7px; }
+.agent-consultation-plan-input label > span { color: var(--muted); font: 600 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.07em; }
+.agent-consultation-plan-input textarea { width: 100%; min-width: 0; resize: vertical; border: 1px solid var(--line); border-radius: 7px; background: #06100e; color: #c8d8d4; padding: 10px 11px; font: 9px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.agent-consultation-plan-input textarea:focus { outline: 2px solid rgba(239, 179, 101, 0.25); border-color: rgba(239, 179, 101, 0.48); }
+.agent-consultation-plan-input textarea:disabled { cursor: not-allowed; opacity: 0.55; }
+.agent-consultation-plan-actions, .agent-consultation-plan-item-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.agent-consultation-plan-actions button:not(.primary-action), .agent-consultation-plan-item-actions button { border: 1px solid var(--line); border-radius: 6px; background: #081512; color: #c7d6d2; padding: 8px 10px; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; cursor: pointer; }
+.agent-consultation-plan-actions button:hover:not(:disabled), .agent-consultation-plan-item-actions button:hover:not(:disabled) { border-color: rgba(110, 231, 194, 0.45); color: var(--accent); }
+.agent-consultation-plan-panel button:disabled { cursor: not-allowed; opacity: 0.46; transform: none; filter: none; }
+.agent-consultation-plan-items { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.agent-consultation-plan-items li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 13px 19px; border-bottom: 1px solid var(--line); }
+.agent-consultation-plan-items li > div:first-child { display: grid; gap: 5px; min-width: 0; }
+.agent-consultation-plan-items strong { overflow-wrap: anywhere; font-size: 11px; }
+.agent-consultation-plan-items li > div:first-child > span:last-child { overflow: hidden; color: var(--muted); font: 9px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.agent-proposal-label { color: var(--warn); font: 8px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+.agent-consultation-plan-panel > p:not(.agent-consultation-plan-safety) { margin: 0; padding: 13px 19px; color: var(--muted); font: 9px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.agent-consultation-plan-panel > p.error { color: var(--danger); }
+.agent-consultation-plan-safety { margin: 0; padding: 12px 19px; border-top: 1px solid rgba(239, 179, 101, 0.22); color: #d9c39f; background: #171309; font: 9px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
 .consultation-board-panel {
   margin: 0 clamp(24px, 4vw, 64px) 40px;
   overflow: hidden;
@@ -597,6 +637,7 @@ footer { display: flex; justify-content: space-between; gap: 24px; padding: 18px
   .mpr-host { height: min(90vw, 480px); }
   .dicom-viewport { height: 72vw; }
   .pairing-fields { grid-template-columns: 1fr 1fr; }
+  .agent-consultation-plan-input { grid-template-columns: 1fr; align-items: stretch; }
   .consultation-board-controls { grid-template-columns: 1fr; }
   .consultation-board-controls > div { justify-content: flex-start; padding-top: 0; }
   .consultation-board-actions { grid-template-columns: auto auto; }
@@ -620,6 +661,10 @@ footer { display: flex; justify-content: space-between; gap: 24px; padding: 18px
   .mpr-review-fields .mpr-review-wide { grid-column: auto; }
   .measurement-paste-panel { margin-left: 16px; margin-right: 16px; }
   .measurement-panel { margin-left: 16px; margin-right: 16px; }
+  .agent-consultation-plan-panel { margin-left: 16px; margin-right: 16px; }
+  .agent-consultation-plan-heading { flex-direction: column; }
+  .agent-consultation-plan-items li { grid-template-columns: 1fr; align-items: start; }
+  .agent-consultation-plan-items li > div:first-child > span:last-child { white-space: normal; }
   .consultation-board-panel { margin-left: 16px; margin-right: 16px; }
   .consultation-board-heading { flex-direction: column; }
   .consultation-board-items li { grid-template-columns: auto minmax(0, 1fr); align-items: start; }

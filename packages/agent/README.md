@@ -10,6 +10,9 @@ python -m pip install -e '.[test]'
 scanview-agent manifest '/path/to/copied/DICOM' --output manifest.json
 scanview-agent candidates manifest.json
 scanview-agent readiness manifest.json --output longitudinal-readiness.json
+scanview-agent create-consultation-plan manifest.json consultation-request.json \
+  --output agent-consultation-plan.json
+scanview-agent validate-consultation-plan manifest.json agent-consultation-plan.json
 scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM' \
@@ -106,6 +109,21 @@ catalog-hash-bound follow-up gate. The report counts eligible MR/CT studies and 
 requires valid distinct dates and one matching opaque patient context, caps reported
 candidate pairs, excludes descriptions/pixels/paths, and leaves all clinical and
 derived-use permissions false.
+`create-consultation-plan` accepts a strict local request containing 2–8 exact opaque
+series/instance pairs and bounded discussion headings. It rejoins every item to the
+supplied catalog, requires one opaque patient context, both MR and CT, distinct
+instances, and at least two studies, and binds the result to a canonical catalog-
+content SHA-256 that excludes only the catalog's volatile top-level generation time.
+`validate-consultation-plan` independently rebuilds that plan from the exact catalog.
+Both artifacts remain sensitive and `deidentified: false`.
+
+The unified viewer validates a pasted plan through browser-session-only
+`POST /v1/agent-consultation-plans/validate` before exposing deliberate “Open in
+Image A/B” controls. The endpoint is exact-origin, exact-media-type, bounded, local,
+and `no-store`; a bearer token alone cannot call it. A valid plan authorizes exact
+native-source navigation only. Agent identity is unverified, headings are unreviewed,
+and automatic opening/capture, source mutation, chronology, registration, lesion
+linkage, response, treatment effect, diagnosis, and clinical conclusion remain false.
 Visit-packet assembly also stays local. It accepts only validated key-image v2
 archives with one matching opaque patient context, distinct dated studies/series,
 explicit ordering, and one modality. It creates a static review page plus an
