@@ -28,6 +28,12 @@
   only after the source volume and locked labelmap are ready.
 - Parsing, decoding, hashing, and rendering are local. No external API, telemetry,
   cloud processing, or network fallback is used.
+- Sparse objects may list the complete source series at top level while omitting empty
+  frames. This is accepted only when every encoded frame still maps to one exact member,
+  SOP class/instance, native position, and guarded local source grid.
+- The independent highdicom gate is patient-free and optional. It disables socket
+  connections before DICOM generation/read; highdicom and NumPy are never installed in
+  the offline runtime and are never used to process Mila data.
 
 ## DICOM presentation-state safety
 

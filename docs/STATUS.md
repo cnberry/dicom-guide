@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 04:23 PDT
+Last updated: 2026-08-29 04:44 PDT
 
 ## Data transfer
 
@@ -60,6 +60,12 @@ Last updated: 2026-08-29 04:23 PDT
   sensitive full catalog, while CLI validation output is privacy-minimized. Paint,
   erase, evidence conversion, export, identity, accuracy, diagnosis, response, and
   clinical conclusions are all unavailable.
+- An optional patient-free interoperability gate now uses pinned highdicom 0.28.1 as
+  an independent writer and reader. It proved that a standard sparse SEG may list its
+  complete 24-image source series at top level while encoding only 11 nonempty frames;
+  ScanView accepts that superset while retaining exact per-frame SOP, native-plane,
+  source-hash, geometry, and bounds checks. highdicom and NumPy are test-only and are
+  absent from the local runtime and offline bundle.
 - Initial local-first React/TypeScript/Cornerstone3D viewer implemented.
 - Baseline/follow-up pairing, linked stack position, compatibility explanations, and
   registration safety gate implemented.
@@ -316,6 +322,39 @@ Last updated: 2026-08-29 04:23 PDT
 
 ## Verification
 
+- v0.11.0 independent highdicom interoperability milestone: passing. The full Python
+  suite reports 255 tests; the viewer reports 135 tests across 28 files; TypeScript
+  typecheck, production build, Python bytecode compilation, diff hygiene, and all 29
+  Draft 2020-12 schemas pass. A socket-denied, patient-free gate pinned highdicom
+  0.28.1, NumPy 2.5.2, and pydicom 3.0.2, independently generated and read a sparse
+  24-source/11-frame binary SEG, and required highdicom and ScanView to reconstruct
+  the same 98,304 bytes, 3,083 foreground voxels, 3.946240 mL, and SHA-256
+  `81946112b1311f1ee9ff4fe1d61f86d36ce82d076122b39b9d4e7a8e46cf82bb`.
+  No patient data entered this gate, and it added no runtime processing service or API.
+- Patient-free production-browser QA opened the independently generated object with
+  one supported SEG, zero locked objects, 24 source slices, 11 mapped frames, and one
+  segment. It rendered a locked overlay on exactly three axial/coronal/sagittal MPR
+  canvases alongside the native stack, exposed no edit/evidence/export path, and
+  reported no browser warnings or errors.
+- Offline runtime bundle v0.11.0: passing on macOS arm64 and Strawberry Linux x86_64.
+  The retained owner-only 5,532,095-byte ZIP has nine fixed-timestamp members and
+  SHA-256 `4fb920ce93ab1459eb3953644162121a02539ba82e7de5881bbc0fc35b345aaf`.
+  It contains the 3,135,113-byte ScanView wheel (SHA-256
+  `f652f5b17c2152b754c2917be3dc0764be2ebf1c8d7075fd0d01c49b202e9f62`),
+  11 UI/worker/codec files (10,289,183 uncompressed bytes), all 29 schemas (271,110
+  bytes), and pinned `pydicom` 3.0.2. A second independent build was byte-identical.
+  Fresh exact-artifact extractions installed with `PIP_NO_INDEX=1`, reported version
+  0.11.0, the embedded UI and 29 schemas, and both runtime-network and external-DICOM-
+  processing-API requirements false. highdicom and NumPy were absent from each exact
+  installed runtime.
+- Exact packaged macOS and Strawberry gates created and validated owner-only source-
+  SEG catalogs, then returned 401 for an unauthenticated catalog, 200 plus `no-store`
+  for an authenticated catalog, 403 for bearer mask access, 200 for browser-session
+  access with the exact mask arithmetic/hash, and 409 after a source mutation.
+  Strawberry listened only on loopback with no server-owned established external
+  socket. Its separate disposable highdicom environment reproduced the independent
+  oracle result. Only the exact software ZIP and patient-free synthetic data went to
+  Strawberry; its entire test tree was deleted, and no Mila data left this computer.
 - v0.10.0 strict source-carried DICOM SEG milestone: passing. The full Python suite
   reports 254 tests; the viewer reports 135 tests across 28 files; TypeScript
   typecheck, production build, Python bytecode compilation, diff hygiene, and all 29
@@ -810,8 +849,9 @@ Last updated: 2026-08-29 04:23 PDT
 
 - Source-carried SEG support is intentionally a narrow ScanView profile, not full DICOM
   conformance. Fractional/compressed SEG, multiframe sources, resampling, non-native or
-  irregular grids, and unsupported reference/dimension forms are refused. Independent
-  highdicom/vendor fixture interoperability and clinical-system comparison remain.
+  irregular grids, and unsupported reference/dimension forms are refused. The pinned
+  highdicom sparse-reference gate now passes; real vendor-produced fixtures, broader
+  interoperability, and comparison with a clinical imaging system remain.
   A displayed mask, label, code, creator, algorithm, count, or technical volume is not
   a reviewed tumor segmentation, clinical conclusion, or treatment-response result.
 - Different-frame longitudinal exams still use approximate normalized linking until

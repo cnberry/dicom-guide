@@ -88,6 +88,11 @@ result into a medical conclusion.
   decoding/masks, independent physical-order and mask-hash validation, and browser-
   session-only dense mask access. Full DICOM conformance, creator/algorithm identity,
   boundary accuracy, tissue meaning, diagnosis, and response authority remain absent.
+- Independent source-SEG interoperability: an optional pinned highdicom test creates
+  a sparse patient-free object, reconstructs it through highdicom's source-instance
+  API, and requires identical ScanView dense bytes, hash, count, and native-grid
+  arithmetic. The test denies socket connections while handling DICOM and adds no
+  runtime dependency or broader clinical permission.
 - Source-bound one-MR/one-CT consultation packets for clinician discussion. Neutral
   key-image archives, exact live-catalog position and source-byte rehashing, strict
   cross-study/patient-context gates, static human presentation, privacy-minimized
@@ -270,3 +275,10 @@ result into a medical conclusion.
     arithmetic before read-only display. No source edit, evidence conversion,
     longitudinal linkage, response, diagnosis, or conclusion is authorized; passing
     the profile is not full DICOM conformance or clinical validation.
+27. **Independent SEG oracle:** the optional interoperability gate must use an exact
+    pinned highdicom/NumPy/pydicom environment and patient-free source images, disable
+    socket connections before DICOM generation/read, and compare highdicom's own
+    source-instance reconstruction byte-for-byte with ScanView. Complete-series Common
+    Instance References may be a superset of encoded sparse frames; every actual frame
+    must still map to one exact referenced source plane. The optional packages must not
+    enter the offline runtime or process Mila data.

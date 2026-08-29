@@ -163,6 +163,15 @@ describe('strict source-carried DICOM SEG catalog', () => {
     expect(resolved?.segmentations).toHaveLength(1);
     expect(resolved?.segmentations[0].state.segments[0].computed_volume_ml).toBe(0.004);
 
+    const completeSeriesReference = await artifact();
+    completeSeriesReference.segmentations[0].referenced_series.referenced_instance_ids = [
+      ...ids.instances,
+    ];
+    completeSeriesReference.segmentations[0].referenced_instance_count = 3;
+    expect(
+      readSourceSegmentationCatalog(completeSeriesReference, [sourceSeries()]),
+    ).toBeDefined();
+
     const altered = structuredClone(input);
     altered.segmentations[0].segments[0].computed_volume_ml = 4;
     expect(readSourceSegmentationCatalog(altered, [sourceSeries()])).toBeUndefined();

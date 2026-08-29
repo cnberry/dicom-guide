@@ -97,6 +97,11 @@ source-SEG bundle also passed fresh no-index install, 29-schema runtime, strict 
 authorization, browser-only mask, hash/length, source-change, and loopback-only gates
 on macOS arm64 and Strawberry Linux x86_64. Its second build was byte-identical; no
 external DICOM-processing API or runtime network was required.
+The v0.11 interoperability gate additionally generates a patient-free sparse binary
+SEG with highdicom 0.28.1, independently reconstructs its dense mask through
+highdicom's source-instance API, and requires ScanView to produce identical bytes,
+hash, count, and volume. highdicom and NumPy are optional test dependencies only and
+are not included in the offline runtime.
 The earlier source-bound boundary-review, reviewed volume-comparison, and reviewed
 native-boundary display gates remain covered by the full regression suite and v0.5.0
 cross-platform package evidence;
@@ -146,11 +151,30 @@ Preserved `YES`, supported segment/plane dimensions, strict geometry, and catalo
 decode/mask budgets. `validate-source-segmentations` rehashes every source and returns
 only aggregate counts. Full DICOM conformance, creator identity, algorithm identity or
 accuracy, boundary accuracy, tissue meaning, diagnosis, and response are not asserted.
+The top-level Common Instance Reference may list the complete guarded source series
+when empty SEG planes are omitted; every encoded frame must still resolve through that
+set and its exact source plane.
 The sensitive catalog is bearer-readable and audited as `source_segmentations_read`;
 dense mask bytes require the HttpOnly browser session, and bearer attempts are denied
 and audited separately. The browser rehashes/recounts the mask and aligns slice slabs
 by independently derived physical source order before read-only MPR display. No
 external API is called.
+
+Run the optional independent interoperability gate from the repository root in a
+disposable environment:
+
+```bash
+python3 -m venv /private/tmp/scanview-highdicom-interop
+/private/tmp/scanview-highdicom-interop/bin/python -m pip install \
+  -e './packages/agent[interop]'
+/private/tmp/scanview-highdicom-interop/bin/python \
+  scripts/verify_highdicom_source_segmentation.py
+```
+
+Dependency installation may contact a package index, but the gate itself disables
+socket connections before generating or reading DICOM. It uses synthetic data only,
+creates everything under a deleted temporary directory, and adds no runtime network
+or external processing API.
 
 `create-consultation-plan` accepts a strict local request containing 2–8 exact opaque
 series/instance pairs and bounded discussion headings. It rejoins every item to the

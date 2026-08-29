@@ -35,6 +35,11 @@ Keep this directory and its
 `.scanview-runtime` private because local browser sessions and generated evidence may
 be sensitive.
 
+The repository's optional highdicom/NumPy interoperability environment is deliberately
+not included here. It is a patient-free build/test oracle only; runtime DICOM parsing,
+mask reconstruction, and display continue to use the included ScanView/pydicom code
+with no external processing API or network fallback.
+
 `bundle.json` and `verify.py` detect payload corruption or changes after the bundle
 was built. They are not a publisher signature, code-signing identity, medical-record
 authentication, or clinical validation. Obtain release bundles through a trusted

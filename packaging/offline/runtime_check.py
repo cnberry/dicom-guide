@@ -21,7 +21,7 @@ from scanview_agent.source_segmentations import ARTIFACT_TYPE as SOURCE_SEGMENTA
 
 
 def main() -> None:
-    if version("scanview-agent") != "0.10.0" or version("pydicom") != "3.0.2":
+    if version("scanview-agent") != "0.11.0" or version("pydicom") != "3.0.2":
         raise SystemExit("installed ScanView runtime versions are invalid")
     if ARTIFACT_TYPE != "clinician_consultation_packet":
         raise SystemExit("installed ScanView consultation contract is unavailable")
@@ -55,7 +55,7 @@ def main() -> None:
         json.dumps(
             {
                 "valid": True,
-                "scanview_agent": "0.10.0",
+                "scanview_agent": "0.11.0",
                 "pydicom": "3.0.2",
                 "embedded_ui": True,
                 "schema_count": schema_count,

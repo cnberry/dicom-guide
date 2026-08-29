@@ -392,6 +392,41 @@ def test_locks_mismatched_top_level_source_sop_class(tmp_path: Path) -> None:
     assert masks == {}
 
 
+def test_accepts_complete_series_reference_when_empty_planes_are_omitted(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "dicom"
+    _, _, seg_path = _fixture(root)
+    dataset = dcmread(seg_path)
+    first_frame = dataset.PerFrameFunctionalGroupsSequence[0]
+    third_frame = dataset.PerFrameFunctionalGroupsSequence[2]
+    third_frame.FrameContentSequence[0].DimensionIndexValues = [2, 2]
+    dataset.PerFrameFunctionalGroupsSequence = Sequence([first_frame, third_frame])
+    dataset.NumberOfFrames = 2
+    dataset.PixelData = _pack_frames(
+        [
+            [1, 0, 0, 1, 0, 0],
+            [1, 1, 0, 0, 0, 0],
+        ]
+    )
+    dataset.save_as(seg_path, enforce_file_format=True)
+    catalog, registry = build_catalog(root, include_hashes=True)
+
+    artifact, masks, _ = build_source_segmentation_catalog(
+        catalog,
+        registry_segmentation_source_loader(catalog, registry),
+    )
+
+    assert artifact["supported_segmentation_count"] == 1
+    assert artifact["unsupported_segmentation_count"] == 0
+    state = artifact["segmentations"][0]
+    assert state["frame_count"] == 2
+    assert state["referenced_instance_count"] == 3
+    assert len(state["referenced_series"]["referenced_instance_ids"]) == 3
+    assert [segment["marked_voxel_count"] for segment in state["segments"]] == [2, 2]
+    assert len(masks) == 2
+
+
 def test_requires_explicit_preserved_spatial_locations(tmp_path: Path) -> None:
     root = tmp_path / "dicom"
     _, _, seg_path = _fixture(root)

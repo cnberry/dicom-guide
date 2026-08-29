@@ -33,6 +33,18 @@ labelmap are ready. Full DICOM conformance, creator/algorithm identity, boundary
 accuracy, represented tissue, and clinical meaning are outside this import profile.
 All work is local; there is no external processing API or fallback.
 
+The top-level Common Instance Reference may enumerate a complete guarded source
+series while sparse empty planes are omitted from Pixel Data. ScanView therefore
+requires every encoded frame to be a member of the top-level set but does not require
+every top-level source to have a frame. The optional highdicom 0.28.1 interoperability
+gate independently reconstructs the same dense mask and is excluded from the runtime:
+
+```text
+patient-free sources → highdicom SEG (24 top-level refs, 11 sparse frames)
+         ├── highdicom source-instance reconstruction ─┐
+         └── ScanView guarded parser + reconstruction ─┴─ byte/hash/count equality
+```
+
 ## Source DICOM presentation-state boundary
 
 GSPS is a guarded source-display path, not an evidence or interpretation path:

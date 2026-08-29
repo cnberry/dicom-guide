@@ -630,6 +630,30 @@
    SEG generator. Full DICOM conformance and independent vendor/highdicom fixture
    interoperability remain explicit future gates.
 
+## Completed in the thirty-first milestone
+
+1. Added a pinned optional highdicom 0.28.1/NumPy 2.5.2 interoperability gate that
+   creates only patient-free DICOM in a deleted temporary directory. Neither package
+   enters the ScanView runtime or receives Mila data.
+2. Independently generated a 24-plane uncompressed binary SEG with 13 empty planes
+   omitted. highdicom enumerates the complete 24-image source series in Common Instance
+   Reference while encoding 11 per-frame derivation/source mappings.
+3. Corrected the backend and browser assumption that top-level source-reference count
+   cannot exceed frame count. Every encoded frame must still resolve through the exact
+   top-level set, SOP class/instance, native position, and guarded local series.
+4. Required highdicom's public source-instance reconstruction and ScanView to produce
+   identical 98,304-byte dense masks, SHA-256, 3,083-voxel count, and 3.946240 mL
+   technical native-grid arithmetic.
+5. Passed production-browser QA with the independently generated object: one supported
+   SEG, three visible locked planes, no edit/evidence/export controls, and no browser
+   warnings or errors.
+6. Kept full conformance, vendor/clinical-system interoperability, creator/algorithm/
+   boundary accuracy, tissue identity, diagnosis, and response authority out of scope.
+7. Built the deterministic owner-only v0.11.0 offline ZIP twice byte-identically and
+   passed fresh no-index exact-artifact gates on macOS arm64 and Strawberry Linux
+   x86_64. Both runtimes excluded highdicom/NumPy, required no external DICOM API,
+   and reproduced the strict catalog/authentication/mask/source-change behavior.
+
 ## Immediate
 
 1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound

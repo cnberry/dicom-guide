@@ -791,8 +791,10 @@ def _parse_segmentation(
         for values in dimension_values_by_ordinal.values()
     ):
         raise ValueError("DICOM SEG frame dimension indexes are not contiguous")
-    if frame_source_ids != set(referenced_instance_ids):
-        raise ValueError("DICOM SEG top-level and per-frame source references disagree")
+    # Common Instance Reference may enumerate the complete source series even when
+    # empty segmentation planes are omitted. Each frame was already required to
+    # resolve through that top-level set; an unused top-level source reference is
+    # therefore valid and remains part of the exact guarded native grid.
     output_masks: dict[tuple[str, int], bytes] = {}
     for number, mask in masks.items():
         foreground = sum(mask)
@@ -811,7 +813,9 @@ def _parse_segmentation(
         output_masks[(segmentation_id, number)] = payload
 
     referenced_ids_in_source_order = [
-        instance_id for instance_id in ordered_ids if instance_id in frame_source_ids
+        instance_id
+        for instance_id in ordered_ids
+        if instance_id in referenced_instance_ids
     ]
     return {
         "segmentation_id": segmentation_id,

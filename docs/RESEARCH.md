@@ -121,9 +121,33 @@ There is no upload or processing API, and ScanView does not modify or emit a new
 The display does not authenticate the creator, validate the algorithm, establish that
 a segment is tumor, quantify boundary uncertainty, or authorize diagnosis or response.
 
-The next interoperability gate is an independently produced highdicom/vendor fixture
-and comparison in an established viewer such as 3D Slicer or Weasis. Until that passes,
-support means only the fixed ScanView profile above.
+## Independent highdicom interoperability used in v0.11
+
+[highdicom 0.28.1](https://github.com/ImagingDataCommons/highdicom/releases/tag/v0.28.1)
+is an MIT-licensed, cross-platform Python implementation built on pydicom. Its
+[SEG guide](https://highdicom.readthedocs.io/en/latest/seg.html) documents sparse
+empty-frame omission, the Dimension Index Sequence, per-frame derivation references,
+and reconstruction by source instance. It is used only as an optional test dependency;
+ScanView's offline runtime remains pydicom-only and has no highdicom, NumPy, cloud, or
+external-processing dependency.
+
+The pinned patient-free gate independently creates a 24-plane binary SEG with 13 empty
+planes omitted. highdicom writes 24 top-level Common Instance References but only 11
+encoded frames, each with an exact derivation/source reference and Spatial Locations
+Preserved `YES`. This exposed an incorrect ScanView restriction that required the two
+sets to have equal cardinality. V0.11 now accepts a valid top-level superset while
+still requiring every encoded frame to resolve through that exact set and source plane.
+
+highdicom's public source-instance API and ScanView independently reconstruct the same
+98,304-byte dense mask: 3,083 marked voxels, SHA-256
+`81946112b1311f1ee9ff4fe1d61f86d36ce82d076122b39b9d4e7a8e46cf82bb`,
+and 3.946240 mL on the synthetic native grid. A production-browser check displayed the
+same boundary in axial, coronal, and sagittal views without warnings or edit/export
+controls. The script disables socket connections before any DICOM generation or read.
+
+This is independent implementation evidence for the supported profile, not full DICOM
+conformance certification. A real vendor-produced fixture and comparison in a clinical
+system or established viewer such as 3D Slicer or Weasis remain future gates.
 
 ## Manual ROI DICOM SEG profile
 

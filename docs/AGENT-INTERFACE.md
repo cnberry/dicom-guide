@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.10.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.11.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -25,7 +25,7 @@ interface is the same loopback bearer-
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-The exact v0.9.0 artifact passed no-index install, 28-schema runtime, GSPS creation/
+exact v0.9.0 artifact passed no-index install, 28-schema runtime, GSPS creation/
 validation, browser/bearer endpoint validation, no-store/audit/source-change gates,
 strict packaged-browser display locks, and loopback launch on macOS arm64 and
 Strawberry Linux x86_64. Longitudinal-readiness,
@@ -45,6 +45,22 @@ bearer mask refusal, browser-session exact mask hash/length, and changed-source 
 The Linux listener was loopback-only with no server-owned established external socket.
 Only the exact ZIP and patient-free synthetic fixture went to Strawberry; the remote
 test tree was deleted and no Mila data left the Mac.
+
+The owner-only v0.11.0 artifact is 5,532,095 bytes with SHA-256
+`4fb920ce93ab1459eb3953644162121a02539ba82e7de5881bbc0fc35b345aaf`.
+Its second build was byte-identical. Fresh macOS arm64 and Strawberry Linux x86_64
+extractions passed verification, no-index install, the 29-schema runtime, owner-only
+source-SEG catalog creation/validation, 401/200 catalog authorization, `no-store`,
+bearer mask refusal, browser-session exact mask reconstruction, and changed-source
+409. The installed artifact contained neither highdicom nor NumPy and declared no
+runtime network or external DICOM-processing API requirement. Strawberry was
+loopback-only, its disposable test tree was deleted, and no Mila data left the Mac.
+
+V0.11 adds an optional pinned highdicom 0.28.1/NumPy 2.5.2 test environment. It is
+outside the offline bundle and uses no patient data. The gate disables socket
+connections, independently creates and reads a sparse SEG, and requires highdicom and
+ScanView to reconstruct identical dense bytes, SHA-256, voxel count, and native-grid
+volume. Exact-artifact macOS/Strawberry evidence is recorded in `docs/STATUS.md`.
 
 ## Local artifacts
 
@@ -169,6 +185,10 @@ arithmetic, source/SEG hashes, and a hash for each dense 0/1 segment mask. It co
 no mask pixels or paths but remains sensitive and `deidentified: false`. Passing the
 profile is not full DICOM conformance certification.
 
+Common Instance Reference may enumerate the complete guarded source series even when
+empty planes are omitted. ScanView accepts that top-level superset, but each encoded
+frame must still resolve through it to one exact SOP class/instance and native plane.
+
 `validate-source-segmentations` reopens and rehashes the SEG and every source image,
 rebuilds the dense masks and arithmetic, and emits only validity plus aggregate counts.
 It omits labels, codes, IDs, paths, pixels, geometry, hashes, and volumes.
@@ -188,6 +208,12 @@ Creator identity is not authenticated; algorithm identity/accuracy, boundary acc
 represented tissue, and clinical meaning are not assessed. Editing, conversion into
 ScanView measurement evidence, longitudinal linking, response classification,
 diagnosis, and conclusion permissions are fixed false. No external API is called.
+
+The optional repository command
+`scripts/verify_highdicom_source_segmentation.py` requires the pinned `interop` extra.
+It generates synthetic DICOM under a temporary directory, disables socket connections
+before DICOM handling, and uses highdicom's public source-instance API as an independent
+mask oracle. highdicom and NumPy are not runtime or offline-bundle dependencies.
 
 ## Agent-to-person consultation plans
 

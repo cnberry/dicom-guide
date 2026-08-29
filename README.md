@@ -210,8 +210,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.10.0.zip
-cd scanview-offline-0.10.0
+unzip release/scanview-offline-0.11.0.zip
+cd scanview-offline-0.11.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -227,6 +227,15 @@ supplied, but installation, viewing, indexing, comparison, and evidence generati
 are offline. The integrity manifest is corruption evidence, not publisher signing or
 clinical authentication. Output is non-overwriting.
 
+The retained owner-only v0.11.0 ZIP is 5,532,095 bytes with SHA-256
+`4fb920ce93ab1459eb3953644162121a02539ba82e7de5881bbc0fc35b345aaf`.
+It passed a second byte-identical build, no-index install, 29-schema runtime, strict
+source-SEG CLI/authorization/mask/hash/source-change gates, and the independent sparse
+highdicom reconstruction oracle on macOS arm64 and Strawberry Linux x86_64. The exact
+runtime contains neither highdicom nor NumPy and requires no network or external DICOM-
+processing API. Only patient-free synthetic data went to Strawberry, and its test
+tree was deleted afterward.
+
 The retained owner-only v0.10.0 ZIP is 5,531,237 bytes with SHA-256
 `715b161a4a55493b19d3b8895d97d1c8fd4644bf798c5617398d140ceacd503f`.
 It passed a second byte-identical build, no-index install, 29-schema runtime, strict
@@ -239,6 +248,22 @@ The retained owner-only v0.9.0 ZIP is 5,510,395 bytes with SHA-256
 `d0ba563e5e8a0d41cac52b2da6f700a5ff22183b411af642f46012182c0dd1ae`.
 It passed exact-artifact no-index install and synthetic local GSPS gates on macOS
 arm64 and Strawberry Linux x86_64; no patient data was used on Strawberry.
+
+The optional v0.11 interoperability gate uses pinned highdicom 0.28.1 and NumPy
+2.5.2 only in a disposable test environment:
+
+```bash
+python3 -m venv /private/tmp/scanview-highdicom-interop
+/private/tmp/scanview-highdicom-interop/bin/python -m pip install \
+  -e './packages/agent[interop]'
+/private/tmp/scanview-highdicom-interop/bin/python \
+  scripts/verify_highdicom_source_segmentation.py
+```
+
+It generates patient-free DICOM, disables socket connections during generation and
+validation, and proves byte-identical dense-mask reconstruction between highdicom and
+ScanView. These packages are not included in the offline runtime and are never used on
+Mila data.
 
 ## Run the folder-picker viewer
 

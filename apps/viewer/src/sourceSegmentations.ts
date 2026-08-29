@@ -422,7 +422,6 @@ const readState = (
   const segmentNumbers = typedSegments.map((item) => item.segment_number);
   return new Set(segmentNumbers).size === segmentNumbers.length &&
     segmentNumbers.every((number, index) => index === 0 || number > segmentNumbers[index - 1]) &&
-    value.frame_count >= referenced.referenced_instance_ids.length &&
     value.frame_count <= depth * value.segment_count &&
     typedSegments.reduce((sum, item) => sum + item.frame_count, 0) === value.frame_count;
 };
