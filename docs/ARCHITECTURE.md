@@ -119,7 +119,8 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    derivative POSTs accept bounded outer ZIPs from an exact local Origin. Visit input
    contains only `baseline.zip` and `followup.zip`; review input adds only
    `comparison.json`; consultation input contains only neutral `view-a.zip` and
-   `view-b.zip`.
+   `view-b.zip`; consultation-board input contains only a strict label manifest and
+   2–8 ordered neutral key-image ZIPs.
    The service assembles and revalidates every nested derivative in memory, returns
    it with `no-store`, and persists nothing. Service-backed measurement IDs join
    directly to the manifest; legacy folder IDs remain accepted.
@@ -235,6 +236,7 @@ catalog has no longitudinal pair --> Consult Prep --> explicit MR + CT selection
                                                            |
                                                            +--> independent native views
                                                            +--> consultation packet
+                                                           +--> 2–8-view discussion board
                                                            +--> clinician questions
 
 chronology / lesion pairing / registration / response assessment: unavailable
@@ -243,6 +245,12 @@ viewer-state v1 publication: unavailable (timepoint-named schema)
 
 The hashes make partial edits evident but do not authenticate a clinician. Signed
 medical-record integration remains outside the current trust boundary.
+
+The local-processing boundary is architectural, not optional. DICOM bytes and
+derived pixels may be read only by the browser runtime, the loopback Python service,
+and an explicitly selected locally installed registration engine inside mandatory
+network isolation. ScanView has no adapter, endpoint, credential, or fallback for an
+external DICOM-processing API; missing local capability fails closed.
 
 Raw slice-index synchronization is marked as approximate. Physical-coordinate
 synchronization requires compatible geometry or an accepted transform. Subtraction

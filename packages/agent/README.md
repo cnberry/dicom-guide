@@ -19,6 +19,11 @@ scanview-agent validate-visit-packet scanview-visit-packet.zip
 scanview-agent assemble-consultation-packet '/path/to/copied/DICOM' \
   view-a-key-image.zip view-b-key-image.zip --output scanview-consultation-packet.zip
 scanview-agent validate-consultation-packet scanview-consultation-packet.zip
+scanview-agent assemble-consultation-board '/path/to/copied/DICOM' \
+  --item 'MRI overview' mr-key-image.zip \
+  --item 'CT overview' ct-key-image.zip \
+  --output scanview-consultation-board.zip
+scanview-agent validate-consultation-board scanview-consultation-board.zip
 scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
@@ -85,6 +90,12 @@ matching opaque patient context are accepted. The final packet uses `view_a`/`vi
 not timepoint roles, binds source byte/SHA anchors into a static page, keeps computed
 and interpretation arrays empty, and asserts no chronology, alignment, lesion match,
 comparison, diagnosis, or response authority.
+A consultation board extends that neutral workflow to 2–8 distinct source instances
+from at least two studies, including at least one MRI and one CT. Every item is
+revalidated against the guarded live catalog and rehashed source bytes. Person-entered
+labels remain discussion headings only. The board has empty computation and
+interpretation arrays and grants no chronology, alignment, lesion identity,
+comparison, diagnosis, or treatment-response authority.
 Comparison-review assembly recursively validates both artifacts and requires the
 selected measurements, source instances, units, and numeric values to match the
 visible key-image evidence exactly. It creates an owner-only ZIP with both images, a

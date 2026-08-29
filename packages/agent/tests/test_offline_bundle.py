@@ -132,6 +132,8 @@ def test_offline_bundle_is_exact_deterministic_and_local_only(tmp_path: Path) ->
     assert "--no-index" in install and "--require-hashes" in install
     assert "runtime_check.py" in install + launch
     assert '"external_dicom_processing_api_required": False' in runtime_check
+    assert "scanview_agent.consultation_boards" in runtime_check
+    assert "schema_count != 17" in runtime_check
     assert "http://" not in install + launch
     assert "https://" not in install + launch
 

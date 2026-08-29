@@ -169,6 +169,43 @@ publication is deliberately unavailable in Consult Prep because viewer-state v1 
 baseline/follow-up fields; an agent must not infer timepoint roles from the internal
 pane implementation.
 
+## Clinician consultation-board archives
+
+A consultation board groups 2–8 explicitly selected neutral consultation key images
+for a source-grounded discussion. It is assembled locally from repeated label/archive
+pairs:
+
+```bash
+scanview-agent assemble-consultation-board '/safe/local/DICOM/root' \
+  --item 'MRI overview' mr-overview.zip \
+  --item 'CT overview' ct-overview.zip \
+  --item 'MRI detail for discussion' mr-detail.zip \
+  --output scanview-consultation-board.zip
+scanview-agent validate-consultation-board scanview-consultation-board.zip
+```
+
+Every input must be a complete neutral consultation key-image archive. Assembly
+requires one matching opaque patient context, at least one MR and one CT, at least two
+distinct studies, and a distinct source instance for every item. Each catalog
+study/series/instance position and guarded source descriptor is resolved and rehashed
+again. Labels are trimmed, bounded person-entered discussion headings; they are not
+observations or findings.
+
+The outer browser transport contains only `board-input.json` and ordered
+`item-01.zip` through `item-08.zip` members. The authenticated exact-origin
+`POST /v1/consultation-boards` endpoint accepts that strict bounded ZIP, assembles and
+revalidates the board in memory, returns `application/zip` with `no-store`, and writes
+no patient artifact. Standalone CLI output is non-overwriting and owner-only.
+
+The v1 board record conforms to
+`schemas/scanview-clinician-consultation-board-v1.schema.json` and is accompanied by
+a script-free `review.html`, instructions, and one exact three-file evidence directory
+per item. Its observation order is for
+presentation only. `computed_results` and `candidate_interpretations` are fixed empty;
+chronology, alignment, registration, lesion identity, diagnosis, comparison, treatment
+response, and clinical review are explicitly not established. The privacy-minimized
+validator summary omits labels, source IDs, dates, hashes, paths, and pixels.
+
 ## Clinician visit-packet archives
 
 Agents can assemble two explicitly ordered key-image archives into one local

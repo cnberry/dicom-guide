@@ -14,6 +14,10 @@ from .comparison_reviews import (
     comparison_review_summary,
     write_comparison_review,
 )
+from .consultation_boards import (
+    consultation_board_summary,
+    write_consultation_board,
+)
 from .consultation_packets import (
     consultation_packet_summary,
     write_consultation_packet,
@@ -174,6 +178,34 @@ def parser() -> argparse.ArgumentParser:
         help="Validate a local clinician consultation packet and all integrity links",
     )
     validate_consultation_packet.add_argument("archive", type=Path)
+
+    assemble_consultation_board = commands.add_parser(
+        "assemble-consultation-board",
+        help=(
+            "Assemble 2-8 labeled live-source-validated MR/CT reference views "
+            "for a clinician discussion"
+        ),
+    )
+    assemble_consultation_board.add_argument(
+        "root", type=Path, help="Local DICOM root used to verify exact source bytes"
+    )
+    assemble_consultation_board.add_argument(
+        "--item",
+        action="append",
+        nargs=2,
+        metavar=("LABEL", "KEY_IMAGE_ARCHIVE"),
+        required=True,
+        help="Person-entered discussion label and neutral consultation key-image ZIP",
+    )
+    assemble_consultation_board.add_argument(
+        "--output", "-o", type=Path, required=True
+    )
+
+    validate_consultation_board = commands.add_parser(
+        "validate-consultation-board",
+        help="Validate a local consultation evidence board and all integrity links",
+    )
+    validate_consultation_board.add_argument("archive", type=Path)
 
     compare_measurements = commands.add_parser(
         "compare-measurements",
@@ -478,6 +510,24 @@ def main() -> None:
             raise SystemExit(1)
     elif args.command == "validate-consultation-packet":
         summary = consultation_packet_summary(args.archive)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "assemble-consultation-board":
+        try:
+            write_consultation_board(
+                args.root,
+                [(label, Path(archive)) for label, archive in args.item],
+                args.output,
+            )
+        except (OSError, ValueError) as error:
+            argument_parser.error(str(error))
+        summary = consultation_board_summary(args.output)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-consultation-board":
+        summary = consultation_board_summary(args.archive)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

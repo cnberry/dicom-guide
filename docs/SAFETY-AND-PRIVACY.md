@@ -24,6 +24,9 @@ quality-system, and regulatory review.
 - The app makes no external runtime network request; unified-workspace traffic stays
   on the loopback origin.
 - DICOM processing never depends on an external API; the CSP blocks external origins.
+- There is no cloud-processing fallback. A missing codec, parser, package, registration
+  engine, or isolation control disables that operation instead of transmitting DICOM,
+  derived pixels, headers, catalogs, or evidence to another service.
 - The transferable offline bundle contains the embedded ScanView wheel and pinned
   pure-Python `pydicom` wheel. Installation uses `pip --no-index --require-hashes`,
   and every launch verifies manifested payload bytes plus installed versions, UI,
@@ -145,6 +148,15 @@ quality-system, and regulatory review.
   Its computed and interpretation arrays are fixed empty. A valid packet remains an
   unreviewed question-preparation artifact that must be confirmed in the clinical
   imaging system.
+- A clinician consultation board inherits the sensitivity of every included rendered
+  view and discussion heading. V1 accepts 2–8 distinct source instances with one
+  matching opaque patient context, at least one MRI and one CT, and at least two
+  studies. Every source is rejoined to the live guarded catalog and rehashed locally.
+  Item order is presentation order only, and person-entered headings are not findings.
+  The artifact grants no chronology, registration, alignment, lesion identity,
+  comparison, diagnosis, treatment response, or clinical-review authority. Browser
+  download permissions are controlled by the host and may not be owner-only; move and
+  protect a retained board appropriately. CLI output is non-overwriting and `0600`.
 - A comparison-review ZIP inherits the sensitivity of its visit packet plus any
   person-entered reviewer identity and note. It never calls an external API. Exact
   visible-measurement joins prevent an unrelated comparison from being presented

@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
+from scanview_agent import consultation_boards as boards
 from scanview_agent import consultation_packets as consultation
 
 
@@ -136,7 +138,7 @@ def _key_image_bytes(source: dict[str, Any], slot: str) -> bytes:
 
 
 def _catalog_and_registry(
-    tmp_path: Path, sources: tuple[dict[str, Any], dict[str, Any]]
+    tmp_path: Path, sources: tuple[dict[str, Any], ...]
 ) -> tuple[dict[str, Any], dict[str, Path]]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     studies: list[dict[str, Any]] = []
@@ -215,6 +217,63 @@ def _zip_files(files: dict[str, bytes]) -> bytes:
         for name, content in files.items():
             archive.writestr(name, content)
     return output.getvalue()
+
+
+def _board_fixture(
+    tmp_path: Path,
+) -> tuple[list[tuple[str, Path]], dict[str, Any], dict[str, Path]]:
+    source_a = _source("view_a")
+    source_b = _source("view_b")
+    source_c = {
+        **_source("view_a", acquisition_date="20261130"),
+        "study_id": "cbcdef0123456789",
+        "series_id": "2123456789abcdef",
+        "instance_id": "1011223344556677",
+        "series_description": "Synthetic second MR source",
+        "instance_number": 4,
+    }
+    sources = (source_a, source_b, source_c)
+    catalog, registry = _catalog_and_registry(tmp_path / "board-source", sources)
+    items: list[tuple[str, Path]] = []
+    for index, (label, source, slot) in enumerate(
+        (
+            ("MRI overview", source_a, "view_a"),
+            ("CT bone reference", source_b, "view_b"),
+            ("Ask about <area>", source_c, "view_a"),
+        )
+    ):
+        path = tmp_path / f"board-item-{index + 1}.zip"
+        path.write_bytes(_key_image_bytes(source, slot))
+        items.append((label, path))
+    return items, catalog, registry
+
+
+def _board_transport(items: list[tuple[str, Path]]) -> bytes:
+    manifest = {
+        "schema_version": "1.0.0",
+        "artifact_type": "consultation_board_input",
+        "items": [
+            {
+                "archive": f"item-{index + 1:02d}.zip",
+                "discussion_label": label,
+            }
+            for index, (label, _) in enumerate(items)
+        ],
+    }
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("board-input.json", json.dumps(manifest) + "\n")
+        for index, (_, path) in enumerate(items):
+            archive.writestr(f"item-{index + 1:02d}.zip", path.read_bytes())
+    return output.getvalue()
+
+
+def _rewrite_key_image_source(path: Path, **changes: Any) -> None:
+    files = _archive_files(path)
+    packet = json.loads(files["key-image.json"])
+    packet["source"].update(changes)
+    files["key-image.json"] = (json.dumps(packet, indent=2) + "\n").encode()
+    path.write_bytes(_zip_files(files))
 
 
 def test_mr_ct_packet_is_source_bound_static_neutral_and_exact(tmp_path: Path) -> None:
@@ -664,3 +723,329 @@ def test_summary_rejects_extra_duplicate_and_path_traversal_members(
     summary = consultation.consultation_packet_summary(io.BytesIO(output.getvalue()))
     assert summary["valid"] is False
     assert any("exactly the nine supported files" in error for error in summary["errors"])
+
+
+def test_consultation_board_is_source_bound_static_neutral_and_schema_valid(
+    tmp_path: Path,
+) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+    original_hashes = {
+        instance_id: hashlib.sha256(path.read_bytes()).hexdigest()
+        for instance_id, path in registry.items()
+    }
+
+    archive_bytes = boards.consultation_board_archive_bytes(
+        items,
+        catalog,
+        registry,
+        created_at=CREATED_AT,
+    )
+    summary = boards.consultation_board_summary(io.BytesIO(archive_bytes))
+    files = _archive_files(archive_bytes)
+    packet = json.loads(files["consultation-board.json"])
+
+    assert summary == {
+        "valid": True,
+        "schema_version": "1.0.0",
+        "review_status": "unreviewed",
+        "artifact_type": "clinician_consultation_board",
+        "item_count": 3,
+        "modalities_present": ["MR", "CT"],
+        "distinct_source_study_count": 3,
+        "measurement_count": 0,
+        "file_integrity": True,
+        "component_integrity": True,
+        "source_anchor_integrity": True,
+        "presentation_integrity": True,
+        "longitudinal_comparison_authorized": False,
+        "response_assessment_authorized": False,
+        "external_api_required": False,
+        "errors": [],
+    }
+    assert packet["computed_results"] == []
+    assert packet["candidate_interpretations"] == []
+    assert packet["relationship"]["temporal_relationship"] == "not_asserted"
+    assert packet["relationship"]["registration_status"] == "not_registered"
+    assert [item["discussion_label"] for item in packet["observations"]] == [
+        label for label, _ in items
+    ]
+    review = files["review.html"].decode()
+    assert "Ask about &lt;area&gt;" in review
+    assert "Ask about <area>" not in review
+    assert "LABELS UNREVIEWED" in review
+    assert "NO RESPONSE CONCLUSION" in review
+    assert all(
+        hashlib.sha256(path.read_bytes()).hexdigest() == original_hashes[instance_id]
+        for instance_id, path in registry.items()
+    )
+
+    schema_path = (
+        Path(__file__).parents[3]
+        / "schemas"
+        / "scanview-clinician-consultation-board-v1.schema.json"
+    )
+    schema = json.loads(schema_path.read_text())
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(packet)
+    packet["candidate_interpretations"] = [{"text": "unsafe"}]
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(packet)
+    packet["candidate_interpretations"] = []
+    packet["observations"][0]["discussion_label"] = "spoof\u202elabel"
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(packet)
+
+
+def test_consultation_board_transport_and_privacy_minimized_summary(
+    tmp_path: Path,
+) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+    archive_bytes = boards.consultation_board_from_transport(
+        _board_transport(items),
+        catalog,
+        registry,
+        created_at=CREATED_AT,
+    )
+
+    summary = boards.consultation_board_summary(io.BytesIO(archive_bytes))
+    serialized = json.dumps(summary, sort_keys=True)
+
+    assert summary["valid"] is True
+    assert summary["item_count"] == 3
+    for sensitive_value in (
+        PATIENT_CONTEXT_ID,
+        *(label for label, _ in items),
+        *(instance_id for instance_id in registry),
+        *(hashlib.sha256(path.read_bytes()).hexdigest() for path in registry.values()),
+        *(str(path) for path in registry.values()),
+    ):
+        assert sensitive_value not in serialized
+
+
+def test_consultation_board_refuses_invalid_sets_labels_and_transport(
+    tmp_path: Path,
+) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+
+    with pytest.raises(ValueError, match="2 to 8"):
+        boards.consultation_board_archive_bytes(items[:1], catalog, registry)
+    with pytest.raises(ValueError, match="trimmed"):
+        boards.consultation_board_archive_bytes(
+            [(" leading label", items[0][1]), items[1]],
+            catalog,
+            registry,
+        )
+    with pytest.raises(ValueError, match="distinct source instances"):
+        boards.consultation_board_archive_bytes(
+            [items[0], ("Duplicate", items[0][1]), items[1]],
+            catalog,
+            registry,
+        )
+
+    files = _archive_files(_board_transport(items))
+    files["unexpected.txt"] = b"not allowed"
+    with pytest.raises(ValueError, match="unsupported files"):
+        boards.consultation_board_from_transport(
+            _zip_files(files),
+            catalog,
+            registry,
+        )
+
+    duplicate = io.BytesIO()
+    with zipfile.ZipFile(duplicate, "w", compression=zipfile.ZIP_STORED) as archive:
+        for name, payload in _archive_files(_board_transport(items)).items():
+            archive.writestr(name, payload)
+        archive.writestr("item-01.zip", items[0][1].read_bytes())
+    with pytest.raises(ValueError, match="ambiguous"):
+        boards.consultation_board_from_transport(
+            duplicate.getvalue(),
+            catalog,
+            registry,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutations", "message"),
+    [
+        (
+            [(2, {"patient_context_id": "2234567890abcdef"})],
+            "matching opaque patient context",
+        ),
+        ([(1, {"modality": "MR"})], "at least one MR and one CT"),
+        ([(2, {"modality": "PT"})], "at least one MR and one CT"),
+        (
+            [
+                (1, {"study_id": "abcdef0123456789"}),
+                (2, {"study_id": "abcdef0123456789"}),
+            ],
+            "at least two distinct source studies",
+        ),
+    ],
+)
+def test_consultation_board_relationship_gates_fail_closed(
+    tmp_path: Path,
+    mutations: list[tuple[int, dict[str, str]]],
+    message: str,
+) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+    for index, changes in mutations:
+        _rewrite_key_image_source(items[index][1], **changes)
+
+    with pytest.raises(ValueError, match=message):
+        boards.consultation_board_archive_bytes(items, catalog, registry)
+
+
+def test_consultation_board_tamper_breaks_integrity_and_presentation(
+    tmp_path: Path,
+) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+    archive_bytes = boards.consultation_board_archive_bytes(
+        items,
+        catalog,
+        registry,
+        created_at=CREATED_AT,
+    )
+    files = _archive_files(archive_bytes)
+    packet = json.loads(files["consultation-board.json"])
+    packet["observations"][0]["discussion_label"] = "Changed after assembly"
+    files["consultation-board.json"] = (json.dumps(packet, indent=2) + "\n").encode()
+
+    summary = boards.consultation_board_summary(io.BytesIO(_zip_files(files)))
+
+    assert summary["valid"] is False
+    assert summary["presentation_integrity"] is False
+
+
+def test_consultation_board_source_anchor_tamper_fails_closed(tmp_path: Path) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+    archive_bytes = boards.consultation_board_archive_bytes(
+        items, catalog, registry, created_at=CREATED_AT
+    )
+    files = _archive_files(archive_bytes)
+    packet = json.loads(files["consultation-board.json"])
+    packet["observations"][0]["source_anchor"]["dicom_sha256"] = "0" * 64
+    files["consultation-board.json"] = (json.dumps(packet, indent=2) + "\n").encode()
+
+    summary = boards.consultation_board_summary(io.BytesIO(_zip_files(files)))
+
+    assert summary["valid"] is False
+    assert summary["source_anchor_integrity"] is False
+    assert summary["presentation_integrity"] is False
+
+
+def test_consultation_board_enforces_component_generated_and_transport_totals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+    with zipfile.ZipFile(items[0][1]) as archive:
+        component_total = sum(info.file_size for info in archive.infolist())
+    monkeypatch.setattr(boards, "MAX_ARCHIVE_TOTAL_BYTES", component_total - 1)
+    with pytest.raises(ValueError, match="key-image content exceeds"):
+        boards.consultation_board_archive_bytes(items, catalog, registry)
+
+    monkeypatch.setattr(boards, "MAX_ARCHIVE_TOTAL_BYTES", 128 * 1024 * 1024)
+    monkeypatch.setattr(boards, "MAX_BOARD_ARCHIVE_BYTES", component_total + 1)
+    with pytest.raises(ValueError, match="consultation-board (member|content) exceeds"):
+        boards.consultation_board_archive_bytes(items, catalog, registry)
+
+    all_component_bytes = 0
+    for _, path in items:
+        with zipfile.ZipFile(path) as archive:
+            all_component_bytes += sum(info.file_size for info in archive.infolist())
+    monkeypatch.setattr(boards, "MAX_BOARD_ARCHIVE_BYTES", all_component_bytes + 1)
+    with pytest.raises(ValueError, match="consultation-board (member|content) exceeds"):
+        boards.consultation_board_archive_bytes(items, catalog, registry)
+
+    manifest = {
+        "schema_version": "1.0.0",
+        "artifact_type": "consultation_board_input",
+        "items": [
+            {
+                "archive": f"item-{index + 1:02d}.zip",
+                "discussion_label": f"Reference {index + 1}",
+            }
+            for index in range(8)
+        ],
+    }
+    transport = io.BytesIO()
+    with zipfile.ZipFile(transport, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("board-input.json", json.dumps(manifest))
+        for index in range(8):
+            archive.writestr(f"item-{index + 1:02d}.zip", b"A" * 4096)
+    transport_bytes = transport.getvalue()
+    assert len(transport_bytes) < 8 * 4096
+    monkeypatch.setattr(boards, "MAX_BOARD_TRANSPORT_BYTES", 16 * 1024)
+    with pytest.raises(ValueError, match="request content exceeds"):
+        boards.consultation_board_from_transport(
+            transport_bytes, catalog, registry
+        )
+
+
+def test_consultation_board_rejects_oversized_item_count_before_path_expansion(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="item count exceeds"):
+        boards._expected_payload_paths(9)
+
+    items, catalog, registry = _board_fixture(tmp_path)
+    archive_bytes = boards.consultation_board_archive_bytes(
+        items, catalog, registry, created_at=CREATED_AT
+    )
+    files = _archive_files(archive_bytes)
+    packet = json.loads(files["consultation-board.json"])
+    packet["observations"].extend([packet["observations"][0]] * 6)
+    files["consultation-board.json"] = (json.dumps(packet, indent=2) + "\n").encode()
+
+    summary = boards.consultation_board_summary(io.BytesIO(_zip_files(files)))
+
+    assert summary["valid"] is False
+    assert any("observations must contain 2 to 8" in error for error in summary["errors"])
+
+
+def test_consultation_board_transport_rejects_duplicate_json_and_link_members(
+    tmp_path: Path,
+) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+    files = _archive_files(_board_transport(items))
+    files["board-input.json"] = files["board-input.json"].replace(
+        b"{", b'{"schema_version":"1.0.0",', 1
+    )
+    with pytest.raises(ValueError, match="JSON is invalid"):
+        boards.consultation_board_from_transport(
+            _zip_files(files), catalog, registry
+        )
+
+    linked = io.BytesIO()
+    with zipfile.ZipFile(linked, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("board-input.json", b"{}")
+        info = zipfile.ZipInfo("item-01.zip")
+        info.create_system = 3
+        info.external_attr = (stat.S_IFLNK | 0o777) << 16
+        archive.writestr(info, b"arbitrary-target")
+    with pytest.raises(ValueError, match="linked consultation-board request"):
+        boards.consultation_board_from_transport(
+            linked.getvalue(), catalog, registry
+        )
+
+
+def test_write_consultation_board_is_owner_only_and_never_overwrites(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    items, catalog, registry = _board_fixture(tmp_path)
+    monkeypatch.setattr(
+        "scanview_agent.catalog.build_catalog",
+        lambda _root, *, include_hashes: (catalog, registry),
+    )
+    output = tmp_path / "consultation-board.zip"
+
+    boards.write_consultation_board(
+        tmp_path / "dicom", items, output, created_at=CREATED_AT
+    )
+
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    original = output.read_bytes()
+    with pytest.raises(FileExistsError):
+        boards.write_consultation_board(
+            tmp_path / "dicom", items, output, created_at=CREATED_AT
+        )
+    assert output.read_bytes() == original

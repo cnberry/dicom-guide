@@ -40,6 +40,13 @@ import {
 import { saveVisitPacket as saveLocalVisitPacket } from './visitPacketService';
 import { saveConsultationPacket as saveLocalConsultationPacket } from './consultationPacketService';
 import {
+  CONSULTATION_BOARD_MAX_LABEL_CHARACTERS,
+  CONSULTATION_BOARD_MAX_ITEMS,
+  CONSULTATION_BOARD_MIN_ITEMS,
+  consultationBoardLabelError,
+  saveConsultationBoard as saveLocalConsultationBoard,
+} from './consultationBoardService';
+import {
   buildViewerStatePublication,
   clearViewerState,
   createViewerStatePublisherId,
@@ -49,6 +56,19 @@ import {
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
+type ConsultationBoardDraftItem = {
+  id: string;
+  selectionSlot: 'view_a' | 'view_b';
+  discussionLabel: string;
+  archive: Uint8Array;
+  studyId: string;
+  instanceId: string;
+  patientContextId: string;
+  modality: string;
+  seriesDescription: string;
+  stackPosition: number;
+  stackCount: number;
+};
 const maxPastedMeasurementBytes = 2_000_000;
 
 const SeriesSelect = ({
@@ -83,6 +103,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const measurementInputRef = useRef<HTMLInputElement>(null);
   const baselineViewportRef = useRef<DicomViewportHandle>(null);
   const followupViewportRef = useRef<DicomViewportHandle>(null);
+  const consultationBoardOperationRef = useRef(false);
   const sourceGenerationRef = useRef(0);
   const sourceSummaryRef = useRef('No scan folder loaded');
   const [agentPublisherId, setAgentPublisherId] = useState(createViewerStatePublisherId);
@@ -123,6 +144,15 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const [consultationPacketMessage, setConsultationPacketMessage] = useState(
     'Select two local reference views to prepare a neutral clinician discussion packet.',
   );
+  const [consultationBoardItems, setConsultationBoardItems] = useState<
+    ConsultationBoardDraftItem[]
+  >([]);
+  const [consultationBoardLabel, setConsultationBoardLabel] = useState('');
+  const [consultationBoardState, setConsultationBoardState] =
+    useState<ExportState>('idle');
+  const [consultationBoardMessage, setConsultationBoardMessage] = useState(
+    'Add 2–8 explicitly labeled MR/CT source views. Labels remain unreviewed discussion headings.',
+  );
   const [agentStateSharing, setAgentStateSharing] = useState(false);
   const [agentStateMessage, setAgentStateMessage] = useState(
     'Agent viewer state is off by default. Enable it to share only expiring opaque positions locally.',
@@ -157,6 +187,27 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       visitPacketUsesLoopback &&
       isConsultationSourcePair(baseline, followup),
   );
+  const consultationBoardModalities = new Set(
+    consultationBoardItems.map((item) => item.modality),
+  );
+  const consultationBoardStudies = new Set(
+    consultationBoardItems.map((item) => item.studyId),
+  );
+  const consultationBoardHasMinimum =
+    consultationBoardItems.length >= CONSULTATION_BOARD_MIN_ITEMS;
+  const consultationBoardHasMR = consultationBoardModalities.has('MR');
+  const consultationBoardHasCT = consultationBoardModalities.has('CT');
+  const consultationBoardHasTwoStudies = consultationBoardStudies.size >= 2;
+  const consultationBoardLabelMessage = consultationBoardLabelError(
+    consultationBoardLabel,
+  );
+  const consultationBoardReady =
+    consultPrepMode &&
+    consultationBoardHasMinimum &&
+    consultationBoardItems.length <= CONSULTATION_BOARD_MAX_ITEMS &&
+    consultationBoardHasMR &&
+    consultationBoardHasCT &&
+    consultationBoardHasTwoStudies;
   const comparisonSourceIndexes = useMemo(() => {
     return findComparisonSourceIndexes(measurementComparisonDraft, baseline, followup);
   }, [baseline, followup, measurementComparisonDraft]);
@@ -171,7 +222,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const evidenceExportWorking =
     visitPacketState === 'working' ||
     comparisonReviewState === 'working' ||
-    consultationPacketState === 'working';
+    consultationPacketState === 'working' ||
+    consultationBoardState === 'working';
   const viewerStatePublication = useMemo(
     () => {
       if (consultPrepMode) return undefined;
@@ -218,6 +270,16 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       'Select two local reference views to prepare a neutral clinician discussion packet.',
     );
   }, [baselineId, baselineIndex, followupId, followupIndex]);
+
+  useEffect(() => {
+    if (consultPrepMode || consultationBoardItems.length === 0) return;
+    setConsultationBoardItems([]);
+    setConsultationBoardLabel('');
+    setConsultationBoardState('idle');
+    setConsultationBoardMessage(
+      'The in-memory consultation board was cleared because this dataset has a longitudinal source pair.',
+    );
+  }, [consultPrepMode, consultationBoardItems.length]);
 
   useEffect(() => {
     setComparisonReviewState('idle');
@@ -454,6 +516,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setMeasurementPasteValue('');
     setMeasurementComparisonDraft(undefined);
     setMeasurementMessage('Measurement drafts stay local and require clinician review.');
+    setConsultationBoardItems([]);
+    setConsultationBoardLabel('');
+    setConsultationBoardState('idle');
+    setConsultationBoardMessage(
+      'Add 2–8 explicitly labeled MR/CT source views. Labels remain unreviewed discussion headings.',
+    );
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     resetLocalImagingSession();
     setImportState({ processed: 0, total: files.length });
@@ -680,6 +748,181 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setConsultationPacketMessage(
         error instanceof Error ? error.message : 'Local consultation-packet export failed.',
       );
+    }
+  };
+
+  const addConsultationBoardView = async (slot: 'view_a' | 'view_b') => {
+    if (consultationBoardOperationRef.current) return;
+    const label = consultationBoardLabel;
+    const labelError = consultationBoardLabelError(label);
+    if (labelError) {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage(labelError);
+      return;
+    }
+    if (!consultPrepMode) {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage('Consultation boards are available only in Consult Prep.');
+      return;
+    }
+    if (consultationBoardItems.length >= CONSULTATION_BOARD_MAX_ITEMS) {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage(
+        `A consultation board can contain at most ${CONSULTATION_BOARD_MAX_ITEMS} views.`,
+      );
+      return;
+    }
+    const selectedSeries = slot === 'view_a' ? baseline : followup;
+    const viewport =
+      slot === 'view_a' ? baselineViewportRef.current : followupViewportRef.current;
+    if (!selectedSeries || !viewport) {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage(
+        `Choose and finish rendering ${slot === 'view_a' ? 'Image A' : 'Image B'} first.`,
+      );
+      return;
+    }
+    if (selectedSeries.sourceKind !== 'loopback-service') {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage(
+        'Use the unified local launcher so every board item can be rebound to exact DICOM bytes.',
+      );
+      return;
+    }
+    consultationBoardOperationRef.current = true;
+    setConsultationBoardState('working');
+    setConsultationBoardMessage(
+      `Capturing ${slot === 'view_a' ? 'Image A' : 'Image B'} locally and binding its source…`,
+    );
+    try {
+      const capture = await viewport.createConsultationKeyImageArchive(
+        slot,
+        new Date().toISOString(),
+      );
+      const source = capture.packet.source;
+      if (
+        consultationBoardItems.some((item) => item.instanceId === source.instance_id)
+      ) {
+        throw new Error(
+          'That exact source instance is already on the board. Choose another slice or remove the existing item.',
+        );
+      }
+      const existingContext = consultationBoardItems[0]?.patientContextId;
+      if (existingContext && existingContext !== source.patient_context_id) {
+        throw new Error('All board views must use one matching opaque patient context.');
+      }
+      const nextItems = [
+        ...consultationBoardItems,
+        {
+          id: crypto.randomUUID(),
+          selectionSlot: slot,
+          discussionLabel: label,
+          archive: capture.bytes,
+          studyId: source.study_id,
+          instanceId: source.instance_id,
+          patientContextId: source.patient_context_id,
+          modality: source.modality,
+          seriesDescription: source.series_description,
+          stackPosition: capture.packet.display.stack_position,
+          stackCount: capture.packet.display.stack_count,
+        },
+      ];
+      setConsultationBoardItems(nextItems);
+      setConsultationBoardLabel('');
+      setConsultationBoardState('idle');
+      const nextModalities = new Set(nextItems.map((item) => item.modality));
+      const nextStudies = new Set(nextItems.map((item) => item.studyId));
+      const missingRequirements = [
+        nextItems.length < CONSULTATION_BOARD_MIN_ITEMS ? 'at least two views' : undefined,
+        !nextModalities.has('MR') ? 'an MR view' : undefined,
+        !nextModalities.has('CT') ? 'a CT view' : undefined,
+        nextStudies.size < 2 ? 'a second study' : undefined,
+      ].filter((value): value is string => Boolean(value));
+      setConsultationBoardMessage(
+        missingRequirements.length === 0
+          ? `Added “${label}” in memory. The ordered board is ready to save locally.`
+          : `Added “${label}” in memory. Still needed: ${missingRequirements.join(', ')}.`,
+      );
+    } catch (error) {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage(
+        error instanceof Error ? error.message : 'Local consultation-board capture failed.',
+      );
+    } finally {
+      consultationBoardOperationRef.current = false;
+    }
+  };
+
+  const removeConsultationBoardItem = (id: string) => {
+    if (consultationBoardOperationRef.current) return;
+    setConsultationBoardItems((current) => current.filter((item) => item.id !== id));
+    setConsultationBoardState('idle');
+    setConsultationBoardMessage(
+      'Removed the in-memory capture. Original DICOM and previously downloaded files were not changed.',
+    );
+  };
+
+  const moveConsultationBoardItem = (id: string, offset: -1 | 1) => {
+    if (consultationBoardOperationRef.current) return;
+    setConsultationBoardItems((current) => {
+      const index = current.findIndex((item) => item.id === id);
+      const targetIndex = index + offset;
+      if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return current;
+      const reordered = [...current];
+      [reordered[index], reordered[targetIndex]] = [
+        reordered[targetIndex],
+        reordered[index],
+      ];
+      return reordered;
+    });
+    setConsultationBoardState('idle');
+    setConsultationBoardMessage(
+      'Updated the board order in memory. Order is preserved in the saved evidence board.',
+    );
+  };
+
+  const clearConsultationBoard = () => {
+    if (consultationBoardOperationRef.current) return;
+    setConsultationBoardItems([]);
+    setConsultationBoardLabel('');
+    setConsultationBoardState('idle');
+    setConsultationBoardMessage(
+      'Cleared all in-memory board captures. Original DICOM was not changed.',
+    );
+  };
+
+  const exportConsultationBoard = async () => {
+    if (consultationBoardOperationRef.current) return;
+    if (!consultationBoardReady) {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage(
+        'Add 2–8 distinct source views containing both MR and CT from at least two studies.',
+      );
+      return;
+    }
+    consultationBoardOperationRef.current = true;
+    setConsultationBoardState('working');
+    setConsultationBoardMessage(
+      'Rehashing every exact local DICOM source and assembling the board in memory…',
+    );
+    try {
+      const result = await saveLocalConsultationBoard(
+        consultationBoardItems.map((item) => ({
+          discussionLabel: item.discussionLabel,
+          archive: item.archive,
+        })),
+      );
+      setConsultationBoardState('saved');
+      setConsultationBoardMessage(
+        `Saved ${result.filename}: ${consultationBoardItems.length} unreviewed reference views, no comparison or response conclusion.`,
+      );
+    } catch (error) {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage(
+        error instanceof Error ? error.message : 'Local consultation-board export failed.',
+      );
+    } finally {
+      consultationBoardOperationRef.current = false;
     }
   };
 
@@ -1124,6 +1367,195 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               </div>
             </article>
           </section>
+          {consultPrepMode && (
+            <section
+              className="consultation-board-panel"
+              aria-labelledby="consultation-board-heading"
+            >
+              <div className="consultation-board-heading">
+                <div>
+                  <span className="eyebrow">Local consultation evidence · 2–8 views</span>
+                  <h2 id="consultation-board-heading">Build a source-bound discussion board</h2>
+                  <p>
+                    Add the currently rendered Image A or Image B with an explicit heading.
+                    Headings are unreviewed prompts, not findings. Captures stay in memory unless
+                    you clear the board or load another folder.
+                  </p>
+                </div>
+                <span className="unreviewed-badge">
+                  {consultationBoardItems.length} / {CONSULTATION_BOARD_MAX_ITEMS} views
+                </span>
+              </div>
+              <div className="consultation-board-controls">
+                <label>
+                  <span>Discussion heading</span>
+                  <input
+                    value={consultationBoardLabel}
+                    maxLength={CONSULTATION_BOARD_MAX_LABEL_CHARACTERS}
+                    placeholder="Example: MRI overview — ask which feature matters"
+                    disabled={evidenceExportWorking}
+                    aria-invalid={
+                      consultationBoardLabel.length > 0 &&
+                      Boolean(consultationBoardLabelMessage)
+                    }
+                    aria-describedby="consultation-board-label-help"
+                    onChange={(event) => {
+                      setConsultationBoardLabel(event.target.value);
+                      if (consultationBoardState !== 'working') {
+                        setConsultationBoardState('idle');
+                      }
+                    }}
+                  />
+                  <small
+                    id="consultation-board-label-help"
+                    className={
+                      consultationBoardLabel.length > 0 && consultationBoardLabelMessage
+                        ? 'error'
+                        : undefined
+                    }
+                  >
+                    {consultationBoardLabel.length === 0
+                      ? `Required · 1–${CONSULTATION_BOARD_MAX_LABEL_CHARACTERS} characters · saved as an unreviewed heading`
+                      : consultationBoardLabelMessage ??
+                        `${consultationBoardLabel.length} / ${CONSULTATION_BOARD_MAX_LABEL_CHARACTERS} characters · ready to capture`}
+                  </small>
+                </label>
+                <div>
+                  <button
+                    type="button"
+                    disabled={
+                      evidenceExportWorking ||
+                      !baseline ||
+                      consultationBoardItems.length >= CONSULTATION_BOARD_MAX_ITEMS ||
+                      Boolean(consultationBoardLabelMessage)
+                    }
+                    onClick={() => void addConsultationBoardView('view_a')}
+                  >
+                    Add current Image A
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      evidenceExportWorking ||
+                      !followup ||
+                      consultationBoardItems.length >= CONSULTATION_BOARD_MAX_ITEMS ||
+                      Boolean(consultationBoardLabelMessage)
+                    }
+                    onClick={() => void addConsultationBoardView('view_b')}
+                  >
+                    Add current Image B
+                  </button>
+                </div>
+              </div>
+              <div className="consultation-board-readiness" aria-label="Board requirements">
+                <span className={consultationBoardHasMinimum ? 'ready' : undefined}>
+                  {consultationBoardHasMinimum ? '✓' : '○'} 2–8 views
+                </span>
+                <span className={consultationBoardHasMR ? 'ready' : undefined}>
+                  {consultationBoardHasMR ? '✓' : '○'} MR included
+                </span>
+                <span className={consultationBoardHasCT ? 'ready' : undefined}>
+                  {consultationBoardHasCT ? '✓' : '○'} CT included
+                </span>
+                <span className={consultationBoardHasTwoStudies ? 'ready' : undefined}>
+                  {consultationBoardHasTwoStudies ? '✓' : '○'} 2+ studies
+                </span>
+              </div>
+              {consultationBoardItems.length > 0 ? (
+                <ol className="consultation-board-items">
+                  {consultationBoardItems.map((item, index) => (
+                    <li key={item.id}>
+                      <div className="consultation-board-item-copy">
+                        <strong>{item.discussionLabel}</strong>
+                        <span>
+                          {item.selectionSlot === 'view_a' ? 'Image A' : 'Image B'} capture ·{' '}
+                          {item.modality} · {item.seriesDescription} · source slice{' '}
+                          {item.stackPosition} / {item.stackCount}
+                        </span>
+                      </div>
+                      <div className="consultation-board-item-actions">
+                        <button
+                          type="button"
+                          disabled={evidenceExportWorking || index === 0}
+                          aria-label={`Move “${item.discussionLabel}” up`}
+                          title="Move up in saved display order"
+                          onClick={() => moveConsultationBoardItem(item.id, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            evidenceExportWorking ||
+                            index === consultationBoardItems.length - 1
+                          }
+                          aria-label={`Move “${item.discussionLabel}” down`}
+                          title="Move down in saved display order"
+                          onClick={() => moveConsultationBoardItem(item.id, 1)}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          disabled={evidenceExportWorking}
+                          onClick={() => removeConsultationBoardItem(item.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="consultation-board-empty">
+                  No captures yet. Select a source slice, enter a heading, then add Image A or B.
+                </p>
+              )}
+              <div className="consultation-board-actions">
+                <button
+                  type="button"
+                  className="primary-action"
+                  disabled={!consultationBoardReady || evidenceExportWorking}
+                  title={
+                    consultationBoardReady
+                      ? 'Rehash every exact source and save one local agent-verifiable board'
+                      : 'Add 2–8 distinct views containing both MR and CT from at least two studies'
+                  }
+                  onClick={() => void exportConsultationBoard()}
+                >
+                  {consultationBoardState === 'working'
+                    ? 'Working locally…'
+                    : consultationBoardState === 'saved'
+                      ? 'Saved evidence board'
+                      : 'Save evidence board'}
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    consultationBoardItems.length === 0 ||
+                    evidenceExportWorking
+                  }
+                  onClick={clearConsultationBoard}
+                >
+                  Clear in-memory board
+                </button>
+                <p
+                  className={consultationBoardState === 'error' ? 'error' : undefined}
+                  role={consultationBoardState === 'error' ? 'alert' : 'status'}
+                  aria-live="polite"
+                >
+                  {consultationBoardMessage}
+                </p>
+              </div>
+              <p className="consultation-board-safety">
+                Export requires one matching opaque patient context, both MR and CT, at least two
+                studies, distinct source instances, and live source rehashing. Order and labels do
+                not establish chronology, alignment, lesion identity, diagnosis, or response. The
+                downloaded ZIP is sensitive; move it to a protected local folder and verify its
+                permissions before retaining it.
+              </p>
+            </section>
+          )}
           <MeasurementWorkspace
             measurements={visibleMeasurements}
             baseline={baseline}

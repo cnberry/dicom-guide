@@ -11,6 +11,12 @@ series, renders native pixels with Cornerstone3D, and presents two series side b
 side. It suggests pair compatibility with visible reasons but never approves a
 pair or issues a medical conclusion.
 
+All DICOM processing is local by design. ScanView has no cloud-processing fallback:
+if a required local decoder, registration engine, or runtime dependency is missing,
+the operation fails closed without uploading images or metadata. The only runtime
+HTTP traffic is authenticated loopback communication between the local viewer and
+the local ScanView process.
+
 The first local catalog contains 2 studies, 65 series, and 10,286 DICOM instances.
 They represent one MRI exam and one CT exam, so there is not yet a valid
 same-modality longitudinal pair for measuring chemotherapy response. ScanView
@@ -57,6 +63,10 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   and stable DICOM bytes are reverified and hashed; the static packet contains no
   comparison, registration, computed result, interpretation, diagnosis, or response
   conclusion.
+- A source-bound consultation board can collect 2–8 explicitly labeled native MRI/CT
+  reference views for a clinical conversation. Labels are person-entered discussion
+  headings, not findings; every source is reverified locally and the board makes no
+  chronology, alignment, lesion, diagnosis, comparison, or response claim.
 - Local agent comparison of explicitly selected, distinct-series measurements;
   a bounded working lesion label and numeric changes remain source-linked and never
   become a response verdict. The same workflow is available in the human viewer.
@@ -558,6 +568,36 @@ permanently states that the views are unregistered, unaligned, unreviewed, not a
 comparison, not for diagnosis, and not a response conclusion; computed results and
 candidate interpretations are fixed empty. Treat it as sensitive question-preparation
 evidence and confirm both source images in the clinician's imaging system.
+
+### Build a multi-view consultation board
+
+In **Consult preparation workspace**, enter a short discussion heading and add the
+current Image A or Image B. Repeat for 2–8 distinct native source instances. A valid
+board must contain at least one MRI view, at least one CT view, and views from at least
+two studies. Choose **Save discussion board** when those gates are visible as ready.
+The captured key-image ZIPs remain in browser memory until export or clearing.
+
+The same workflow is available entirely locally from the CLI:
+
+```bash
+.venv/bin/scanview-agent assemble-consultation-board \
+  '/Users/chris/Desktop/Mila Scan CD' \
+  --item 'MRI overview' mr-overview-key-image.zip \
+  --item 'CT overview' ct-overview-key-image.zip \
+  --item 'MRI detail for discussion' mr-detail-key-image.zip \
+  --output scanview-consultation-board.zip
+.venv/bin/scanview-agent validate-consultation-board \
+  scanview-consultation-board.zip
+```
+
+The assembler revalidates every nested neutral key image and exact live DICOM source.
+The headings are unreviewed person-entered organizational text, not clinical findings.
+The script-free board is a discussion aid only: item order supplies no chronology,
+and the artifact supplies no registration, alignment, lesion linkage, diagnosis,
+comparison, response assessment, or medical conclusion.
+Browser download permissions are host-controlled and may be broader than owner-only;
+move the sensitive ZIP into an appropriately protected local folder before retaining
+or sharing it. CLI-created boards are written non-overwriting with owner-only mode.
 
 ## Assemble a clinician visit packet
 

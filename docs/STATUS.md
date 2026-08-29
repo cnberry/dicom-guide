@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 18:52 PDT
+Last updated: 2026-08-28 19:24 PDT
 
 ## Data transfer
 
@@ -158,6 +158,17 @@ Last updated: 2026-08-28 18:52 PDT
   and interpretation arrays. Its deterministic review page binds both DICOM byte
   counts/SHA-256 values and permanently says reference views only, not a comparison,
   unregistered, unreviewed, not for diagnosis, and no response conclusion.
+- Consultation-board v1 extends that neutral workflow to 2–8 explicitly labeled,
+  ordered native views with both MR and CT, at least two studies, distinct source
+  instances, and one matching opaque patient context. Every nested archive and exact
+  guarded DICOM source is revalidated and rehashed locally. Labels remain unreviewed
+  person-entered discussion headings; computed results, interpretations, chronology,
+  alignment, lesion linkage, diagnosis, comparison, and response authority are absent.
+- The viewer collects those labeled captures in memory, shows independent readiness
+  gates, permits explicit move/remove/clear, and sends only a strict bounded ZIP to
+  authenticated `POST /v1/consultation-boards`. The validated result is returned with
+  `no-store`; the server writes no patient artifact. A matching CLI path produces
+  non-overwriting owner-only output and a privacy-minimized validation summary.
 - The same consultation contract is available through strict non-overwriting CLI
   assembly/validation and `POST /v1/consultation-packets`. All nested input and output
   ZIP members, JSON keys, digests, source metadata, positions, modalities, study and
@@ -174,7 +185,7 @@ Last updated: 2026-08-28 18:52 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 16 contracts without breaking lightweight
+  UI-embedded wheel together with all 17 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks; signing/notarization and Linux execution remain pending.
@@ -189,7 +200,7 @@ Last updated: 2026-08-28 18:52 PDT
 
 ## Verification
 
-- Python agent tests: 133 passing, including cross-patient and legacy-context
+- Python agent tests: 148 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -209,14 +220,20 @@ Last updated: 2026-08-28 18:52 PDT
   same-descriptor reviewed-volume streaming, consultation MR/CT/patient/study gates,
   live source hash/position binding, hostile nested/final ZIP refusal, strict JSON,
   output permissions/no-overwrite, presentation/source-anchor tamper detection, and
-  consultation endpoint auth/origin/media enforcement, deterministic offline-bundle
-  shape, pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
-- Viewer tests: 80 passing, including patient-context and local-only enforcement,
+  consultation endpoint auth/origin/media enforcement; consultation-board patient/
+  modality/study/instance gates, Unicode label safety, aggregate decoded-size limits,
+  source-anchor tamper detection, live-source mutation refusal, privacy-minimized
+  failures, authenticated exact-origin transport, owner-only/non-overwriting CLI
+  output, and deterministic presentation; deterministic offline-bundle shape,
+  pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
+- Viewer tests: 85 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
-  endpoint contract, exact neutral two-view consultation transport/sidecar and
-  cross-modality dataset-mode gates, exact three-file comparison-review transport and source-slice
-  lookup, strict one-use navigation parsing and atomic source resolution, and
+  endpoint contract, exact neutral two-view consultation transport/sidecar,
+  cross-modality dataset-mode gates, consultation-board order/label/count/size and
+  exact same-origin service transport, exact three-file comparison-review transport
+  and source-slice lookup, strict one-use navigation parsing and atomic source
+  resolution, and
   complete/regular MPR geometry gating, privacy-minimized viewer-state construction,
   source refusal, link-state labeling, same-origin publication/clear transport,
   oblique/permuted/RAS patient-space NRRD reformats, physical aspect, through-plane
@@ -225,26 +242,28 @@ Last updated: 2026-08-28 18:52 PDT
   anchor checks, chronology/source-separation refusal, encoded/predecode/decoded and
   render-dimension caps, ordinary-viewer state retention across mode switches, and
   rejected/malformed reviewed-context refusal.
-- All 16 JSON Schemas pass Draft 2020-12 validation.
+- All 17 JSON Schemas pass Draft 2020-12 validation.
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- UI-embedded staged Python wheel build: passing; the 2,909,942-byte wheel contains the
+- UI-embedded staged Python wheel build: passing; the 2,927,401-byte wheel contains the
   registration host/runner/review/display module, viewer-state server module, viewer
-  entry point, all 11 built UI/worker/codec files (9,882,460 bytes uncompressed), and
-  all 16 JSON Schemas (122,334 bytes). A fresh isolated installation resolved its
+  entry point, all 11 built UI/worker/codec files (9,897,749 bytes uncompressed), and
+  all 17 JSON Schemas (134,380 bytes). A fresh isolated installation resolved its
   embedded UI and schemas without the source checkout; temporary release, installation,
   and installer-log artifacts were moved to recoverable Trash.
 - Offline runtime bundle build and macOS arm64 smoke test: passing. The deterministic
-  5,303,605-byte ZIP contains nine fixed-timestamp members: `bundle.json` plus eight
-  hash-manifested payloads, including the 2,909,942-byte embedded ScanView wheel and
+  5,321,443-byte ZIP contains nine fixed-timestamp members: `bundle.json` plus eight
+  hash-manifested payloads, including the 2,927,401-byte embedded ScanView wheel and
   pinned 2,376,822-byte `pydicom` 3.0.2 wheel. A fresh extraction verified, installed
   with `PIP_NO_INDEX=1`, `--no-index`, and `--require-hashes`, then rechecked both
-  versions, the embedded UI, all 16 schemas, and an explicit
-  `external_dicom_processing_api_required: false` runtime assertion. A second build
+  versions, the embedded UI, all 17 schemas, both consultation contracts, and explicit
+  `runtime_network_required: false` and
+  `external_dicom_processing_api_required: false` runtime assertions. A second build
   from the same wheels was byte-identical. The retained ZIP SHA-256 is
-  `e594af37705c31f719bed38c15dac44da5f85ba521ce2c101306f5b4ea3ef2bb`. Its packaged
-  launcher indexed one synthetic MR instance and served health/manifest over loopback
+  `a4d3523c06f5e9d1d7c9b0d65125adc9ec83453ce19a3a93652250b141a16b99`. Its packaged
+  launcher indexed synthetic MR and CT instances, served health/manifest over loopback,
+  and independently validated the production synthetic consultation board
   with direct identifiers excluded and deidentification explicitly false. No local Linux container or VM is
   available, so Linux execution is still unverified. One patient-free verified ZIP is
   retained in the ignored local `release/` directory; synthetic sources, extracted
@@ -399,6 +418,18 @@ Last updated: 2026-08-28 18:52 PDT
   10,286 instances loaded from the local service. A 62-slice native stack rendered
   through the bundled OpenJPEG WebAssembly decoder with no browser errors or external
   requests.
+- Consultation-board production smoke test: two same-context synthetic MR/CT studies
+  rendered in neutral Image A/Image B panes. Explicit headings were captured in
+  memory, all four readiness gates activated, and one local
+  `POST /v1/consultation-boards` returned a 90,640-byte nine-file ZIP. Independent
+  agent validation reported file, nested-component, source-anchor, and deterministic-
+  presentation integrity true, with both comparison/response authorization flags
+  false and `external_api_required: false`. The static page had no script or external
+  URL; browser diagnostics were empty and server logs contained only loopback assets,
+  opaque instance reads, and the single POST. The browser-created file demonstrated
+  host-controlled `0644` download mode, so the UI now instructs users to move/protect
+  retained sensitive boards; the synthetic DICOM and board were moved to recoverable
+  Trash.
 - Real-copy Consult Prep smoke test: the same catalog automatically opened the
   neutral consultation workspace, showed Image A/Image B instead of timepoint roles,
   kept approximate linking disabled, hid longitudinal lesion pairing and response
@@ -418,10 +449,10 @@ Last updated: 2026-08-28 18:52 PDT
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.
-- The current MRI+CT consultation packet is a source-bound conversation aid only. It
-  does not establish chronology, align anatomy, match a lesion, compare intensity,
-  assess tumor response, authenticate reviewer identity, or replace review in the
-  clinical imaging system.
+- The current MRI+CT consultation packet and multi-view board are source-bound
+  conversation aids only. Neither establishes chronology, aligns anatomy, matches a
+  lesion, compares intensity, assesses tumor response, authenticates reviewer
+  identity, or replaces review in the clinical imaging system.
 - Clinical-organization identity authentication, digital signatures, and medical-
   record sign-off remain. The current review chain is self-attested and explicitly
   unverified. Elliptical ROI is a 2D manual draft, not segmentation or volume

@@ -321,11 +321,37 @@
    errors or external requests. No decision was submitted, no patient data was used,
    and synthetic inputs/derivatives were moved to recoverable Trash.
 
+## Completed in the twenty-first milestone
+
+1. Added a source-bound clinician consultation board for 2–8 explicitly selected
+   neutral native key images. It requires one matching opaque patient context, both
+   MR and CT, at least two studies, and a distinct source instance for every item.
+2. Added bounded, Unicode-safe person-entered discussion headings and ordered
+   move/remove controls. Headings are permanently identified as unreviewed prompts,
+   not observations, findings, lesion identities, or clinical conclusions.
+3. Added strict CLI assembly/validation and an authenticated exact-origin loopback
+   endpoint. Every nested archive, catalog position, guarded source descriptor, and
+   DICOM SHA-256 is revalidated locally; hostile ZIPs, source mutation, oversized
+   expansion, ambiguous members, and privacy-leaking failures are refused.
+4. Added a script-free responsive/printable board plus a strict v1 agent contract and
+   privacy-minimized summary. Computed and interpretation arrays remain empty, and no
+   chronology, alignment, registration, lesion linkage, diagnosis, comparison, or
+   treatment-response authority is created.
+5. Verified the production workflow on synthetic MR/CT DICOM: both local pixels
+   rendered, the readiness gates activated, the downloaded nine-file board passed all
+   integrity flags, browser diagnostics were empty, and server traffic stayed on
+   loopback. Synthetic sources and output were moved to recoverable Trash.
+6. Promoted “no external DICOM-processing API and no cloud fallback” to a release
+   invariant. The rebuilt deterministic offline bundle now verifies the consultation-
+   board contract, all 17 schemas, embedded UI, pinned local dependency, and explicit
+   `runtime_network_required: false` and
+   `external_dicom_processing_api_required: false` assertions before cataloging.
+
 ## Immediate
 
-1. Use the consultation packet only to prepare questions with Mila's clinicians;
-   confirm the correct MRI and CT source views in the clinical imaging system and do
-   not treat the packet as a diagnosis or treatment-response analysis.
+1. Use consultation packets or boards only to prepare questions with Mila's
+   clinicians; confirm every MRI/CT source view in the clinical imaging system and do
+   not treat either artifact as a diagnosis or treatment-response analysis.
 2. Import a future same-modality MRI follow-up, have a person confirm the intended
    earlier/later sequences and clinical roles, run the required engine on that pair,
    and complete qualified visual/quantitative QA.

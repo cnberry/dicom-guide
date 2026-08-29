@@ -25,6 +25,11 @@ from .comparison_reviews import (
     comparison_review_from_transport,
     comparison_review_summary,
 )
+from .consultation_boards import (
+    MAX_BOARD_TRANSPORT_BYTES,
+    consultation_board_from_transport,
+    consultation_board_summary,
+)
 from .consultation_packets import (
     MAX_CONSULTATION_PACKET_TRANSPORT_BYTES,
     consultation_packet_from_transport,
@@ -512,6 +517,10 @@ class Handler(BaseHTTPRequestHandler):
                 "application/vnd.scanview.consultation-input+zip",
                 MAX_CONSULTATION_PACKET_TRANSPORT_BYTES,
             ),
+            "/v1/consultation-boards": (
+                "application/vnd.scanview.consultation-board-input+zip",
+                MAX_BOARD_TRANSPORT_BYTES,
+            ),
         }
         if path not in supported:
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
@@ -560,7 +569,7 @@ class Handler(BaseHTTPRequestHandler):
                         "assembled comparison review failed local integrity validation"
                     )
                 filename_prefix = "scanview-comparison-review"
-            else:
+            elif path == "/v1/consultation-packets":
                 payload = consultation_packet_from_transport(
                     body,
                     self.server.catalog,
@@ -573,6 +582,19 @@ class Handler(BaseHTTPRequestHandler):
                         "assembled consultation packet failed local integrity validation"
                     )
                 filename_prefix = "scanview-consultation-packet"
+            else:
+                payload = consultation_board_from_transport(
+                    body,
+                    self.server.catalog,
+                    self.server.registry,
+                    created_at=created_at,
+                )
+                summary = consultation_board_summary(io.BytesIO(payload))
+                if not summary["valid"]:
+                    raise ValueError(
+                        "assembled consultation board failed local integrity validation"
+                    )
+                filename_prefix = "scanview-consultation-board"
         except ValueError as error:
             self._send_json(
                 {
@@ -580,6 +602,7 @@ class Handler(BaseHTTPRequestHandler):
                         "/v1/visit-packets": "invalid_visit_packet_input",
                         "/v1/comparison-reviews": "invalid_comparison_review_input",
                         "/v1/consultation-packets": "invalid_consultation_packet_input",
+                        "/v1/consultation-boards": "invalid_consultation_board_input",
                     }[path],
                     "detail": str(error),
                 },

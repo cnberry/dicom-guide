@@ -48,6 +48,10 @@ result into a medical conclusion.
   cross-study/patient-context gates, static human presentation, privacy-minimized
   validation, CLI workflows, and a bounded same-origin in-memory endpoint are
   implemented without external processing APIs.
+- Source-bound consultation boards for 2–8 explicitly labeled native MRI/CT views.
+  Each item is rejoined to the guarded live catalog and exact source bytes; the board
+  remains a neutral discussion aid with no chronology, alignment, lesion identity,
+  comparison, diagnosis, treatment-response, or external processing authority.
 - Explicit, numeric-only local measurement comparison for agents.
 - Human/agent measurement workspace with strict pasted-JSON import, session-only
   deletion, explicit labeled lesion pairing, local numeric preview/export, and a
@@ -149,3 +153,7 @@ result into a medical conclusion.
     hashed local wheels with package-index access disabled, verifies its payload and
     installed runtime before launch, and requires no external DICOM-processing API.
     Platform execution and publisher signatures are separate, explicit release gates.
+17. **Local processing boundary:** no feature that reads, decodes, indexes, registers,
+    measures, compares, segments, renders, or packages DICOM may require an external
+    API. A missing local engine or dependency must fail closed; it must never trigger
+    a patient-data upload or cloud fallback.

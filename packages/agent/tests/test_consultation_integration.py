@@ -24,6 +24,8 @@ from pydicom.uid import (
 
 from scanview_agent.catalog import build_catalog
 from scanview_agent.cli import main, parser
+from scanview_agent.consultation_boards import consultation_board_summary
+from scanview_agent.consultation_boards import MAX_BOARD_TRANSPORT_BYTES
 from scanview_agent.consultation_packets import (
     CONSULTATION_KEY_IMAGE_IMPLEMENTATION,
     CONSULTATION_KEY_IMAGE_LIMITATIONS,
@@ -200,14 +202,32 @@ def _transport(view_a: Path, view_b: Path) -> bytes:
     return output.getvalue()
 
 
+def _board_transport(view_a: Path, view_b: Path) -> bytes:
+    manifest = {
+        "schema_version": "1.0.0",
+        "artifact_type": "consultation_board_input",
+        "items": [
+            {"archive": "item-01.zip", "discussion_label": "MRI question"},
+            {"archive": "item-02.zip", "discussion_label": "CT question"},
+        ],
+    }
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("board-input.json", json.dumps(manifest) + "\n")
+        archive.writestr("item-01.zip", view_a.read_bytes())
+        archive.writestr("item-02.zip", view_b.read_bytes())
+    return output.getvalue()
+
+
 def _post(
     port: int,
     body: bytes,
     *,
     headers: dict[str, str],
+    path: str = "/v1/consultation-packets",
 ) -> tuple[int, dict[str, str], bytes]:
     connection = HTTPConnection("127.0.0.1", port, timeout=5)
-    connection.request("POST", "/v1/consultation-packets", body=body, headers=headers)
+    connection.request("POST", path, body=body, headers=headers)
     response = connection.getresponse()
     result = response.status, dict(response.getheaders()), response.read()
     connection.close()
@@ -307,6 +327,46 @@ def test_consultation_cli_assembles_and_validates_live_sources(
     assert validated["response_assessment_authorized"] is False
 
 
+def test_consultation_board_cli_assembles_and_privacy_validates_live_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, _, _, view_a, view_b = _fixture(tmp_path)
+    output = tmp_path / "consultation-board.zip"
+    arguments = [
+        "assemble-consultation-board",
+        str(root),
+        "--item",
+        "MRI question",
+        str(view_a),
+        "--item",
+        "CT question",
+        str(view_b),
+        "--output",
+        str(output),
+    ]
+    parsed = parser().parse_args(arguments)
+    assert parsed.command == "assemble-consultation-board"
+    assert len(parsed.item) == 2
+
+    monkeypatch.setattr(sys, "argv", ["scanview-agent", *arguments])
+    main()
+    assembled = json.loads(capsys.readouterr().out)
+    assert assembled["valid"] is True
+    assert assembled["item_count"] == 2
+    assert "MRI question" not in json.dumps(assembled)
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["scanview-agent", "validate-consultation-board", str(output)],
+    )
+    main()
+    validated = json.loads(capsys.readouterr().out)
+    assert validated["valid"] is True
+    assert validated["external_api_required"] is False
+    assert validated["longitudinal_comparison_authorized"] is False
+
+
 def test_consultation_endpoint_enforces_auth_origin_media_type_and_live_sources(
     tmp_path: Path,
 ) -> None:
@@ -369,6 +429,119 @@ def test_consultation_endpoint_enforces_auth_origin_media_type_and_live_sources(
         error = json.loads(body)
         assert error["error"] == "invalid_consultation_packet_input"
         assert "could not be read" in error["detail"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_consultation_board_endpoint_is_same_origin_source_bound_and_no_store(
+    tmp_path: Path,
+) -> None:
+    _, catalog, registry, view_a, view_b = _fixture(tmp_path)
+    transport = _board_transport(view_a, view_b)
+    before = {path.name for path in tmp_path.iterdir()}
+    server = create_server(
+        catalog,
+        registry,
+        port=0,
+        token="consultation-board-token",
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_port
+    headers = {
+        "Authorization": "Bearer consultation-board-token",
+        "Origin": f"http://127.0.0.1:{port}",
+        "Content-Type": "application/vnd.scanview.consultation-board-input+zip",
+        "Accept": "application/zip",
+    }
+    try:
+        status, response_headers, body = _post(
+            port,
+            transport,
+            headers={
+                "Origin": f"http://127.0.0.1:{port}",
+                "Content-Type": "application/vnd.scanview.consultation-board-input+zip",
+            },
+            path="/v1/consultation-boards",
+        )
+        assert status == HTTPStatus.UNAUTHORIZED
+        assert response_headers["Cache-Control"] == "no-store"
+        assert json.loads(body) == {"error": "unauthorized"}
+
+        status, response_headers, body = _post(
+            port,
+            transport,
+            headers={**headers, "Content-Type": "application/zip"},
+            path="/v1/consultation-boards",
+        )
+        assert status == HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+        assert response_headers["Cache-Control"] == "no-store"
+        assert json.loads(body) == {"error": "unsupported_media_type"}
+
+        status, response_headers, body = _post(
+            port,
+            b"x",
+            headers={**headers, "Content-Length": str(MAX_BOARD_TRANSPORT_BYTES + 1)},
+            path="/v1/consultation-boards",
+        )
+        assert status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+        assert response_headers["Cache-Control"] == "no-store"
+        assert json.loads(body) == {"error": "request_too_large"}
+
+        status, response_headers, body = _post(
+            port,
+            transport,
+            headers=headers,
+            path="/v1/consultation-boards",
+        )
+        assert status == HTTPStatus.OK
+        assert response_headers["Content-Type"] == "application/zip"
+        assert response_headers["Cache-Control"] == "no-store"
+        assert response_headers["Content-Disposition"].startswith(
+            'attachment; filename="scanview-consultation-board-'
+        )
+        summary = consultation_board_summary(io.BytesIO(body))
+        assert summary["valid"] is True
+        assert summary["item_count"] == 2
+        assert {path.name for path in tmp_path.iterdir()} == before
+
+        status, _, body = _post(
+            port,
+            transport,
+            headers={**headers, "Origin": "http://example.invalid"},
+            path="/v1/consultation-boards",
+        )
+        assert status == HTTPStatus.FORBIDDEN
+        assert json.loads(body) == {"error": "same_origin_required"}
+
+        status, _, body = _post(
+            port,
+            b"not a zip",
+            headers=headers,
+            path="/v1/consultation-boards",
+        )
+        assert status == HTTPStatus.UNPROCESSABLE_ENTITY
+        assert json.loads(body)["error"] == "invalid_consultation_board_input"
+
+        source = next(iter(registry.values()))
+        original = source.read_bytes()
+        source.write_bytes(bytes([original[0] ^ 0x01]) + original[1:])
+        status, response_headers, body = _post(
+            port,
+            transport,
+            headers=headers,
+            path="/v1/consultation-boards",
+        )
+        assert status == HTTPStatus.UNPROCESSABLE_ENTITY
+        assert response_headers["Cache-Control"] == "no-store"
+        error = json.loads(body)
+        assert error["error"] == "invalid_consultation_board_input"
+        assert str(source) not in error["detail"]
+        assert hashlib.sha256(original).hexdigest() not in error["detail"]
+        source.write_bytes(original)
+        assert {path.name for path in tmp_path.iterdir()} == before
     finally:
         server.shutdown()
         server.server_close()
