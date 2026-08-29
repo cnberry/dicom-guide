@@ -567,6 +567,47 @@
    browser-session authorization, bearer refusal, and minimized-summary gates using
    synthetic DICOM only.
 
+## Completed in the twenty-ninth milestone
+
+1. Inspected the copied media's non-image DICOM objects locally without emitting
+   patient identifiers, paths, pixels, annotation text, or coordinates. The seven PR
+   objects are Grayscale Softcopy Presentation States; the single SR is an X-Ray
+   Radiation Dose SR, not a diagnostic narrative report.
+2. Added a strict source-bound GSPS catalog and 28th JSON Schema. Each PR is read with
+   no-follow/stable-descriptor guards, bounded to 16 MiB, rehashed, rejoined through
+   opaque catalog IDs to exact MR/CT instances, and rebuilt byte-for-byte during
+   validation. Malformed or source-changed inputs fail closed.
+3. Restricted display to hashed same-study, single-frame monochrome sources whose
+   linear modality transform matches the GSPS, with unrotated/unflipped geometry,
+   LINEAR VOI, identity presentation LUT/polarity, no shutter/mask/overlay/subtraction,
+   exact full-image SCALE TO FIT and matching aspect, plus explicit PIXEL POLYLINE/
+   anchor-text annotations. Frame scopes, dimensions-plus-one, crops, lookup tables,
+   unsupported graphics/text, invalid layers/SOP classes, unsafe controls, and
+   out-of-image points are withheld as a whole.
+4. Added owner-only CLI creation/validation, bearer-audited authenticated
+   `GET /v1/presentation-states`, `no-store` responses, process-lifetime source guards,
+   and privacy-minimized validation summaries that omit text, IDs, geometry, and VOI
+   values. The full catalog remains sensitive and local.
+5. Added a strict same-origin browser parser that independently checks the fixed
+   permission/privacy contract, exact local source membership, counts, dimensions,
+   exact displayed area, VOI arithmetic, text controls, and coordinate bounds before
+   resolving controls.
+6. Added deliberate Image A/B navigation and a high-contrast read-only source overlay.
+   DICOM corner coordinates are converted to image-index centers before Cornerstone
+   `worldToCanvas`; projection is atomic, and all viewport/slice manipulation,
+   measurement display/import/export, volume/evidence flows, MPR, and live agent-state
+   publication are locked while any source state is active because their schemas do
+   not encode GSPS provenance.
+7. Added a patient-free CT+GSPS generator and synthetic CLI/browser checks. The exact
+   annotated slice rendered one polyline and one text object with no browser errors;
+   clearing removed the overlay and restored native controls. The copied media's seven
+   states correctly remain locked because their far displayed-area corner uses a
+   dimensions-plus-one vendor convention outside the strict DICOM full-image rule.
+   The deterministic exact v0.9.0 artifact then passed macOS arm64 and Strawberry
+   Linux x86_64 no-index install, 28-schema runtime, synthetic CLI, authenticated/
+   audited/no-store/409 endpoint, loopback-only listener, strict packaged-browser
+   display/clear, and no-external-processing gates. No Mila data went to Strawberry.
+
 ## Immediate
 
 1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
@@ -578,18 +619,21 @@
 3. Treat any agent consultation plan as a local navigation suggestion only. Inspect
    each native source before adding it to a board, and keep prompts free of unnecessary
    direct identifiers because plan headings are sensitive and not de-identified.
-4. Import a future same-modality MRI follow-up, have a person confirm the intended
+4. Treat GSPS text/geometry as unverified source display content. Confirm its meaning
+   and authorship in the clinical imaging system; do not copy it into measurements or
+   evidence until the evidence contract explicitly records GSPS provenance.
+5. Import a future same-modality MRI follow-up, have a person confirm the intended
    earlier/later sequences and clinical roles, run the required engine on that pair,
    and complete qualified visual/quantitative QA.
-5. Protect the authenticated local Slicer installation and keep using the recorded
+6. Protect the authenticated local Slicer installation and keep using the recorded
    launcher hash; reauthenticate any replacement before a future patient-specific job.
-6. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
+7. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
    hash; repeat authentication and synthetic commissioning after any replacement.
-7. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
+8. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
    offline bundle, and evaluate whether to include a separately authenticated interpreter.
-8. Design optional authenticated signature integration for clinical organizations;
+9. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
-9. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
+10. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
    on a clinically appropriate same-modality case before any patient-specific reliance.
 
 ## Next milestone

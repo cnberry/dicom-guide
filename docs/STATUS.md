@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 02:08 PDT
+Last updated: 2026-08-29 03:16 PDT
 
 ## Data transfer
 
@@ -36,6 +36,12 @@ Last updated: 2026-08-29 02:08 PDT
   context, zero candidates, and
   `future_distinct_study_same_modality_series`. It contains no paths or pixels, grants
   no derived or clinical permission, and is retained outside Git with mode 0600.
+- Privacy-minimized local GSPS inspection found 7 PR states, 6 with annotations (19
+  PIXEL polylines and 9 anchor-text objects). The final strict v0.9 parser withholds
+  all 7 because their displayed-area far corner uses dimensions plus one rather than
+  DICOM's exact `(Columns,Rows)` full-image boundary. No identifiers, annotation text,
+  coordinates, pixels, paths, or patient artifact left the Mac or entered Git; native
+  MR/CT display remains available.
 
 ## Repository
 
@@ -264,7 +270,7 @@ Last updated: 2026-08-29 02:08 PDT
 - Versioned measurement, key-image, consultation-key-image, consultation-packet,
   numeric-comparison, visit-packet,
   comparison-review, navigation-intent, viewer-state, longitudinal-readiness,
-  agent-consultation-plan,
+  agent-consultation-plan, source-bound GSPS presentation-state,
   rigid-registration,
   registration-QA, reviewed-registration-display, source-bound manual ROI volume,
   manual boundary-review, reviewed manual ROI volume-comparison, reviewed native-
@@ -278,7 +284,7 @@ Last updated: 2026-08-29 02:08 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 27 contracts without breaking lightweight
+  UI-embedded wheel together with all 28 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -294,6 +300,37 @@ Last updated: 2026-08-29 02:08 PDT
 - Research, architecture, plan, roadmap, safety, and status committed to the project.
 
 ## Verification
+
+- v0.9.0 source-bound GSPS milestone: passing. The full Python suite reports 242
+  tests; the viewer reports 131 tests across 27 files; TypeScript typecheck,
+  production build, Python bytecode compilation, diff hygiene, and all 28 Draft
+  2020-12 schemas pass. GSPS coverage proves exact hashed same-study/patient sources,
+  source-equivalent linear modality transforms, LINEAR VOI/polarity, exact full-image
+  aspect, frame/mask/overlay/LUT/shutter/crop/scoping refusal, bounded geometry/text,
+  semantic-authority locks, owner-only CLI round-trip, authenticated/no-store/audited
+  endpoint behavior, source-change 409, strict browser parsing, pixel-corner mapping,
+  atomic projection, and complete manipulation/evidence locking while active.
+- Offline runtime bundle v0.9.0: passing on macOS arm64 and Strawberry Linux x86_64.
+  The retained owner-only 5,510,395-byte ZIP has nine fixed-timestamp files and
+  SHA-256 `d0ba563e5e8a0d41cac52b2da6f700a5ff22183b411af642f46012182c0dd1ae`.
+  It contains the 3,114,039-byte ScanView wheel (SHA-256
+  `59d1e28e9a76c4a5f4474b1807cf5fde33e0399f63fbfe1e466dfad60272ee6a`),
+  11 UI/worker/codec files (10,262,098 uncompressed bytes), all 28 schemas (258,131
+  bytes), and pinned `pydicom` 3.0.2. A second independent build was byte-identical.
+  Fresh extractions installed with `PIP_NO_INDEX=1`, reported version 0.9.0,
+  `schema_count: 28`, `runtime_network_required: false`, and
+  `external_dicom_processing_api_required: false`, then created and independently
+  validated an owner-only one-state patient-free GSPS catalog on both platforms.
+- Exact packaged macOS and Strawberry loopback gates returned 401 without authority,
+  200 plus `Cache-Control: no-store` with bearer authority, and 409 after mutating the
+  disposable synthetic PR metadata. The optional two-event audit validated without
+  patient content, tokens, paths, or request targets; each listener was loopback-only
+  and the Strawberry server had no established external socket. Packaged-browser QA
+  deliberately opened exact synthetic CT slice 2/3, displayed one polyline and one
+  text object, locked both panes/tools/measurements/evidence/MPR/agent state, and
+  restored native controls after Clear. Only the exact ZIP and four patient-free
+  synthetic DICOM files went to Strawberry; 1,344 temporary test/runtime files were
+  deleted afterward, and no Mila data left this computer.
 
 - v0.8.0 agent consultation-plan milestone: passing. The full Python suite reports
   221 tests; the viewer reports 125 tests across 26 files; TypeScript typecheck,

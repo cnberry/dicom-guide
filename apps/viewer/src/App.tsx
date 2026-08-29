@@ -3,6 +3,7 @@ import { DicomViewport, type DicomViewportHandle } from './components/DicomViewp
 import { MeasurementWorkspace } from './components/MeasurementWorkspace';
 import { MprPanel } from './components/MprPanel';
 import { LesionVolumeComparisonPanel } from './components/LesionVolumeComparisonPanel';
+import { PresentationStatePanel } from './components/PresentationStatePanel';
 import {
   createMeasurementEvidencePacket,
   removeMeasurementAnnotation,
@@ -62,6 +63,13 @@ import {
   type ResolvedAgentConsultationPlan,
   type ResolvedAgentConsultationPlanItem,
 } from './agentConsultationPlan';
+import {
+  loadPresentationStateCatalog,
+  type AppliedPresentationState,
+  type PresentationStateTarget,
+  type ResolvedPresentationState,
+  type ResolvedPresentationStateCatalog,
+} from './presentationStates';
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
@@ -85,15 +93,21 @@ const SeriesSelect = ({
   value,
   series,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value?: string;
   series: DicomSeries[];
   onChange: (id: string) => void;
+  disabled?: boolean;
 }) => (
   <label className="series-select">
     <span>{label}</span>
-    <select value={value ?? ''} onChange={(event) => onChange(event.target.value)}>
+    <select
+      value={value ?? ''}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    >
       <option value="" disabled>
         Choose a series
       </option>
@@ -174,6 +188,16 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const [agentStateMessage, setAgentStateMessage] = useState(
     'Agent viewer state is off by default. Enable it to share only expiring opaque positions locally.',
   );
+  const [presentationStateCatalog, setPresentationStateCatalog] =
+    useState<ResolvedPresentationStateCatalog>();
+  const [presentationStateLoading, setPresentationStateLoading] = useState(true);
+  const [presentationStateMessage, setPresentationStateMessage] = useState(
+    'Checking source DICOM presentation states locally…',
+  );
+  const [baselinePresentationState, setBaselinePresentationState] =
+    useState<AppliedPresentationState>();
+  const [followupPresentationState, setFollowupPresentationState] =
+    useState<AppliedPresentationState>();
 
   const baseline = series.find((item) => item.id === baselineId);
   const followup = series.find((item) => item.id === followupId);
@@ -194,6 +218,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const visibleMeasurements = liveMeasurementPacket
     ? liveMeasurementPacket.measurements
     : (measurementPacket?.measurements ?? []);
+  const presentationStateActive = Boolean(
+    baselinePresentationState || followupPresentationState,
+  );
   const visitPacketUsesLoopback = Boolean(
     baseline?.sourceKind === 'loopback-service' && followup?.sourceKind === 'loopback-service',
   );
@@ -202,12 +229,14 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       baseline &&
       followup &&
       visitPacketUsesLoopback &&
-      compatibility.level !== 'incompatible',
+      compatibility.level !== 'incompatible' &&
+      !presentationStateActive,
   );
   const consultationPacketReady = Boolean(
-    consultPrepMode &&
+      consultPrepMode &&
       visitPacketUsesLoopback &&
-      isConsultationSourcePair(baseline, followup),
+      isConsultationSourcePair(baseline, followup) &&
+      !presentationStateActive,
   );
   const consultationBoardModalities = new Set(
     consultationBoardItems.map((item) => item.modality),
@@ -229,7 +258,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     consultationBoardItems.length <= CONSULTATION_BOARD_MAX_ITEMS &&
     consultationBoardHasMR &&
     consultationBoardHasCT &&
-    consultationBoardHasTwoStudies;
+    consultationBoardHasTwoStudies &&
+    !presentationStateActive;
   const comparisonSourceIndexes = useMemo(() => {
     return findComparisonSourceIndexes(measurementComparisonDraft, baseline, followup);
   }, [baseline, followup, measurementComparisonDraft]);
@@ -248,7 +278,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     consultationBoardState === 'working';
   const viewerStatePublication = useMemo(
     () => {
-      if (consultPrepMode) return undefined;
+      if (consultPrepMode || presentationStateActive) return undefined;
       return buildViewerStatePublication({
         publisherId: agentPublisherId,
         activeTool,
@@ -274,6 +304,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       linkStrategy,
       measurementComparisonDraft,
       mprSeries,
+      presentationStateActive,
       effectiveSynchronized,
       visibleMeasurements.length,
     ],
@@ -349,11 +380,13 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   useEffect(() => {
     if (agentStateSharing) return;
     setAgentStateMessage(
-      consultPrepMode
+      presentationStateActive
+        ? 'Live agent state is unavailable while a source-carried GSPS presentation is active because the current state schema does not encode GSPS provenance.'
+        : consultPrepMode
         ? 'Live agent state is unavailable in Consult Prep because the current state schema uses timepoint roles. Use the neutral consultation packet for agent evidence.'
         : 'Agent viewer state is off by default. Enable it to share only expiring opaque positions locally.',
     );
-  }, [agentStateSharing, consultPrepMode]);
+  }, [agentStateSharing, consultPrepMode, presentationStateActive]);
 
   useEffect(() => {
     agentPublisherIdRef.current = agentPublisherId;
@@ -377,7 +410,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       agentStateSharingRef.current = false;
       setAgentStateSharing(false);
       setAgentStateMessage(
-        consultPrepMode
+        presentationStateActive
+          ? 'Agent viewer state stopped because the active source-carried GSPS presentation is not represented by the current state schema.'
+          : consultPrepMode
           ? 'Agent viewer state stopped because Consult Prep does not publish timepoint-role state. Use the neutral consultation packet instead.'
           : 'Agent viewer state stopped: it is available only through the authenticated local launcher.',
       );
@@ -424,7 +459,14 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       window.clearTimeout(initial);
       window.clearInterval(heartbeat);
     };
-  }, [active, agentPublisherId, agentStateSharing, consultPrepMode, viewerStatePublication]);
+  }, [
+    active,
+    agentPublisherId,
+    agentStateSharing,
+    consultPrepMode,
+    presentationStateActive,
+    viewerStatePublication,
+  ]);
 
   useEffect(() => {
     const clearPublishedState = () => {
@@ -469,11 +511,15 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   useEffect(() => {
     const controller = new AbortController();
     const generation = sourceGenerationRef.current;
-    void loadLocalServiceCatalog(controller.signal).then((catalog) => {
+    void loadLocalServiceCatalog(controller.signal).then(async (catalog) => {
       if (controller.signal.aborted || generation !== sourceGenerationRef.current) {
         return;
       }
       if (!catalog) {
+        setPresentationStateLoading(false);
+        setPresentationStateMessage(
+          'Source-carried GSPS states are available only through the authenticated local launcher.',
+        );
         setSourceReady(true);
         return;
       }
@@ -487,6 +533,38 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setFollowupId(undefined);
       setBaselineIndex(Math.floor((catalog.series[0]?.instances.length ?? 1) / 2));
       setFollowupIndex(0);
+      setBaselinePresentationState(undefined);
+      setFollowupPresentationState(undefined);
+      setPresentationStateLoading(true);
+      try {
+        const presentationStates = await loadPresentationStateCatalog(
+          catalog.series,
+          controller.signal,
+        );
+        if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
+        setPresentationStateCatalog(presentationStates);
+        const supported = presentationStates.catalog.supported_state_count;
+        const unsupported = presentationStates.catalog.unsupported_state_count;
+        setPresentationStateMessage(
+          supported > 0
+            ? `Recognized ${supported} supported GSPS ${supported === 1 ? 'state' : 'states'} from source-bound local DICOM bytes; ${unsupported} unsupported ${unsupported === 1 ? 'state remains' : 'states remain'} locked.`
+            : unsupported > 0
+              ? `No supported GSPS states; ${unsupported} ${unsupported === 1 ? 'state failed' : 'states failed'} closed.`
+              : 'No DICOM GSPS presentation states were found in this local workspace.',
+        );
+      } catch (error) {
+        if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
+        setPresentationStateCatalog(undefined);
+        setPresentationStateMessage(
+          error instanceof Error
+            ? error.message
+            : 'Source-carried GSPS states are unavailable. Nothing was displayed.',
+        );
+      } finally {
+        if (!controller.signal.aborted && generation === sourceGenerationRef.current) {
+          setPresentationStateLoading(false);
+        }
+      }
       setSourceReady(true);
     });
     return () => controller.abort();
@@ -497,6 +575,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     if (pendingNavigation.intent) {
       const resolved = resolveNavigationIntent(pendingNavigation.intent, series);
       if (resolved.navigation) {
+        setBaselinePresentationState(undefined);
+        setFollowupPresentationState(undefined);
         setBaselineId(resolved.navigation.baseline.seriesId);
         setBaselineIndex(resolved.navigation.baseline.instanceIndex);
         setFollowupId(resolved.navigation.followup?.seriesId);
@@ -532,6 +612,13 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setBaselineId(undefined);
     setFollowupId(undefined);
     setMprSeriesId(undefined);
+    setPresentationStateCatalog(undefined);
+    setPresentationStateLoading(false);
+    setPresentationStateMessage(
+      'Source-saved views are available only through the authenticated local launcher.',
+    );
+    setBaselinePresentationState(undefined);
+    setFollowupPresentationState(undefined);
     setMeasurementPacket(undefined);
     setLiveMeasurementPacket(undefined);
     setMeasurementPasteOpen(false);
@@ -573,6 +660,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   };
 
   const updateIndex = (side: 'baseline' | 'followup', next: number) => {
+    setBaselinePresentationState(undefined);
+    setFollowupPresentationState(undefined);
     if (side === 'baseline') {
       setBaselineIndex(next);
       if (effectiveSynchronized && baseline && followup) {
@@ -604,7 +693,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     }
     if (!viewerStatePublication) {
       setAgentStateMessage(
-        'Agent viewer state requires scans opened through the authenticated local launcher.',
+        presentationStateActive
+          ? 'Clear source-carried GSPS states before sharing viewer state; the current state schema does not encode GSPS provenance.'
+          : 'Agent viewer state requires scans opened through the authenticated local launcher.',
       );
       return;
     }
@@ -818,15 +909,65 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     }
   };
 
+  const openPresentationState = (
+    resolved: ResolvedPresentationState,
+    target: PresentationStateTarget,
+    slot: 'image_a' | 'image_b',
+  ) => {
+    const application: AppliedPresentationState = {
+      state: resolved.state,
+      target,
+    };
+    setActiveTool('window');
+    setMprSeriesId(undefined);
+    if (slot === 'image_a') {
+      setBaselineId(target.seriesId);
+      setBaselineIndex(target.instanceIndex);
+      setBaselinePresentationState(application);
+    } else {
+      setFollowupId(target.seriesId);
+      setFollowupIndex(target.instanceIndex);
+      setFollowupPresentationState(application);
+    }
+    setPresentationStateMessage(
+      `Opened a supported GSPS subset on exact referenced ${target.modality} image ${target.stackPosition} / ${target.stackCount} in ${slot === 'image_a' ? 'Image A' : 'Image B'}. Creator identity and source-text meaning are not assessed. No ScanView measurement, finding, diagnosis, or conclusion was created.`,
+    );
+  };
+
+  const clearPresentationState = (slot: 'image_a' | 'image_b') => {
+    if (slot === 'image_a') {
+      setBaselinePresentationState(undefined);
+    } else {
+      setFollowupPresentationState(undefined);
+    }
+    setPresentationStateMessage(
+      `Cleared the local GSPS-derived display from ${slot === 'image_a' ? 'Image A' : 'Image B'}. Native DICOM and source presentation objects were not changed.`,
+    );
+  };
+
+  const lockPresentationState = (
+    slot: 'image_a' | 'image_b',
+    message: string,
+  ) => {
+    if (slot === 'image_a') {
+      setBaselinePresentationState(undefined);
+    } else {
+      setFollowupPresentationState(undefined);
+    }
+    setPresentationStateMessage(message);
+  };
+
   const openAgentConsultationPlanItem = (
     item: ResolvedAgentConsultationPlanItem,
     slot: 'view_a' | 'view_b',
   ) => {
     if (!agentConsultationPlan || !consultPrepMode) return;
     if (slot === 'view_a') {
+      setBaselinePresentationState(undefined);
       setBaselineId(item.seriesId);
       setBaselineIndex(item.instanceIndex);
     } else {
+      setFollowupPresentationState(undefined);
       setFollowupId(item.seriesId);
       setFollowupIndex(item.instanceIndex);
     }
@@ -868,6 +1009,15 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       return;
     }
     const selectedSeries = slot === 'view_a' ? baseline : followup;
+    const sourcePresentation =
+      slot === 'view_a' ? baselinePresentationState : followupPresentationState;
+    if (sourcePresentation) {
+      setConsultationBoardState('error');
+      setConsultationBoardMessage(
+        `Clear the source-carried GSPS state from ${slot === 'view_a' ? 'Image A' : 'Image B'} before capturing board evidence.`,
+      );
+      return;
+    }
     const viewport =
       slot === 'view_a' ? baselineViewportRef.current : followupViewportRef.current;
     if (!selectedSeries || !viewport) {
@@ -1159,7 +1309,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               label={consultPrepMode ? 'Image A series' : 'Baseline series'}
               value={baselineId}
               series={series}
+              disabled={presentationStateActive}
               onChange={(id) => {
+                setBaselinePresentationState(undefined);
                 setBaselineId(id);
                 setBaselineIndex(
                   Math.floor((series.find((item) => item.id === id)?.instances.length ?? 1) / 2),
@@ -1174,6 +1326,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               disabled={
                 !baseline ||
                 !followup ||
+                presentationStateActive ||
                 (consultPrepMode && linkStrategy !== 'patient-position')
               }
             >
@@ -1191,7 +1344,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               label={consultPrepMode ? 'Image B series' : 'Follow-up series'}
               value={followupId}
               series={series}
+              disabled={presentationStateActive}
               onChange={(id) => {
+                setFollowupPresentationState(undefined);
                 setFollowupId(id);
                 setFollowupIndex(
                   Math.floor((series.find((item) => item.id === id)?.instances.length ?? 1) / 2),
@@ -1215,16 +1370,30 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                   key={tool}
                   className={activeTool === tool ? 'active' : ''}
                   aria-pressed={activeTool === tool}
+                  disabled={presentationStateActive}
                   onClick={() => setActiveTool(tool)}
                 >
                   {label}
                 </button>
               ))}
-              <button onClick={() => setResetNonce((value) => value + 1)}>Reset views</button>
-              <button onClick={exportMeasurementDraft}>Export measurement draft</button>
-              <button onClick={openMeasurementDraft}>Open measurement draft</button>
+              <button
+                onClick={() => {
+                  setBaselinePresentationState(undefined);
+                  setFollowupPresentationState(undefined);
+                  setResetNonce((value) => value + 1);
+                }}
+              >
+                Reset views
+              </button>
+              <button disabled={presentationStateActive} onClick={exportMeasurementDraft}>
+                Export measurement draft
+              </button>
+              <button disabled={presentationStateActive} onClick={openMeasurementDraft}>
+                Open measurement draft
+              </button>
               <button
                 aria-expanded={measurementPasteOpen}
+                disabled={presentationStateActive}
                 onClick={() => setMeasurementPasteOpen((value) => !value)}
               >
                 Paste measurement JSON
@@ -1236,6 +1405,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                 title={
                   viewerStatePublication
                     ? 'Opt in to an expiring, privacy-minimized state for bearer-authorized local agents'
+                    : presentationStateActive
+                      ? 'Unavailable until source-carried GSPS states are cleared'
                     : consultPrepMode
                       ? 'Live agent state is unavailable because its current schema uses longitudinal pane roles; use a consultation packet instead'
                     : 'Available only through the authenticated local launcher'
@@ -1249,7 +1420,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                   className={`visit-packet-button ${consultationPacketState}`}
                   disabled={!consultationPacketReady || evidenceExportWorking}
                   title={
-                    !baseline || !followup
+                    presentationStateActive
+                      ? 'Clear source-carried GSPS states before evidence export'
+                      : !baseline || !followup
                       ? 'Choose Image A and Image B'
                       : !visitPacketUsesLoopback
                         ? 'Available through the unified local launcher'
@@ -1273,7 +1446,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     className={`visit-packet-button ${visitPacketState}`}
                     disabled={!visitPacketReady || evidenceExportWorking}
                     title={
-                      !baseline || !followup
+                      presentationStateActive
+                        ? 'Clear source-carried GSPS states before evidence export'
+                        : !baseline || !followup
                         ? 'Choose a baseline and follow-up series'
                         : !visitPacketUsesLoopback
                           ? 'Available through the unified local launcher'
@@ -1295,7 +1470,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     className={`review-packet-button ${comparisonReviewState}`}
                     disabled={!comparisonReviewReady || evidenceExportWorking}
                     title={
-                      !measurementComparisonDraft
+                      presentationStateActive
+                        ? 'Clear source-carried GSPS states before evidence export'
+                        : !measurementComparisonDraft
                         ? 'Build an explicit numeric preview first'
                         : !visitPacketUsesLoopback
                           ? 'Available through the unified local launcher'
@@ -1380,6 +1557,11 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               activeTool={activeTool}
               resetNonce={resetNonce}
               measurementPacket={measurementPacket}
+              presentationState={baselinePresentationState}
+              interactionLocked={presentationStateActive}
+              onPresentationStateError={(message) =>
+                lockPresentationState('image_a', message)
+              }
               consultationSelectionSlot={consultPrepMode ? 'view_a' : undefined}
               onOpenMpr={() => baseline && setMprSeriesId(baseline.id)}
             />
@@ -1393,6 +1575,11 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               activeTool={activeTool}
               resetNonce={resetNonce}
               measurementPacket={measurementPacket}
+              presentationState={followupPresentationState}
+              interactionLocked={presentationStateActive}
+              onPresentationStateError={(message) =>
+                lockPresentationState('image_b', message)
+              }
               consultationSelectionSlot={consultPrepMode ? 'view_b' : undefined}
               onOpenMpr={() => followup && setMprSeriesId(followup.id)}
             />
@@ -1400,7 +1587,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
 
           {mprSeries && <MprPanel series={mprSeries} onClose={() => setMprSeriesId(undefined)} />}
 
-          {!consultPrepMode && (
+          {!presentationStateActive && !consultPrepMode && (
             <LesionVolumeComparisonPanel
               series={series}
               selectedBaselineSeriesId={baselineId}
@@ -1483,7 +1670,19 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               </div>
             </article>
           </section>
-          {consultPrepMode && (
+          {series.some((item) => item.sourceKind === 'loopback-service') && (
+            <PresentationStatePanel
+              catalog={presentationStateCatalog}
+              message={presentationStateMessage}
+              loading={presentationStateLoading}
+              disabled={evidenceExportWorking}
+              imageA={baselinePresentationState}
+              imageB={followupPresentationState}
+              onOpen={openPresentationState}
+              onClear={clearPresentationState}
+            />
+          )}
+          {!presentationStateActive && consultPrepMode && (
             <section
               className="agent-consultation-plan-panel"
               aria-labelledby="agent-consultation-plan-heading"
@@ -1602,7 +1801,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               </p>
             </section>
           )}
-          {consultPrepMode && (
+          {!presentationStateActive && consultPrepMode && (
             <section
               className="consultation-board-panel"
               aria-labelledby="consultation-board-heading"
@@ -1661,6 +1860,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     disabled={
                       evidenceExportWorking ||
                       !baseline ||
+                      Boolean(baselinePresentationState) ||
                       consultationBoardItems.length >= CONSULTATION_BOARD_MAX_ITEMS ||
                       Boolean(consultationBoardLabelMessage)
                     }
@@ -1673,6 +1873,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     disabled={
                       evidenceExportWorking ||
                       !followup ||
+                      Boolean(followupPresentationState) ||
                       consultationBoardItems.length >= CONSULTATION_BOARD_MAX_ITEMS ||
                       Boolean(consultationBoardLabelMessage)
                     }
@@ -1791,20 +1992,22 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               </p>
             </section>
           )}
-          <MeasurementWorkspace
-            measurements={visibleMeasurements}
-            baseline={baseline}
-            followup={followup}
-            compatibilityLevel={compatibility.level}
-            allowLongitudinalPairing={!consultPrepMode}
-            onDeleteMeasurement={removeMeasurementAnnotation}
-            onComparisonDraftChange={setMeasurementComparisonDraft}
-          />
+          {!presentationStateActive && (
+            <MeasurementWorkspace
+              measurements={visibleMeasurements}
+              baseline={baseline}
+              followup={followup}
+              compatibilityLevel={compatibility.level}
+              allowLongitudinalPairing={!consultPrepMode}
+              onDeleteMeasurement={removeMeasurementAnnotation}
+              onComparisonDraftChange={setMeasurementComparisonDraft}
+            />
+          )}
         </>
       )}
 
       <footer>
-        <span>ScanView 0.8 · local-first prototype</span>
+        <span>ScanView 0.9 · local-first prototype</span>
         <span>Every automated result is unreviewed until a qualified clinician accepts it.</span>
       </footer>
     </main>

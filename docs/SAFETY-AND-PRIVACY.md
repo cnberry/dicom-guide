@@ -1,5 +1,34 @@
 # Medical safety and privacy
 
+## DICOM presentation-state safety
+
+- GSPS objects and their annotation text are sensitive local medical data. The full
+  authenticated endpoint contains source text and opaque linkable IDs; it is not a
+  de-identified export and must not be copied into logs, Git, issue trackers, or
+  external services.
+- The parser reads only bounded stable regular files with no-follow semantics and
+  binds each supported state to its PR SHA-256 plus hashed exact same-study MR/CT
+  catalog objects. Source changes fail closed.
+- Support is limited to a documented display subset. ScanView does not silently drop
+  unsupported transforms, polarity, frames, aspect, rotation, flip, crop, shutter,
+  mask, overlay, LUT, scoping, graphic, or text semantics and then show a misleading
+  partial state; the entire state is withheld. Projection is atomic at runtime.
+- Orange GSPS geometry/text is read-only source-carried display content. Text may
+  contain identifiers or clinical language. ScanView does not authenticate the
+  creator/credentials/signature, establish review status or accuracy, or assess the
+  text's clinical meaning. It is not a ScanView measurement, finding, diagnosis,
+  tumor label, response assessment, or medical-record statement.
+- Orange is a high-contrast ScanView rendering of supported source coordinates;
+  source color, style, layer behavior, typography, and full GSPS fidelity are not
+  claimed. The original image and GSPS object remain authoritative.
+- All viewport manipulation and slice navigation, existing measurement overlays,
+  measurement draft import/export, evidence captures, consultation/board/volume
+  exports, MPR, and live agent-state publication are locked or hidden while any
+  source state is active because current provenance contracts do not represent GSPS.
+  Clearing restores the native DICOM display without modifying either source object.
+- All parsing and rendering is local. There is no external API, cloud fallback,
+  telemetry, remote font, or external DICOM-processing request.
+
 ## Intended posture
 
 ScanView is a local research and communication tool. It may organize source-backed

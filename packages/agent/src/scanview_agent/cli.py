@@ -42,6 +42,11 @@ from .measurements import (
     measurement_packet_summary,
 )
 from .navigation import build_navigation_intent
+from .presentation_states import (
+    build_presentation_state_catalog,
+    presentation_state_summary,
+    registry_source_loader,
+)
 from .registration import (
     registration_bundle_summary,
     registration_doctor,
@@ -117,6 +122,20 @@ def parser() -> argparse.ArgumentParser:
     )
     validate_consultation_plan.add_argument("manifest", type=Path)
     validate_consultation_plan.add_argument("plan", type=Path)
+
+    presentation_states = commands.add_parser(
+        "presentation-states",
+        help="Extract a source-bound read-only DICOM GSPS catalog locally",
+    )
+    presentation_states.add_argument("root", type=Path)
+    presentation_states.add_argument("--output", "-o", type=Path, required=True)
+
+    validate_presentation_states = commands.add_parser(
+        "validate-presentation-states",
+        help="Revalidate a GSPS catalog against the exact local DICOM sources",
+    )
+    validate_presentation_states.add_argument("root", type=Path)
+    validate_presentation_states.add_argument("artifact", type=Path)
 
     api = commands.add_parser("serve", help="Run the source-read-only loopback agent API")
     api.add_argument("root", type=Path)
@@ -533,6 +552,30 @@ def main() -> None:
         except (OSError, ValueError) as error:
             argument_parser.error(str(error))
         summary = agent_consultation_plan_summary(catalog, plan)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "presentation-states":
+        try:
+            catalog, registry = build_catalog(
+                args.root,
+                include_hashes=True,
+            )
+            artifact = build_presentation_state_catalog(
+                catalog,
+                registry_source_loader(catalog, registry),
+            )
+        except (OSError, TypeError, ValueError) as error:
+            argument_parser.error(str(error))
+        _write_json(artifact, args.output)
+    elif args.command == "validate-presentation-states":
+        try:
+            catalog, registry = build_catalog(args.root, include_hashes=True)
+            loader = registry_source_loader(catalog, registry)
+            artifact = load_strict_json(args.artifact.read_bytes())
+        except (OSError, TypeError, ValueError) as error:
+            argument_parser.error(str(error))
+        summary = presentation_state_summary(catalog, loader, artifact)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

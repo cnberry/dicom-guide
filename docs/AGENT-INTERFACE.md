@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.8.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.9.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -25,14 +25,16 @@ interface is the same loopback bearer-
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-exact v0.8.0 artifact has passed no-index install, runtime, agent consultation-plan
-creation/validation, browser-session endpoint validation, bearer-only endpoint refusal,
-and loopback launch on macOS arm64 and Strawberry Linux x86_64. Longitudinal-readiness,
+exact v0.9.0 artifact passed no-index install, 28-schema runtime, GSPS creation/
+validation, browser/bearer endpoint validation, no-store/audit/source-change gates,
+strict packaged-browser display locks, and loopback launch on macOS arm64 and
+Strawberry Linux x86_64. Longitudinal-readiness,
 privacy-minimized bearer-access audit, audit-tamper refusal, synthetic source-bound SEG, qualified
 boundary review, reviewed volume-
 comparison validation, and reviewed native-boundary display remain covered by the full
 regression suite and earlier cross-platform release gates; signing/notarization
-remains pending.
+remains pending. Only the patient-free fixture and exact software ZIP were transferred
+to Strawberry; its temporary staging tree was removed and no Mila data left the Mac.
 
 ## Local artifacts
 
@@ -85,6 +87,56 @@ metadata candidates that still require human review. The current MRI+CT shape re
 registration, spatial comparison, lesion linking, response classification, treatment-
 effect conclusion, diagnosis, and clinical conclusion false. It is sensitive and
 `deidentified: false` even though direct identifier tags, paths, and pixels are absent.
+
+## Source DICOM presentation states
+
+Create and independently revalidate the local sensitive GSPS catalog:
+
+```bash
+scanview-agent presentation-states '/safe/local/DICOM/root' \
+  --output '/safe/private/presentation-states.json'
+scanview-agent validate-presentation-states '/safe/local/DICOM/root' \
+  '/safe/private/presentation-states.json'
+```
+
+The artifact is `scanview.presentation-state-catalog` v1 and is bound to the canonical
+content hash of the exact ScanView manifest. A supported state includes only opaque
+source/referenced IDs, guarded PR byte count/SHA-256, exact referenced MR/CT series and
+instances with SHA-256, one saved LINEAR VOI, a verified source-equivalent linear
+modality transform, an exact full displayed area with matching pixel aspect, and supported annotation
+geometry/text. It contains no pixels or paths, but source annotation text may contain
+direct identifiers; it is sensitive, `deidentified: false`, and owner-only on CLI
+output.
+
+The supported subset is deliberately fixed: single-frame monochrome sources, same
+study and patient context, source/GSPS-equivalent linear modality transforms, rotation
+0, no horizontal flip, LINEAR VOI, identity presentation LUT, no shutter/mask/overlay/
+subtraction, one unscoped exact full-image SCALE TO FIT area with matching aspect,
+explicit PIXEL POLYLINE objects, and PIXEL anchor text without a bounding box. Invalid
+or frame-scoped SOP references, graphic layers, counts, controls, dimensions,
+coordinates, transforms, or display semantics fail closed into an unsupported entry
+that contains no display data.
+Missing/changed source bytes invalidate the whole artifact rather than becoming a
+valid unsupported state.
+
+`validate-presentation-states` emits only validity and aggregate state/annotation/
+graphic/text counts. It deliberately omits source IDs, annotation text/geometry, and
+VOI values. The authenticated bearer/browser endpoint `GET /v1/presentation-states`
+returns the full sensitive catalog with `no-store` as an authenticated read-only
+extraction for local agents and as the human viewer's display input. It contains source
+text that may itself use clinical language; semantic meaning has value `not_assessed`,
+and `scanview_interpretation_added` is fixed false. Covered bearer reads are recorded
+as `presentation_states_read` when the optional privacy-minimized audit is enabled.
+The endpoint returns HTTP 409 if any guarded PR or supported referenced source changes
+after startup.
+
+The permissions authorize exact source navigation, saved VOI application, and local
+display of source-carried annotations only. Editing, treating text as a measurement,
+authenticating the creator, diagnosis, response classification, and clinical conclusion
+are fixed false. The human viewer requires an explicit click and locks all viewport,
+measurement, MPR, agent-state, and evidence operations until the state is cleared;
+runtime projection is atomic. Agents must treat text as sensitive, creator-unauthenticated
+source content and must not promote it to an observation or conclusion.
 
 ## Agent-to-person consultation plans
 
@@ -829,6 +881,7 @@ GET /v1/health
 GET /v1/manifest
 GET /v1/viewer-state
 GET /v1/comparison-candidates
+GET /v1/presentation-states
 GET /v1/lesion-volume-comparison-display
 GET /v1/lesion-volume-comparison-display/context
 GET /v1/lesion-volume-comparison-display/masks/{baseline|followup}

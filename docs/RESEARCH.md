@@ -1,7 +1,65 @@
 # Cross-platform DICOM viewer research
 
-Research date: 2026-08-28. Only public project documentation and repositories were
-reviewed; no patient data was used.
+Research updated: 2026-08-29. Viewer/standard research used only public project
+documentation and repositories. A separate privacy-minimized structural inspection of
+the copied media ran locally: no DICOM bytes, identifiers, annotation text, coordinates,
+pixels, paths, or derived patient artifact left this computer or entered Git.
+
+## DICOM presentation states used in v0.9
+
+The copied media contains seven Grayscale Softcopy Presentation State objects. A
+privacy-minimized local inspection found that all seven use zero rotation, no
+horizontal flip, identity presentation LUT, no shutter, one intended full-image SCALE
+TO FIT display area, and one linear VOI. Six contain annotations; together they contain 19
+PIXEL POLYLINE objects and nine anchor-text objects. The one SR object is an X-Ray
+Radiation Dose SR with numeric dose content, not a diagnostic radiology report.
+
+The final strict v0.9 gate withholds all seven states: their displayed-area far corner
+uses dimensions-plus-one, while DICOM defines the full image from `(1,1)` through
+exactly `(Columns,Rows)`. ScanView records only the aggregate lock reason and continues
+to render native MR/CT images; it does not approximate the vendor convention.
+
+The current DICOM Graphic Annotation Module defines PIXEL coordinates relative to the
+top-left corner of the top-left pixel as `(0,0)`; the bottom-right corner is
+`(Columns,Rows)`. POLYLINE data is ordered as x/y pairs and consecutive points are
+connected. This is why ScanView subtracts 0.5 before converting a DICOM corner
+coordinate to a Cornerstone image-data index center. See [DICOM PS3.3 C.10.5](https://dicom.nema.org/medical/DICOM/current/output/chtml/part03/sect_C.10.5.html).
+
+The DICOM Displayed Area Module defines the top-left displayed pixel as `(1,1)`, the
+bottom-right displayed pixel as a one-based column/row, and an explicit presentation
+pixel aspect that may override image spacing. ScanView accepts only exact
+`(Columns,Rows)` with a presentation aspect proven equal to the local source display;
+vendor dimensions-plus-one, cropping, aspect overrides, and scoped areas fail closed.
+See [DICOM PS3.3 C.10.4](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.10.4.html).
+
+GSPS defines the grayscale pipeline from stored values through modality, VOI, and
+presentation LUTs, and overrides image presentation transforms. ScanView therefore
+supports only single-frame monochrome sources whose linear modality transform exactly
+matches the GSPS, forces LINEAR VOI and identity-presentation polarity in Cornerstone,
+and rejects masks, overlays, subtraction, lookup tables, and source-transform drift.
+See [DICOM PS3.4 N.2](https://dicom.nema.org/medical/dicom/2024a/output/chtml/part04/sect_N.2.html)
+and [DICOM PS3.3 C.11.8](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_c.11.8.html).
+
+DICOM requires referenced grayscale images to be in the presentation state's study;
+ScanView enforces the same-study and one-patient-context relationship and rejects
+frame-scoped references until frame navigation is implemented. See
+[DICOM PS3.4 N.1](https://dicom.nema.org/medical/dicom/2025e/output/chtml/part04/chapter_N.html)
+and [DICOM PS3.3 C.11.11](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_c.11.11.html).
+
+Cornerstone's current stack viewport exposes `worldToCanvas()` for mapping a patient-
+space point to the live canvas. ScanView first uses the active image data's
+`indexToWorld()` mapping and then `worldToCanvas()`, so the overlay follows camera
+zoom and pan. See [Cornerstone IStackViewport](https://www.cornerstonejs.org/docs/api/core/namespaces/types/classes/istackviewport/).
+
+The implementation is intentionally smaller than full GSPS. It does not implement
+rotation, flip, crop, shutters, masks, overlays, lookup-table transforms,
+displayed-area/VOI scoping, multi-frame references, compound or filled
+graphics, bounding-box text, graphic-layer styling, or author authentication. It
+uses a fixed high-contrast local style, so it does not claim vendor color/style/layer
+fidelity, authenticated creator identity, or assessed clinical meaning. The DICOM
+[creator identification macro](https://dicom.nema.org/medical/Dicom/2024b/output/chtml/part03/sect_10.9.3.html)
+and [digital-signature profiles](https://dicom.nema.org/medical/dicom/current/output/chtml/part15/sect_c.3.html)
+are not verified by this milestone.
 
 ## Recommendation
 

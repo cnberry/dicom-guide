@@ -74,6 +74,14 @@ result into a medical conclusion.
   captures a proposal. Agent identity, source relevance, chronology, registration,
   lesion linkage, response, treatment effect, diagnosis, and conclusion authority
   all remain false.
+- Source-bound DICOM GSPS display support for a deliberately narrow subset: hashed
+  same-study single-frame MR/CT sources, source-equivalent linear modality transform,
+  LINEAR VOI, identity presentation LUT, exact full-image SCALE TO FIT with matching
+  aspect, and PIXEL POLYLINE/anchor-text annotations. Unsupported structures fail
+  closed as a whole; runtime projection is atomic; deliberate display locks all
+  manipulation, measurement, evidence, MPR, and agent-state paths until cleared.
+  Creator identity and source-text clinical meaning are not assessed; measurement,
+  finding, diagnosis, and response authority remain false.
 - Source-bound one-MR/one-CT consultation packets for clinician discussion. Neutral
   key-image archives, exact live-catalog position and source-byte rehashing, strict
   cross-study/patient-context gates, static human presentation, privacy-minimized
@@ -240,3 +248,10 @@ result into a medical conclusion.
     navigation only. It cannot authenticate an agent, open or capture a source without
     a person's action, establish relevance or chronology, register images, link a
     lesion, assess response or treatment effect, diagnose, or create a conclusion.
+25. **Source presentation-state separation:** a supported GSPS state must bind to the
+    exact guarded PR bytes and every exact referenced local MR/CT instance. Only the
+    documented unrotated/unflipped/full-image/linear-VOI/PIXEL-polyline/anchor-text
+    subset may render. Opening is a person's explicit action; geometry is visually
+    distinct and read-only; source text may contain identifiers and cannot become a
+    ScanView measurement, finding, diagnosis, response label, or clinical conclusion.
+    Unsupported or changed input displays no state-derived content.

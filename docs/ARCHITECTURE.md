@@ -1,5 +1,46 @@
 # Architecture
 
+## Source DICOM presentation-state boundary
+
+GSPS is a guarded source-display path, not an evidence or interpretation path:
+
+```text
+guarded local DICOM catalog
+        │
+        ├── exact PR bytes ── stable read + SHA-256 ── conservative GSPS parser
+        │                                             │
+        └── hashed referenced MR/CT metadata ─────────┤
+             same study/patient · single frame · matching linear grayscale/aspect
+                                                      ▼
+                                      versioned sensitive display catalog
+                                      ├── full bearer/browser local endpoint
+                                      ├── privacy-minimized CLI validation
+                                      └── fixed false clinical permissions
+                                                      │
+                                           deliberate person click
+                                                      ▼
+                         exact native slice + forced LINEAR VOI/identity polarity
+                         + atomic read-only orange overlay
+                         all manipulation/evidence/MPR/agent state locked until cleared
+```
+
+The server caches the parsed artifact at startup and guards every supported PR and
+referenced image by device, inode, byte count, mtime, and ctime. Any change returns
+HTTP 409 instead of serving stale display instructions. The browser independently
+validates exact fields, fixed permissions/privacy, source series/study/patient/
+modality membership, dimensions, coordinates, display area, and VOI arithmetic. Source annotation
+text may contain identifiers. It is not included in the privacy-minimized CLI summary,
+but the authenticated full endpoint necessarily carries it for local display and
+agent inspection. The artifact fixes ScanView interpretation to absent and source-text
+clinical meaning to not assessed. There is no source-write route and no external
+processing call.
+
+Cornerstone image-data indices identify pixel centers; DICOM PIXEL graphic coordinates
+identify pixel corners. The renderer therefore maps `(x-0.5,y-0.5,0)` through the
+current image's `indexToWorld`, then through the stack viewport's `worldToCanvas`.
+Projection is atomic: any expected graphic/text projection failure clears the entire
+state. All viewport interaction is locked until a person clears the state.
+
 ## Decision
 
 Use a local web UI based on Cornerstone3D, a versioned agent contract, and a
@@ -362,7 +403,7 @@ is not an MVP feature and is never allowed between CT and MRI.
   `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
   payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
   and `--require-hashes`; every launch verifies the bundle and probes installed
-  versions, UI, all 27 schemas, consultation contracts, agent consultation-plan
+  versions, UI, all 28 schemas, consultation contracts, agent consultation-plan
   validation, manual ROI review/comparison, native-boundary display, agent-access
   audit, and longitudinal-readiness support
   before cataloging DICOM.

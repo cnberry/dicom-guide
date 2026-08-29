@@ -53,6 +53,10 @@ from .lesion_volume_display import (
     lesion_volume_comparison_display_context,
 )
 from .navigation import NAVIGATION_FRAGMENT_PREFIX
+from .presentation_states import (
+    build_presentation_state_catalog,
+    registry_source_loader,
+)
 from .registration_display import (
     reviewed_registration_display_context,
     reviewed_registration_display_summary,
@@ -96,6 +100,7 @@ def _agent_audit_operation(path: str) -> str | None:
         "/v1/viewer-state": "viewer_state_read",
         "/v1/comparison-candidates": "comparison_candidates_read",
         "/v1/longitudinal-readiness": "longitudinal_readiness_read",
+        "/v1/presentation-states": "presentation_states_read",
         "/v1/lesion-volume-comparison-display": "native_boundary_summary_read",
         "/v1/lesion-volume-comparison-display/context": (
             "browser_only_native_boundary_context_attempt"
@@ -287,6 +292,8 @@ class ScanViewServer(ThreadingHTTPServer):
     lesion_volume_display_instance_ids: set[str]
     lesion_volume_display_agent_summary: dict[str, Any]
     agent_access_audit: AgentAccessAudit | None
+    presentation_state_catalog: dict[str, Any]
+    presentation_state_instance_ids: set[str]
 
     def server_close(self) -> None:
         try:
@@ -318,6 +325,29 @@ class ScanViewServer(ThreadingHTTPServer):
             ):
                 return False
             for instance_id in self.lesion_volume_display_instance_ids:
+                path = self.registry.get(instance_id)
+                guard = self.instance_guards.get(instance_id)
+                if path is None or guard is None:
+                    return False
+                metadata = path.lstat()
+                observed = {
+                    "device": metadata.st_dev,
+                    "inode": metadata.st_ino,
+                    "bytes": metadata.st_size,
+                    "mtime_ns": metadata.st_mtime_ns,
+                    "ctime_ns": metadata.st_ctime_ns,
+                }
+                if not stat.S_ISREG(metadata.st_mode) or any(
+                    observed[field] != guard[field] for field in observed
+                ):
+                    return False
+        except OSError:
+            return False
+        return True
+
+    def presentation_state_inputs_unchanged(self) -> bool:
+        try:
+            for instance_id in self.presentation_state_instance_ids:
                 path = self.registry.get(instance_id)
                 guard = self.instance_guards.get(instance_id)
                 if path is None or guard is None:
@@ -552,6 +582,15 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return
             self._send_json(report)
+            return
+        if path == "/v1/presentation-states":
+            if not self.server.presentation_state_inputs_unchanged():
+                self._send_json(
+                    {"error": "presentation_state_sources_changed"},
+                    HTTPStatus.CONFLICT,
+                )
+                return
+            self._send_json(self.server.presentation_state_catalog)
             return
         if path == "/v1/lesion-volume-comparison-display":
             summary = self.server.lesion_volume_display_agent_summary
@@ -1246,6 +1285,22 @@ def create_server(
     if host not in {"127.0.0.1", "::1", "localhost"}:
         raise ValueError("ScanView only supports loopback binding in this release")
     guarded_registry, instance_guards = _guard_instance_sources(catalog, registry)
+    cached_presentation_state_catalog = build_presentation_state_catalog(
+        catalog,
+        registry_source_loader(catalog, guarded_registry),
+    )
+    presentation_state_instance_ids = {
+        state["source"]["instance_id"]
+        for state in cached_presentation_state_catalog["states"]
+    } | {
+        instance_id
+        for state in cached_presentation_state_catalog["states"]
+        for referenced_series in state["referenced_series"]
+        for instance_id in referenced_series["instance_ids"]
+    } | {
+        state["presentation_state_id"]
+        for state in cached_presentation_state_catalog["unsupported_states"]
+    }
     resolved_source_root = (
         source_root.expanduser().resolve(strict=True) if source_root is not None else None
     )
@@ -1425,6 +1480,8 @@ def create_server(
         cached_lesion_volume_display_summary
     )
     server.agent_access_audit = agent_access_audit
+    server.presentation_state_catalog = cached_presentation_state_catalog
+    server.presentation_state_instance_ids = presentation_state_instance_ids
     return server
 
 

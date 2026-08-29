@@ -13,6 +13,10 @@ scanview-agent readiness manifest.json --output longitudinal-readiness.json
 scanview-agent create-consultation-plan manifest.json consultation-request.json \
   --output agent-consultation-plan.json
 scanview-agent validate-consultation-plan manifest.json agent-consultation-plan.json
+scanview-agent presentation-states '/path/to/copied/DICOM' \
+  --output '/safe/private/presentation-states.json'
+scanview-agent validate-presentation-states '/path/to/copied/DICOM' \
+  '/safe/private/presentation-states.json'
 scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM' \
@@ -81,10 +85,11 @@ For offline transfer and installation on macOS or Linux, run
 wheel, pinned pure-Python `pydicom` 3.0.2, hash-locked local requirements, and
 verifier/install/launch scripts. The installer invokes pip only with `--no-index` and
 `--require-hashes`, and every launch checks the bundle and installed runtime before
-indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.7.0 bundle has passed
-offline install, runtime checks, longitudinal-readiness generation, privacy-minimized
-bearer-access auditing, audit-tamper refusal, and loopback launch on both macOS arm64
-and Strawberry Linux x86_64.
+indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.8.0 bundle has passed
+offline install, runtime checks, consultation-plan generation/validation, browser and
+bearer authorization gates, and loopback launch on both macOS arm64 and Strawberry
+Linux x86_64. The v0.9.0 GSPS bundle must pass the same exact-artifact gate before its
+release statement is complete.
 The earlier source-bound boundary-review, reviewed volume-comparison, and reviewed
 native-boundary display gates remain covered by the full regression suite and v0.5.0
 cross-platform package evidence;
@@ -109,6 +114,23 @@ catalog-hash-bound follow-up gate. The report counts eligible MR/CT studies and 
 requires valid distinct dates and one matching opaque patient context, caps reported
 candidate pairs, excludes descriptions/pixels/paths, and leaves all clinical and
 derived-use permissions false.
+
+`presentation-states` builds an owner-only, source-bound GSPS display catalog entirely
+locally and always hashes the PR plus every referenced MR/CT instance. The strict
+subset requires same-study/same-patient, single-frame monochrome sources, a linear
+modality transform equivalent to the source renderer, LINEAR VOI, identity presentation
+LUT/polarity, exact full-image displayed area with matching aspect, and bounded PIXEL
+POLYLINE/anchor text. Masks, overlays, subtraction, lookup tables, frame scoping,
+transform/aspect drift, invalid geometry/text, or missing hashes withhold the whole
+state. `validate-presentation-states` rehashes local sources and emits only aggregate
+counts; it omits IDs, text, geometry, and window values.
+
+Authenticated `GET /v1/presentation-states` is a sensitive read-only extraction for
+local agents and the human viewer. It returns `no-store` and can be audited as
+`presentation_states_read`; it contains opaque IDs and source text that may contain
+identifiers or clinical language. Creator identity is not authenticated, source-text
+clinical meaning is `not_assessed`, and ScanView interpretation, editing, measurement,
+diagnosis, response, and conclusion permissions are false. No external API is called.
 `create-consultation-plan` accepts a strict local request containing 2–8 exact opaque
 series/instance pairs and bounded discussion headings. It rejoins every item to the
 supplied catalog, requires one opaque patient context, both MR and CT, distinct

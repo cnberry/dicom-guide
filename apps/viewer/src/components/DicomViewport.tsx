@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import type { RenderingEngine, Types } from '@cornerstonejs/core';
+import { Enums, type RenderingEngine, type Types } from '@cornerstonejs/core';
 import {
   createMeasurementEvidencePacket,
   createStackViewport,
@@ -19,6 +19,11 @@ import {
   type KeyImagePresentation,
 } from '../keyImages';
 import type { MeasurementEvidencePacket } from '../measurements';
+import type {
+  AppliedPresentationState,
+  PresentationStatePoint,
+} from '../presentationStates';
+import { presentationPixelPointToImageIndex } from '../presentationStates';
 
 type Props = {
   id: 'baseline' | 'followup';
@@ -31,6 +36,46 @@ type Props = {
   measurementPacket?: MeasurementEvidencePacket;
   onOpenMpr?: () => void;
   consultationSelectionSlot?: ConsultationSelectionSlot;
+  presentationState?: AppliedPresentationState;
+  onPresentationStateError?: (message: string) => void;
+  interactionLocked?: boolean;
+};
+
+type CanvasPresentationOverlay = {
+  width: number;
+  height: number;
+  instanceId: string;
+  graphics: Array<{ id: string; points: PresentationStatePoint[] }>;
+  texts: Array<{
+    id: string;
+    point: PresentationStatePoint;
+    visible: boolean;
+    lines: string[];
+  }>;
+};
+
+const applySourcePresentation = (
+  viewport: Types.IStackViewport,
+  series: DicomSeries,
+  application?: AppliedPresentationState,
+) => {
+  viewport.resetProperties();
+  viewport.resetCamera();
+  if (
+    application &&
+    application.target.seriesId === series.id &&
+    application.state.referenced_series.some((item) => item.series_id === series.id)
+  ) {
+    viewport.setProperties({
+      VOILUTFunction: Enums.VOILUTFunctionType.LINEAR,
+      invert: false,
+      voiRange: {
+        lower: application.state.presentation.voi_range.lower,
+        upper: application.state.presentation.voi_range.upper,
+      },
+    });
+  }
+  viewport.render();
 };
 
 export type DicomViewportHandle = {
@@ -53,6 +98,9 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     measurementPacket,
     onOpenMpr,
     consultationSelectionSlot,
+    presentationState,
+    onPresentationStateError,
+    interactionLocked = false,
   }: Props,
   ref,
 ) {
@@ -60,11 +108,17 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
   const engineRef = useRef<RenderingEngine | undefined>(undefined);
   const viewportRef = useRef<Types.IStackViewport | undefined>(undefined);
   const toolsRef = useRef<ViewportToolController | undefined>(undefined);
+  const presentationStateRef = useRef(presentationState);
+  presentationStateRef.current = presentationState;
+  const presentationStateErrorRef = useRef(onPresentationStateError);
+  presentationStateErrorRef.current = onPresentationStateError;
   const [status, setStatus] = useState('Choose a series');
   const [keyImageState, setKeyImageState] = useState<'idle' | 'working' | 'saved' | 'error'>(
     'idle',
   );
   const [keyImageError, setKeyImageError] = useState('');
+  const [sourceOverlay, setSourceOverlay] = useState<CanvasPresentationOverlay>();
+  const presentationLocked = interactionLocked || Boolean(presentationState);
 
   useEffect(() => {
     const element = elementRef.current;
@@ -102,7 +156,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
         viewportRef.current = viewport;
         toolsRef.current = tools;
         restoreMeasurementEvidencePacket(`viewport-${id}`, series.id, measurementPacket);
-        viewport.render();
+        applySourcePresentation(viewport, series, presentationStateRef.current);
         setStatus('');
       })
       .catch((error: unknown) => {
@@ -130,11 +184,15 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
 
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport || resetNonce === 0) return;
-    viewport.resetProperties();
-    viewport.resetCamera();
-    viewport.render();
-  }, [resetNonce]);
+    if (!viewport || !series || resetNonce === 0) return;
+    applySourcePresentation(viewport, series, presentationStateRef.current);
+  }, [resetNonce, series]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !series) return;
+    applySourcePresentation(viewport, series, presentationState);
+  }, [presentationState, series]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -153,6 +211,120 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     }
   }, [id, measurementPacket, series]);
 
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    const update = () => {
+      const viewport = viewportRef.current;
+      const currentIndex = viewport?.getCurrentImageIdIndex();
+      const instance =
+        viewport && series && currentIndex !== undefined
+          ? series.instances[currentIndex]
+          : undefined;
+      if (
+        !viewport ||
+        !series ||
+        !instance ||
+        !presentationState ||
+        presentationState.target.seriesId !== series.id
+      ) {
+        setSourceOverlay(undefined);
+        return;
+      }
+      const annotations = presentationState.state.annotations.filter((annotation) =>
+        annotation.referenced_instance_ids.includes(instance.instanceId),
+      );
+      if (annotations.length === 0) {
+        setSourceOverlay({
+          width: element.clientWidth,
+          height: element.clientHeight,
+          instanceId: instance.instanceId,
+          graphics: [],
+          texts: [],
+        });
+        return;
+      }
+      const imageData = viewport.getImageData();
+      const vtkImageData = imageData?.imageData;
+      const indexToWorld = vtkImageData?.indexToWorld;
+      if (
+        !vtkImageData ||
+        typeof indexToWorld !== 'function' ||
+        element.clientWidth < 1 ||
+        element.clientHeight < 1
+      ) {
+        setSourceOverlay(undefined);
+        presentationStateErrorRef.current?.(
+          `${label} GSPS display was locked because its source coordinates could not be projected atomically. Nothing from that state remains applied.`,
+        );
+        return;
+      }
+      const project = (source: PresentationStatePoint): PresentationStatePoint | undefined => {
+        try {
+          // DICOM PIXEL annotations use the top-left corner of the top-left pixel as
+          // (0, 0), while image-data index (0, 0) identifies that pixel's center.
+          const world = indexToWorld.call(
+            vtkImageData,
+            presentationPixelPointToImageIndex(source),
+          ) as Types.Point3;
+          const canvas = viewport.worldToCanvas(world);
+          return canvas.every(Number.isFinite) ? [canvas[0], canvas[1]] : undefined;
+        } catch {
+          return undefined;
+        }
+      };
+      const graphics: CanvasPresentationOverlay['graphics'] = [];
+      const texts: CanvasPresentationOverlay['texts'] = [];
+      for (const annotation of annotations) {
+        for (const graphic of annotation.graphics) {
+          const points = graphic.points.map(project);
+          if (!points.every((point): point is PresentationStatePoint => Boolean(point))) {
+            setSourceOverlay(undefined);
+            presentationStateErrorRef.current?.(
+              `${label} GSPS display was locked because a source polyline could not be projected atomically. No partial annotation was displayed.`,
+            );
+            return;
+          }
+          graphics.push({
+            id: `${annotation.annotation_id}-${graphic.graphic_id}`,
+            points,
+          });
+        }
+        for (const text of annotation.texts) {
+          const canvas = project(text.anchor_point);
+          if (!canvas) {
+            setSourceOverlay(undefined);
+            presentationStateErrorRef.current?.(
+              `${label} GSPS display was locked because a source text anchor could not be projected atomically. No partial annotation was displayed.`,
+            );
+            return;
+          }
+          texts.push({
+            id: `${annotation.annotation_id}-${text.text_id}`,
+            point: canvas,
+            visible: text.anchor_point_visible,
+            lines: text.unformatted_text.split(/\r\n|\r|\n/),
+          });
+        }
+      }
+      setSourceOverlay({
+        width: element.clientWidth,
+        height: element.clientHeight,
+        instanceId: instance.instanceId,
+        graphics,
+        texts,
+      });
+    };
+    element.addEventListener(Enums.Events.IMAGE_RENDERED, update);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    update();
+    return () => {
+      element.removeEventListener(Enums.Events.IMAGE_RENDERED, update);
+      observer.disconnect();
+    };
+  }, [label, presentationState, series]);
+
   const maxIndex = Math.max(0, (series?.instances.length ?? 1) - 1);
   const orientationLabels = getPatientOrientationLabels(series?.geometry.orientation);
   const mprEligibility = assessMprEligibility(series);
@@ -163,6 +335,11 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     const element = elementRef.current;
     if (!viewport || !element || !series) {
       throw new Error(`${label} image is not ready for evidence export.`);
+    }
+    if (presentationStateRef.current) {
+      throw new Error(
+        `${label} uses a source-carried GSPS state. Clear it before evidence export.`,
+      );
     }
     const actualIndex = viewport.getCurrentImageIdIndex();
     const instance = series.instances[actualIndex];
@@ -269,22 +446,39 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
               ? `Native source · ${series.sourceKind === 'loopback-service' ? 'local service' : 'folder'}`
               : 'Native source'}
           </span>
+          {presentationState && (
+            <span className="source-presentation-badge">
+              GSPS display active · supported subset · creator not authenticated
+            </span>
+          )}
           <button
             className="key-image-button"
-            disabled={!mprEligibility.eligible || Boolean(status)}
-            title={mprEligibility.reason}
+            disabled={!mprEligibility.eligible || Boolean(status) || presentationLocked}
+            title={
+              presentationLocked
+                ? 'Clear all active source-carried GSPS states before opening MPR.'
+                : mprEligibility.reason
+            }
             onClick={onOpenMpr}
           >
             Open MPR
           </button>
           <button
             className={`key-image-button ${keyImageState}`}
-            disabled={!series || keyImageState === 'working' || Boolean(status)}
+            disabled={
+              !series ||
+              keyImageState === 'working' ||
+              Boolean(status) ||
+              presentationLocked
+            }
             title={
               keyImageError ||
+              (presentationLocked
+                ? 'Clear all active source-carried GSPS states before export; this evidence schema does not encode GSPS provenance.'
+                :
               (consultationSelectionSlot
                 ? 'Save a neutral local reference-view ZIP with PNG, provenance, and measurements'
-                : 'Save a local ZIP with PNG, provenance, and measurements')
+                : 'Save a local ZIP with PNG, provenance, and measurements'))
             }
             onClick={() => void saveKeyImage()}
           >
@@ -314,12 +508,50 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
       <div
         className="dicom-viewport"
         onWheel={(event) => {
-          if (!series) return;
+          if (!series || presentationLocked) return;
           event.preventDefault();
           onIndexChange(Math.max(0, Math.min(maxIndex, index + Math.sign(event.deltaY))));
         }}
       >
-        <div ref={elementRef} className="cornerstone-host" />
+        <div
+          ref={elementRef}
+          className={`cornerstone-host ${presentationLocked ? 'presentation-locked' : ''}`}
+        />
+        {presentationState && sourceOverlay && (
+          <svg
+            className="presentation-state-overlay"
+            viewBox={`0 0 ${sourceOverlay.width} ${sourceOverlay.height}`}
+            aria-label={`Read-only source-carried DICOM presentation-state overlay with ${sourceOverlay.graphics.length} polylines and ${sourceOverlay.texts.length} text objects`}
+          >
+            {sourceOverlay.graphics.map((graphic) => (
+              <polyline
+                key={graphic.id}
+                points={graphic.points.map((point) => point.join(',')).join(' ')}
+              />
+            ))}
+            {sourceOverlay.texts.map((text) => (
+              <g key={text.id}>
+                {text.visible && <circle cx={text.point[0]} cy={text.point[1]} r="3.5" />}
+                <text x={text.point[0] + 7} y={text.point[1] - 7}>
+                  {text.lines.map((line, lineIndex) => (
+                    <tspan
+                      key={`${text.id}-${lineIndex}`}
+                      x={text.point[0] + 7}
+                      dy={lineIndex === 0 ? 0 : 15}
+                    >
+                      {line}
+                    </tspan>
+                  ))}
+                </text>
+              </g>
+            ))}
+          </svg>
+        )}
+        {presentationState && (
+          <div className="presentation-state-viewport-note">
+            SOURCE GSPS COORDINATES/TEXT · SCANVIEW HIGH-CONTRAST RENDER · CREATOR NOT AUTHENTICATED
+          </div>
+        )}
         {orientationLabels && (
           <div
             className="orientation-labels"
@@ -348,7 +580,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
           min={0}
           max={maxIndex}
           value={Math.min(index, maxIndex)}
-          disabled={!series}
+          disabled={!series || presentationLocked}
           onChange={(event) => onIndexChange(Number(event.target.value))}
         />
         <span>

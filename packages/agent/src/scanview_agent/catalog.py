@@ -52,6 +52,11 @@ HEADER_TAGS = [
     "MRAcquisitionType",
     "EchoTrainLength",
     "NumberOfFrames",
+    "PhotometricInterpretation",
+    "PixelAspectRatio",
+    "RescaleSlope",
+    "RescaleIntercept",
+    "ModalityLUTSequence",
 ]
 
 
@@ -186,6 +191,13 @@ def _read_instance(path: Path, root: Path, *, include_hashes: bool, salt: str) -
         "rows": _int(getattr(dataset, "Rows", None)),
         "columns": _int(getattr(dataset, "Columns", None)),
         "pixel_spacing": _float_list(getattr(dataset, "PixelSpacing", None)),
+        "pixel_aspect_ratio": _float_list(getattr(dataset, "PixelAspectRatio", None)),
+        "photometric_interpretation": _text(
+            getattr(dataset, "PhotometricInterpretation", None)
+        ),
+        "rescale_slope": _float(getattr(dataset, "RescaleSlope", None)),
+        "rescale_intercept": _float(getattr(dataset, "RescaleIntercept", None)),
+        "has_modality_lut_sequence": "ModalityLUTSequence" in dataset,
         "slice_thickness": _float(getattr(dataset, "SliceThickness", None)),
         "image_orientation_patient": _float_list(
             getattr(dataset, "ImageOrientationPatient", None)

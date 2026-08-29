@@ -34,6 +34,15 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - No external processing API: decoding, metadata, and comparisons stay on-device.
 - Extension-independent DICOM Part 10 parsing.
 - MRI/CT stack rendering through Cornerstone3D's maintained codecs.
+- Conservative local DICOM Grayscale Softcopy Presentation State (GSPS) support:
+  hashed same-study source references, a source-equivalent linear modality transform,
+  saved LINEAR window/level, exact full-image display area/aspect, and PIXEL
+  polyline/anchor-text annotations are parsed locally and shown only after a deliberate
+  click. Unsupported transforms, frames, LUTs, overlays, masks, shutters, crops,
+  scoping, geometry, or text fail closed as a whole. The copied media's seven GSPS
+  objects currently remain locked because their displayed-area far corner does not
+  satisfy ScanView's strict DICOM full-image rule. Creator identity and source-text
+  meaning are not assessed.
 - Geometry-gated, single-series axial/coronal/sagittal MPR built locally from native
   source slices, with physically linked patient-space crosshairs, visible LPS
   coordinates, window/level, pan, zoom, wheel navigation, and reset.
@@ -192,8 +201,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.8.0.zip
-cd scanview-offline-0.8.0
+unzip release/scanview-offline-0.9.0.zip
+cd scanview-offline-0.9.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -208,6 +217,11 @@ Building the bundle may download the pinned dependency unless `--pydicom-wheel` 
 supplied, but installation, viewing, indexing, comparison, and evidence generation
 are offline. The integrity manifest is corruption evidence, not publisher signing or
 clinical authentication. Output is non-overwriting.
+
+The retained owner-only v0.9.0 ZIP is 5,510,395 bytes with SHA-256
+`d0ba563e5e8a0d41cac52b2da6f700a5ff22183b411af642f46012182c0dd1ae`.
+It passed exact-artifact no-index install and synthetic local GSPS gates on macOS
+arm64 and Strawberry Linux x86_64; no patient data was used on Strawberry.
 
 ## Run the folder-picker viewer
 
@@ -268,6 +282,10 @@ python3 -m venv .venv
 .venv/bin/scanview-agent assemble-consultation-packet '/path/to/copied/DICOM' \
   view-a-key-image.zip view-b-key-image.zip --output scanview-consultation-packet.zip
 .venv/bin/scanview-agent validate-consultation-packet scanview-consultation-packet.zip
+.venv/bin/scanview-agent presentation-states '/path/to/copied/DICOM' \
+  --output presentation-states.json
+.venv/bin/scanview-agent validate-presentation-states \
+  '/path/to/copied/DICOM' presentation-states.json
 .venv/bin/scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
@@ -302,6 +320,8 @@ The server exposes:
 - `GET /v1/manifest`
 - `GET /v1/viewer-state` (opt-in, expiring browser session state)
 - `GET /v1/comparison-candidates`
+- `GET /v1/presentation-states` (source-bound GSPS display catalog; annotation text
+  may contain identifiers)
 - `GET /v1/registration-qa` (privacy-minimized agent status)
 - `GET /v1/registration-qa/preview` (separate browser session capability only)
 - `GET /v1/registration-qa/files/{allowlisted_nrrd}` (separate browser session capability only)

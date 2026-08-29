@@ -219,6 +219,7 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
             ("/v1/viewer-state", HTTPStatus.OK),
             ("/v1/comparison-candidates", HTTPStatus.OK),
             ("/v1/longitudinal-readiness", HTTPStatus.OK),
+            ("/v1/presentation-states", HTTPStatus.OK),
             ("/v1/lesion-volume-comparison-display", HTTPStatus.OK),
             ("/v1/registration-qa", HTTPStatus.OK),
             (f"/v1/instances/{INSTANCE_ID}", HTTPStatus.OK),
@@ -243,13 +244,14 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
 
     summary = agent_access_audit_summary(audit_path)
     assert summary["valid"] is True
-    assert summary["event_count"] == 11
+    assert summary["event_count"] == 12
     events = [json.loads(line) for line in audit_path.read_text().splitlines()]
     assert [event["operation"] for event in events] == [
         "manifest_read",
         "viewer_state_read",
         "comparison_candidates_read",
         "longitudinal_readiness_read",
+        "presentation_states_read",
         "native_boundary_summary_read",
         "registration_status_read",
         "native_dicom_instance_read",
