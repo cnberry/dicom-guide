@@ -16,6 +16,7 @@ from scanview_agent.registration_reviews import (
     QUALITATIVE_CHECKS,
     TOLERANCE_BASIS,
     build_registration_review,
+    import_registration_review,
     registration_qa_agent_summary,
     registration_qa_context,
     registration_review_bytes,
@@ -443,3 +444,45 @@ def test_registration_qa_rejects_tampering_and_writes_atomically(tmp_path: Path)
     assert summary["valid"] is False
     assert summary["display_unlocked"] is False
     registration_path.write_bytes(registration_payload)
+
+
+def test_downloaded_review_import_validates_live_bundle_and_seals_owner_only(
+    tmp_path: Path,
+) -> None:
+    bundle = registration_bundle(tmp_path)
+    record = build_registration_review(bundle, review_request())
+    downloaded = tmp_path / "browser-download.json"
+    payload = json.dumps(record, indent=2).encode() + b"\n"
+    downloaded.write_bytes(payload)
+    downloaded.chmod(0o644)
+    sealed = tmp_path / "sealed-review.json"
+
+    summary = import_registration_review(bundle, downloaded, sealed)
+    assert summary["valid"] is True
+    assert summary["source_integrity"] is True
+    assert summary["display_unlocked"] is True
+    assert sealed.read_bytes() == payload
+    metadata = sealed.stat()
+    assert stat.S_IMODE(metadata.st_mode) == 0o600
+    assert metadata.st_nlink == 1
+    with pytest.raises(FileExistsError):
+        import_registration_review(bundle, downloaded, sealed)
+
+    tampered = json.loads(downloaded.read_text())
+    tampered["note"] = "Changed after browser download."
+    downloaded.write_text(json.dumps(tampered))
+    refused = tmp_path / "refused-review.json"
+    with pytest.raises(ValueError, match="invalid or for another live bundle"):
+        import_registration_review(bundle, downloaded, refused)
+    assert not refused.exists()
+
+    symlink = tmp_path / "download-link.json"
+    symlink.symlink_to(downloaded)
+    with pytest.raises(ValueError, match="cannot be read safely"):
+        import_registration_review(bundle, symlink, tmp_path / "symlink-refused.json")
+
+    oversized = tmp_path / "oversized-download.json"
+    with oversized.open("wb") as stream:
+        stream.truncate(4 * 1024 * 1024 + 1)
+    with pytest.raises(ValueError, match="too large"):
+        import_registration_review(bundle, oversized, tmp_path / "oversized-refused.json")

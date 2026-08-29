@@ -217,7 +217,7 @@
 1. Added an isolated, browser-capability registration-QA workspace that never exposes
    NRRDs to bearer-authorized agents and never loads the ordinary measurement or
    evidence-export viewer. The capability boundary does not prove human presence.
-2. Added native fixed/moving and registered-moving views with axial, coronal, and
+2. Added derived fixed/moving reference and registered-moving views with axial, coronal, and
    sagittal traversal, orientation labels, independent windows, opacity, swipe,
    checkerboard, edge comparison, qualitative landmark review, and physical-point
    residual tools—all computed locally.
@@ -235,6 +235,28 @@
    across all three planes and four QA modes. Real Slicer and real-patient QA remain
    pending and are not claimed.
 
+## Completed in the seventeenth milestone
+
+1. Added a strict reviewed-registration display contract that requires one accepted,
+   owner-only, unlinked review and its exact live six-file bundle. It binds review,
+   event, bundle, manifest, transform, file, and geometry hashes while omitting reviewer
+   name and organization.
+2. Added `serve`/`launch --registration-review` plumbing, a browser-only reviewed
+   context, same-descriptor file streaming, bearer-minimized status, and refusal of
+   rejected, tampered, mismatched, missing, linked, malformed, or unsafe inputs.
+   Reviewed mode suppresses pending-QA routes rather than reopening review authority.
+3. Added a separate human display with patient-space axial/coronal/sagittal traversal,
+   exact fixed/registered geometry checks, capped sequential loading, and only opacity
+   and swipe. It identifies both NRRDs as derived, registered moving as resampled, and
+   native DICOM as authoritative.
+4. Made the shared-coverage limit explicit: the six-file bundle has no transformed
+   pixel coverage mask, so authorization is reviewer-visual only and pixels outside
+   visible overlap remain unauthorized.
+5. Added mandatory OS-enforced network denial for Slicer execution: macOS uses a
+   deny-all-network sandbox; supported 64-bit Linux requires `bwrap` private namespaces
+   plus seccomp denial of socket creation, socket pairs, and io_uring. Weaker
+   `unshare`-only execution fails closed with no unsandboxed fallback.
+
 ## Immediate
 
 1. Import a future same-modality MRI follow-up, have a person confirm the intended
@@ -251,8 +273,8 @@
    never relabel the current self-attested hash chain as identity verification.
 6. Design an append-only, privacy-minimized local audit for bearer access to live
    viewer state without recording patient content or putting tokens in logs.
-7. Add ordinary-viewer consumption of an accepted record only after revalidating its
-   exact live six-file bundle anchor; unlock exploratory overlay/swipe and nothing else.
+7. Add an explicit transformed moving-coverage mask to a future registration bundle so
+   reviewed display can enforce shared coverage pixel by pixel rather than visually.
 
 ## Next milestone
 
@@ -269,8 +291,8 @@
    distributor signature/checksum verification for the complete engine bundle.
 2. Perform the implemented QA workflow on a valid real same-modality pair with a
    qualified reviewer and a predeclared clinically appropriate landmark tolerance.
-3. Consume an explicit accepted record in the ordinary viewer only after live bundle
-   revalidation; never overwrite originals and never unlock subtraction or masks.
+3. Verify the implemented accepted-record display on a real reviewed bundle; never
+   overwrite originals and never unlock subtraction or masks.
 
 ## Decisions needed with clinicians
 

@@ -150,6 +150,20 @@ describe('local NRRD QA parsing and rendering', () => {
     expect(() => parseNrrd(oversized.buffer)).toThrow(/voxel count/i);
   });
 
+  it.each(['raw', 'gzip'] as const)(
+    'enforces a caller-supplied decoded-byte budget before decoding %s payloads',
+    (encoding) => {
+      const encoded = nrrd({ encoding });
+      expect(() => parseNrrd(encoded, { maxDecodedBytes: 15 })).toThrow(
+        /decoded payload exceeds/i,
+      );
+      expect(parseNrrd(encoded, { maxDecodedBytes: 16 }).payload.byteLength).toBe(16);
+      expect(() => parseNrrd(encoded, { maxDecodedBytes: 0 })).toThrow(
+        /decoded payload limit is invalid/i,
+      );
+    },
+  );
+
   it('orthogonally reformats oblique geometry with trilinear LPS sampling', () => {
     const cosine = Math.SQRT1_2;
     const values = Array.from({ length: 27 }, (_, index) => {

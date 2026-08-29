@@ -75,7 +75,7 @@ const SeriesSelect = ({
   </label>
 );
 
-export default function App() {
+export default function App({ active = true }: { active?: boolean } = {}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const measurementInputRef = useRef<HTMLInputElement>(null);
   const baselineViewportRef = useRef<DicomViewportHandle>(null);
@@ -236,7 +236,19 @@ export default function App() {
   }, [agentPublisherId]);
 
   useEffect(() => {
-    if (!agentStateSharing) return;
+    if (active || !agentStateSharing) return;
+    const revokedPublisherId = agentPublisherIdRef.current;
+    agentStateSharingRef.current = false;
+    setAgentStateSharing(false);
+    setAgentPublisherId(createViewerStatePublisherId());
+    setAgentStateMessage(
+      'Agent viewer state stopped while the ordinary DICOM surface is hidden.',
+    );
+    void clearViewerState(revokedPublisherId).catch(() => undefined);
+  }, [active, agentStateSharing]);
+
+  useEffect(() => {
+    if (!active || !agentStateSharing) return;
     if (!viewerStatePublication) {
       agentStateSharingRef.current = false;
       setAgentStateSharing(false);
@@ -248,7 +260,7 @@ export default function App() {
       void clearViewerState(revokedPublisherId).catch(() => undefined);
       return;
     }
-    let active = true;
+    let effectActive = true;
     const send = async () => {
       let published = false;
       try {
@@ -266,13 +278,13 @@ export default function App() {
           });
         agentPublishQueueRef.current = queued.catch(() => undefined);
         await queued;
-        if (active && published) {
+        if (effectActive && published) {
           setAgentStateMessage(
             'Sharing opaque viewer state with bearer-authorized local agents · memory-only · expires within 30 seconds.',
           );
         }
       } catch (error) {
-        if (active) {
+        if (effectActive) {
           setAgentStateMessage(
             `${error instanceof Error ? error.message : 'Local viewer-state update failed.'} Any previous state expires automatically.`,
           );
@@ -282,11 +294,11 @@ export default function App() {
     const initial = window.setTimeout(() => void send(), 100);
     const heartbeat = window.setInterval(() => void send(), VIEWER_STATE_HEARTBEAT_MS);
     return () => {
-      active = false;
+      effectActive = false;
       window.clearTimeout(initial);
       window.clearInterval(heartbeat);
     };
-  }, [agentPublisherId, agentStateSharing, viewerStatePublication]);
+  }, [active, agentPublisherId, agentStateSharing, viewerStatePublication]);
 
   useEffect(() => {
     const clearPublishedState = () => {

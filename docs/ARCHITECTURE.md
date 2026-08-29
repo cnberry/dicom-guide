@@ -54,6 +54,7 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
                                 --> DICOM SEG/SR + provenance sidecars
 
 explicit same-modality pair --> local Slicer/BRAINSFit rigid job
+                                      (OS-enforced no-network execution)
                                       |
                                       +--> hashed derivative bundle (pending QA only)
                                                    |
@@ -61,13 +62,21 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
                                                                |
                                                                +--> separate review JSON
                                                                     (six-file hash anchor)
+                                                                            |
+                                      exact accepted review + live bundle ---+
+                                                                            |
+                                                                            +--> reviewed browser display
+                                                                                 (opacity/swipe only)
 ```
 
 ## Trust boundaries
 
 1. **Source:** ScanView has no source write/delete operation; copied-original hashes
    are evidence anchors. This is an application boundary, not an operating-system
-   immutable-file flag.
+   immutable-file flag. Each service-streamed instance is anchored to startup
+   device/inode/size/change metadata, opened without following a final symlink, copied
+   into one owner-only ephemeral local snapshot, hashed, and only then served. A source
+   changed after catalog/startup is refused before patient bytes are sent.
 2. **Catalog:** direct patient name/ID tags are excluded, but all output remains
    sensitive and is explicitly not claimed to be de-identified. An opaque patient-
    context digest is derived locally and gates all cross-exam suggestions; raw
@@ -110,9 +119,16 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    the in-memory TTL is a fallback, not a consent substitute.
    Registration QA is a separately mounted mode: a bearer-authorized agent receives
    only a minimized status, while preview context, the three allowlisted NRRDs, and
-   decision submission require the distinct HttpOnly browser session and exact Origin.
-   This separates bearer-agent authority but does not prove a person is present.
+   decision submission require the distinct HttpOnly browser session; the POST also
+   requires exact Origin. This separates bearer-agent authority but does not prove a person is present.
    The server returns one validated decision JSON in memory and does not persist it.
+   A launch that also supplies a saved review enters a distinct reviewed-display mode.
+   The server validates the owner-only, unlinked review against the exact live bundle,
+   rechecks every evidence-file identity and metadata on access, suppresses pending-QA
+   authority, and exposes only fixed-reference and registered-moving NRRDs to the
+   browser session. Rejected or invalid review input falls back to
+   ordinary DICOM with every registered route locked. Bearer access gets only a
+   privacy-minimized authorization summary.
 5. **Derivatives:** rigid transforms and resampled volumes now go to a separate,
    owner-only, atomic no-replace directory with exact source hashes, version-gated
    local Slicer/BRAINSFit provenance, and every display use locked pending QA. Future masks,
@@ -141,7 +157,10 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    paths through a private environment request rather than command arguments, captures
    diagnostics only in the deleted private job directory, terminates the process group
    on timeout, and accepts only the required version/revision report, expected launcher
-   hash, parsed scalar-volume geometry, and finite proper-rigid transform. The hash
+   hash, parsed scalar-volume geometry, and finite proper-rigid transform. The engine
+   runs inside a mandatory macOS deny-network sandbox or, on supported 64-bit Linux,
+   `bwrap` private namespaces plus a no-socket/io_uring seccomp filter; no weaker
+   `unshare`-only or unsandboxed fallback exists. The hash
    match does not authenticate the software distributor. A generated transform is not
    display-approved. Registration review does not mutate that bundle: a separate JSON
    event anchors the exact six filenames, byte counts, hashes, manifest, transform,
@@ -149,7 +168,10 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    but does not authenticate the reviewer. Acceptance expresses only an authorization
    input for exploratory shared-coverage overlay/swipe; subtraction, masks, segmentation,
    resampled-image measurements, and response conclusions remain locked. The ordinary
-   viewer does not consume that input yet.
+   viewer consumes that input only through the separate live-bundle-validated reviewed
+   surface. It implements opacity/swipe only, identifies both NRRDs as derived, labels
+   registered moving as resampled, and states that shared coverage is reviewer-visual
+   because no pixel-level overlap mask exists.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

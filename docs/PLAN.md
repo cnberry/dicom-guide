@@ -68,12 +68,15 @@ result into a medical conclusion.
 
 - Version-gated local Slicer/BRAINSFit rigid-registration execution and source-hashed,
   generated-pending-QA bundles (implemented; real-engine case execution pending).
-- Isolated local registration QA with native/registered views, all three planes,
+- Isolated local registration QA with derived reference/registered views, all three planes,
   opacity, swipe, checkerboard, edges, qualitative landmarks, quantitative 3-D
   residuals mandatory for acceptance, and a separate hash-linked accept/reject record
   (implemented; real-case review pending).
-- Consume a live-bundle-validated accepted record in the ordinary viewer to unlock
-  only exploratory overlay/swipe. Mask propagation remains locked.
+- Live-bundle-validated accepted-record consumption in the ordinary viewer, exposing
+  only derived fixed/registered volumes and exploratory opacity/swipe (implemented;
+  real-case review pending). Shared coverage is visibly reviewer-identified rather
+  than falsely represented as a machine mask. All other derived operations remain
+  locked.
 - DICOM SEG/SR import/export and separate derivative store.
 - Manual/semi-automatic component-specific tumor segmentation.
 

@@ -39,6 +39,10 @@ def main() -> None:
             ),
         )
         shutil.copytree(viewer_dist, staged_agent / "src" / "scanview_agent" / "ui")
+        shutil.copytree(
+            repository / "schemas",
+            staged_agent / "src" / "scanview_agent" / "schemas",
+        )
         subprocess.run(
             [
                 sys.executable,

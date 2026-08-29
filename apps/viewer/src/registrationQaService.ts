@@ -292,13 +292,13 @@ export const readRegistrationQaContext = (
   const fixedVolume = readVolume(
     value.volumes.fixed,
     'fixed.nrrd',
-    'fixed_earlier_native',
+    'fixed_earlier_reference',
     false,
   );
   const movingVolume = readVolume(
     value.volumes.moving,
     'moving.nrrd',
-    'moving_later_native',
+    'moving_later_reference',
     false,
   );
   const registered = readVolume(
@@ -349,12 +349,22 @@ export const readRegistrationQaContext = (
       'always_locked',
     ]) ||
     !sameStringSet(value.display_policy.accepted_unlocks, ['overlay', 'swipe']) ||
-    !Array.isArray(value.display_policy.qa_preview_allowed_while_pending) ||
-    !value.display_policy.qa_preview_allowed_while_pending.every(
-      (item) => typeof item === 'string',
-    ) ||
-    !Array.isArray(value.display_policy.always_locked) ||
-    !value.display_policy.always_locked.every((item) => typeof item === 'string') ||
+    !sameStringSet(value.display_policy.qa_preview_allowed_while_pending, [
+      'reference_volume_side_by_side',
+      'registered_side_by_side',
+      'opacity_overlay',
+      'swipe_or_flicker',
+      'checkerboard',
+      'edge_overlay',
+      'landmark_residuals',
+    ]) ||
+    !sameStringSet(value.display_policy.always_locked, [
+      'subtraction',
+      'mask_propagation',
+      'segmentation',
+      'resampled_image_measurements',
+      'response_conclusions',
+    ]) ||
     !value.limitations.every(
       (item) => typeof item === 'string' && item.length >= 1 && item.length <= 300,
     )

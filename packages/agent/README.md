@@ -37,13 +37,17 @@ scanview-agent validate-registration '/safe/local/registration-job'
 scanview-agent review-registration '/safe/local/registration-job'
 scanview-agent record-registration-review '/safe/local/registration-job' \
   review-request.json --output registration-review.json
+scanview-agent import-registration-review '/safe/local/registration-job' \
+  ~/Downloads/scanview-registration-review.json \
+  --output '/safe/local/registration-review.json'
 scanview-agent validate-registration-review registration-review.json \
   --registration-bundle '/safe/local/registration-job'
 ```
 
 Use `scripts/build_release.py` from the repository root to produce a self-contained
-wheel with the built UI under `scanview_agent/ui`. A regular agent-only wheel stays
-lightweight. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
+wheel with the built UI under `scanview_agent/ui` and all versioned contracts under
+`scanview_agent/schemas`. A regular agent-only wheel stays lightweight and reads
+schemas from the source checkout. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
 and the API from one loopback origin. It establishes an
 HttpOnly browser session, while agents continue to use the printed bearer token.
 The server has no source-write or delete endpoint. The unified viewer's derivative
@@ -105,7 +109,10 @@ job; a no-data preflight checks the self-reported version/revision and BRAINSFit
 availability before source staging. Source bytes are rehashed before private staging;
 Slicer/BRAINSFit receives only
 local generic paths, and user settings/startup scripts and user-site Python packages
-are disabled. A successful non-overwriting, owner-only directory contains the fixed,
+are disabled. OS-enforced network isolation is mandatory: macOS uses a deny-all-network
+sandbox; supported 64-bit Linux requires `bwrap` private namespaces plus seccomp denial
+of socket creation, socket pairs, and io_uring. The weaker `unshare`-only path is
+refused, and there is no unsandboxed fallback. A successful non-overwriting, owner-only directory contains the fixed,
 moving, and registered-moving NRRDs, moving-to-fixed text ITK transform, engine report,
 and v1 manifest. `validate-registration` rechecks all hashes, required versions,
 parameters, parsed output geometry/rigidity, private permissions, source provenance,
@@ -113,7 +120,7 @@ and the invariant that the generated bundle stays `generated_pending_qa` and
 `unreviewed`.
 
 `review-registration` serves a separate, watermarked, browser-capability QA workspace
-from loopback. It shows native and registered volumes in all three planes with
+from loopback. It shows derived fixed/moving reference and registered volumes in all three planes with
 opacity, swipe, checkerboard, edges, landmarks, and physical-point residual tools.
 Agents can read only a privacy-minimized status; bearer authentication alone cannot
 fetch NRRDs or submit a decision. This is a separate browser capability, not proof a
@@ -124,6 +131,31 @@ aligned qualitative landmarks, and at least three spatially distributed 3-D land
 pairs within the fixed geometry-derived tolerance. It can authorize only exploratory
 shared-coverage overlay/swipe; all other derivative uses stay false.
 `validate-registration-review` must be given the live bundle to establish source
-integrity. No command authenticates the reviewer or
-turns an event hash into a signature, and the ordinary viewer does not yet consume
-accepted records.
+integrity. No command authenticates the reviewer or turns an event hash into a
+signature.
+
+A browser cannot guarantee the owner-only Unix mode required for display authorization.
+Validate and import the downloaded bytes into a non-overwriting owner-only copy first:
+
+```bash
+scanview-agent import-registration-review '/safe/local/registration-job' \
+  ~/Downloads/scanview-registration-review.json \
+  --output '/safe/local/registration-review.json'
+```
+
+An accepted imported record can be consumed only with its exact live bundle:
+
+```bash
+scanview-agent launch '/safe/local/DICOM/root' \
+  --registration-bundle '/safe/local/registration-job' \
+  --registration-review '/safe/local/registration-review.json'
+```
+
+The browser-only reviewed surface exposes only fixed reference and registered-moving
+NRRDs and implements opacity/swipe. A bearer agent sees a minimized authorization
+summary but cannot fetch these pixels. Rejected, tampered, linked, mismatched, missing,
+or non-owner-only review inputs keep the ordinary DICOM viewer available and every
+registered pixel locked. Startup hashes plus per-response review/bundle identity and
+metadata freshness checks relock the surface if any evidence changes. Shared coverage
+is reviewer-identified because the six-file bundle has no pixel-level transformed
+coverage mask.

@@ -65,6 +65,10 @@ export type PatientSpaceReformatOptions = {
   maxPixels?: number;
 };
 
+export type NrrdParseOptions = {
+  maxDecodedBytes?: number;
+};
+
 export type QaCompositeSlice = {
   width: number;
   height: number;
@@ -293,7 +297,10 @@ const sampledWindow = (
   return { sampledRange: [minimum, maximum], suggestedWindow: [low, high] };
 };
 
-export const parseNrrd = (buffer: ArrayBuffer): NrrdVolume => {
+export const parseNrrd = (
+  buffer: ArrayBuffer,
+  options: NrrdParseOptions = {},
+): NrrdVolume => {
   const bytes = new Uint8Array(buffer);
   const { header, payloadOffset } = splitHeader(bytes);
   const lines = header.split(/\r?\n/);
@@ -327,7 +334,12 @@ export const parseNrrd = (buffer: ArrayBuffer): NrrdVolume => {
   const scalar = scalarTypes[(fields.get('type') ?? '').toLowerCase()];
   if (!scalar) throw new Error('NRRD scalar type is unsupported.');
   const expectedBytes = voxelCount * scalar.bytes;
-  if (!Number.isSafeInteger(expectedBytes) || expectedBytes > MAX_DECODED_BYTES) {
+  const requestedDecodedLimit = options.maxDecodedBytes ?? MAX_DECODED_BYTES;
+  if (!Number.isSafeInteger(requestedDecodedLimit) || requestedDecodedLimit <= 0) {
+    throw new Error('NRRD decoded payload limit is invalid.');
+  }
+  const decodedLimit = Math.min(MAX_DECODED_BYTES, requestedDecodedLimit);
+  if (!Number.isSafeInteger(expectedBytes) || expectedBytes > decodedLimit) {
     throw new Error('NRRD decoded payload exceeds the browser QA safety limit.');
   }
   const encoding = (fields.get('encoding') ?? '').toLowerCase();

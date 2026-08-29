@@ -416,7 +416,7 @@ export const RegistrationQaWorkspace = ({
         : undefined,
     [movingWindow, plane, sliceIndex, volumes],
   );
-  const movingNativeSlice = useMemo(() => {
+  const movingReferenceSlice = useMemo(() => {
     if (!volumes) return undefined;
     const fixedLength = patientSpacePlaneLength(volumes.fixed, plane);
     const movingLength = patientSpacePlaneLength(volumes.moving, plane);
@@ -634,8 +634,8 @@ export const RegistrationQaWorkspace = ({
       setPhase('saved');
       setReviewMessage(
         decision === 'rejected'
-          ? 'Rejected QA record downloaded. All registered display uses remain locked.'
-          : 'Accepted exploratory overlay/swipe QA record downloaded. Subtraction, segmentation, measurements, propagation, and response conclusions remain locked.',
+          ? 'Rejected QA record downloaded. Import it into an owner-only local archive if it must be retained; all registered display uses remain locked.'
+          : 'Accepted exploratory overlay/swipe QA record downloaded. Import it into an owner-only local archive before reviewed launch; all other derivative uses remain locked.',
       );
     } catch (error) {
       setPhase('error');
@@ -673,9 +673,10 @@ export const RegistrationQaWorkspace = ({
       </header>
 
       <section className="qa-safety-strip">
-        <strong>Investigational preview.</strong> Registered moving is interpolated. Native images
-        stay visible. No measurement, screenshot export, agent-state publishing, subtraction,
-        segmentation, mask propagation, or response conclusion is available here.
+        <strong>Investigational preview.</strong> All three displayed NRRDs are local derived
+        scalar-volume representations; registered moving is additionally interpolated. Native
+        DICOM remains authoritative. No measurement, screenshot export, agent-state publishing,
+        subtraction, segmentation, mask propagation, or response conclusion is available here.
       </section>
 
       <section className="qa-controls" aria-label="Registration QA display controls">
@@ -735,13 +736,13 @@ export const RegistrationQaWorkspace = ({
           <section className="qa-native-grid">
             <QaCanvas
               orientation={fixedOrientation}
-              title="Fixed earlier · native-intensity"
+              title="Fixed earlier reference · derived NRRD · not native DICOM"
               slice={fixedSlice}
             />
             <QaCanvas
               orientation={movingOrientation}
-              title="Moving later · native-intensity · approximate stack fraction"
-              slice={movingNativeSlice}
+              title="Moving later reference · derived NRRD · approximate stack fraction"
+              slice={movingReferenceSlice}
             />
             <QaCanvas
               derived
@@ -1089,6 +1090,14 @@ export const RegistrationQaWorkspace = ({
             backed up or cloud-synced; I will move and protect it appropriately.
           </span>
         </label>
+
+        <p className="qa-review-file-note">
+          <strong>Required before a later reviewed launch:</strong> browser downloads are not
+          accepted directly because the browser cannot guarantee owner-only file permissions.
+          Run <code>scanview-agent import-registration-review</code> with this live bundle and
+          downloaded record; it validates the exact source anchor and creates a non-overwriting
+          owner-only copy.
+        </p>
 
         <div className="qa-submit-row">
           <button

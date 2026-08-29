@@ -6,6 +6,7 @@ import math
 import os
 import re
 import secrets
+import stat
 import tempfile
 import unicodedata
 from copy import deepcopy
@@ -229,10 +230,11 @@ def _volume_geometry(path: Path) -> dict[str, Any]:
 
 
 def _validated_bundle(directory: Path) -> tuple[Path, dict[str, Any]]:
-    directory = directory.expanduser().resolve(strict=True)
-    summary = registration_bundle_summary(directory)
+    expanded = directory.expanduser()
+    summary = registration_bundle_summary(expanded)
     if not summary["valid"]:
         raise ValueError("registration QA requires one valid pending-QA registration bundle")
+    directory = expanded.resolve(strict=True)
     manifest = _strict_json_loads((directory / "registration.json").read_bytes())
     if not isinstance(manifest, dict):
         raise ValueError("registration QA bundle manifest is invalid")
@@ -282,8 +284,8 @@ def registration_qa_context(directory: Path) -> dict[str, Any]:
             },
         },
         "volumes": {
-            "fixed": volume("fixed_earlier_native", "fixed.nrrd", resampled=False),
-            "moving": volume("moving_later_native", "moving.nrrd", resampled=False),
+            "fixed": volume("fixed_earlier_reference", "fixed.nrrd", resampled=False),
+            "moving": volume("moving_later_reference", "moving.nrrd", resampled=False),
             "registered_moving": volume(
                 "moving_later_registered_to_fixed",
                 "registered-moving.nrrd",
@@ -305,7 +307,7 @@ def registration_qa_context(directory: Path) -> dict[str, Any]:
         "allowed_decisions": sorted(DECISIONS),
         "display_policy": {
             "qa_preview_allowed_while_pending": [
-                "native_side_by_side",
+                "reference_volume_side_by_side",
                 "registered_side_by_side",
                 "opacity_overlay",
                 "swipe_or_flicker",
@@ -1336,28 +1338,7 @@ def registration_review_bytes(
     return json.dumps(record, indent=2, allow_nan=False).encode() + b"\n"
 
 
-def write_registration_review(
-    registration_directory: Path,
-    request_path: Path,
-    output: Path,
-    *,
-    previous_review: Path | None = None,
-    created_at: str | None = None,
-) -> dict[str, Any]:
-    previous_hash = None
-    if previous_review is not None:
-        previous_summary = registration_review_summary(
-            previous_review, registration_directory=registration_directory
-        )
-        if not previous_summary["valid"]:
-            raise ValueError("previous registration QA record is invalid or for another bundle")
-        previous_hash = hash_file(previous_review)
-    payload = registration_review_bytes(
-        registration_directory,
-        request_path.read_bytes(),
-        created_at=created_at,
-        previous_review_sha256=previous_hash,
-    )
+def _write_new_owner_only(output: Path, payload: bytes) -> None:
     requested_output = output.expanduser()
     requested_output.parent.mkdir(parents=True, exist_ok=True)
     parent = requested_output.parent.resolve(strict=True)
@@ -1382,6 +1363,94 @@ def write_registration_review(
             os.close(parent_descriptor)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _read_bounded_regular_file(path: Path, maximum_bytes: int) -> bytes:
+    """Read one stable regular file without following a final-component symlink."""
+
+    requested = Path(os.path.abspath(os.fspath(path.expanduser())))
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            requested,
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+        )
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or not 1 <= before.st_size <= maximum_bytes:
+            raise ValueError("registration QA record is empty, too large, or not a regular file")
+        payload = bytearray()
+        while chunk := os.read(descriptor, min(1024 * 1024, maximum_bytes + 1)):
+            payload.extend(chunk)
+            if len(payload) > maximum_bytes:
+                raise ValueError("registration QA record is too large")
+        after = os.fstat(descriptor)
+        before_identity = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        )
+        after_identity = (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        )
+        if before_identity != after_identity or len(payload) != before.st_size:
+            raise ValueError("registration QA record changed while it was read")
+        return bytes(payload)
+    except OSError as error:
+        raise ValueError("registration QA record cannot be read safely") from error
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def import_registration_review(
+    registration_directory: Path,
+    downloaded_review: Path,
+    output: Path,
+) -> dict[str, Any]:
+    """Validate and copy a browser-downloaded record into one owner-only archive."""
+
+    payload = _read_bounded_regular_file(downloaded_review, MAX_RECORD_BYTES)
+    summary = registration_review_summary(
+        payload,
+        registration_directory=registration_directory,
+    )
+    if not summary["valid"] or not summary["source_integrity"]:
+        raise ValueError("registration QA record is invalid or for another live bundle")
+    _write_new_owner_only(output, payload)
+    return summary
+
+
+def write_registration_review(
+    registration_directory: Path,
+    request_path: Path,
+    output: Path,
+    *,
+    previous_review: Path | None = None,
+    created_at: str | None = None,
+) -> dict[str, Any]:
+    previous_hash = None
+    if previous_review is not None:
+        previous_summary = registration_review_summary(
+            previous_review, registration_directory=registration_directory
+        )
+        if not previous_summary["valid"]:
+            raise ValueError("previous registration QA record is invalid or for another bundle")
+        previous_hash = hash_file(previous_review)
+    payload = registration_review_bytes(
+        registration_directory,
+        request_path.read_bytes(),
+        created_at=created_at,
+        previous_review_sha256=previous_hash,
+    )
+    _write_new_owner_only(output, payload)
     record = _strict_json_loads(payload)
     assert isinstance(record, dict)
     return record

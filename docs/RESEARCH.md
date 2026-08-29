@@ -48,9 +48,10 @@ again after execution. This protects against accidental substitution relative to
 independently recorded digest, but it does not authenticate the distributor, macOS
 code signature, Linux package, SlicerApp-real process, BRAINSFit binary, or dependent
 libraries. End-to-end official-release signature/checksum verification remains a
-required packaging milestone. ScanView's restricted child environment requests no
-external API; without an operating-system network sandbox it does not claim to have
-observed every action of a third-party executable.
+required packaging milestone. ScanView now requires OS-enforced network isolation for
+the child: a macOS deny-all-network sandbox or, on supported 64-bit Linux, `bwrap`
+private namespaces plus a seccomp filter denying socket creation, socket pairs, and
+io_uring. It refuses weaker `unshare`-only execution and has no unsandboxed fallback.
 
 The runner uses Slicer's official temporary local [DICOM database/import
 helpers](https://slicer.readthedocs.io/en/latest/developer_guide/script_repository/dicom.html)

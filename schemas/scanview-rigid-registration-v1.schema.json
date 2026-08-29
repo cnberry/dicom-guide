@@ -122,7 +122,8 @@
         "executable_sha256",
         "runner_sha256",
         "engine_identity",
-        "external_api_requested_by_scanview"
+        "external_api_requested_by_scanview",
+        "network_isolation"
       ],
       "properties": {
         "engine": { "const": "3D Slicer" },
@@ -143,7 +144,30 @@
         "engine_identity": {
           "const": "self_reported_version_revision_expected_binary_hash_matched_distributor_not_authenticated"
         },
-        "external_api_requested_by_scanview": { "const": false }
+        "external_api_requested_by_scanview": { "const": false },
+        "network_isolation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "mechanism",
+            "external_network",
+            "host_network",
+            "unsandboxed_fallback"
+          ],
+          "properties": {
+            "status": { "const": "os_enforced" },
+            "mechanism": {
+              "enum": [
+                "macos_sandbox_exec_deny_all_network",
+                "linux_bwrap_network_namespace_seccomp_no_sockets"
+              ]
+            },
+            "external_network": { "const": "denied" },
+            "host_network": { "const": "isolated" },
+            "unsandboxed_fallback": { "const": false }
+          }
+        }
       }
     },
     "files": {

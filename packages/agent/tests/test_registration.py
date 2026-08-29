@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
+import socket
 import stat
+import sys
 from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+import scanview_agent.registration as registration_module
 from scanview_agent.registration import (
     BUNDLE_FILES,
     ENGINE_OUTPUTS,
@@ -371,6 +375,15 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
     assert not any(manifest["qa"]["display_unlocks"].values())
     assert manifest["algorithm"]["parameters"] == REGISTRATION_PARAMETERS
     assert manifest["algorithm"]["external_api_requested_by_scanview"] is False
+    network_isolation = manifest["algorithm"]["network_isolation"]
+    assert network_isolation["status"] == "os_enforced"
+    assert network_isolation["mechanism"] in {
+        "macos_sandbox_exec_deny_all_network",
+        "linux_bwrap_network_namespace_seccomp_no_sockets",
+    }
+    assert network_isolation["external_network"] == "denied"
+    assert network_isolation["host_network"] == "isolated"
+    assert network_isolation["unsandboxed_fallback"] is False
     assert manifest["pairing"]["patient_identity_status"] == "opaque_context_match_unverified"
     assert manifest["pairing"]["clinical_baseline_status"] == "not_assessed"
     assert manifest["computed_results"] == []
@@ -514,6 +527,133 @@ def test_registration_failure_or_source_change_creates_no_partial_output(
     assert doctor["local_only"] is True
     assert doctor["external_api_required"] is False
     assert doctor["executable_found"] is True
+    assert doctor["network_isolation"]["required"] is True
+    assert doctor["network_isolation"]["available"] is True
+    assert doctor["network_isolation"]["mechanism"] in {
+        "macos_sandbox_exec_deny_all_network",
+        "linux_bwrap_network_namespace_seccomp_no_sockets",
+    }
+    assert doctor["network_isolation"]["external_network_denied"] is True
+    assert doctor["network_isolation"]["host_network_isolated"] is True
+    assert doctor["network_isolation"]["unsandboxed_fallback"] is False
+    assert doctor["ready_for_execution_check"] is True
+
+
+def test_engine_network_sandbox_cannot_reach_host_loopback(tmp_path: Path) -> None:
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    marker = tmp_path / "network-denied"
+    probe = tmp_path / "network-probe.py"
+    probe.write_text(
+        "import os, socket, sys\n"
+        "from pathlib import Path\n"
+        "connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+        "connection.settimeout(2)\n"
+        "try:\n"
+        "    connection.connect(('127.0.0.1', int(os.environ['PROBE_PORT'])))\n"
+        "except OSError:\n"
+        "    Path(os.environ['PROBE_MARKER']).write_text('network isolated')\n"
+        "    raise SystemExit(0)\n"
+        "finally:\n"
+        "    connection.close()\n"
+        "raise SystemExit(9)\n"
+    )
+    try:
+        _run_local_engine(
+            [sys.executable, str(probe)],
+            temporary=tmp_path,
+            environment={
+                "PROBE_PORT": str(listener.getsockname()[1]),
+                "PROBE_MARKER": str(marker),
+            },
+            timeout_seconds=10,
+        )
+    finally:
+        listener.close()
+    assert marker.read_text() == "network isolated"
+
+
+def test_engine_refuses_unsandboxed_execution(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(registration_module.platform, "system", lambda: "Unsupported")
+    with pytest.raises(ValueError, match="OS-enforced network isolation"):
+        _run_local_engine(
+            [sys.executable, "-c", "raise SystemExit(0)"],
+            temporary=tmp_path,
+            environment={},
+            timeout_seconds=10,
+        )
+    doctor = registration_doctor()
+    assert doctor["network_isolation"]["available"] is False
+    assert doctor["network_isolation"]["unsandboxed_fallback"] is False
+    assert doctor["ready_for_execution_check"] is False
+
+
+def test_linux_engine_sandbox_command_is_network_isolated(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(registration_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(registration_module.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(
+        registration_module.shutil,
+        "which",
+        lambda name: "/usr/bin/bwrap" if name == "bwrap" else None,
+    )
+    command, mechanism = registration_module._sandboxed_engine_command(
+        ["/opt/Slicer/Slicer", "--no-main-window"],
+        tmp_path,
+        seccomp_descriptor=9,
+    )
+    assert mechanism == "linux_bwrap_network_namespace_seccomp_no_sockets"
+    assert {
+        "--new-session",
+        "--unshare-all",
+        "--seccomp",
+        "--ro-bind",
+        "--bind",
+        "--chdir",
+        "--dev",
+    }.issubset(command)
+    assert command[command.index("--seccomp") + 1] == "9"
+    assert command[-2:] == ["/opt/Slicer/Slicer", "--no-main-window"]
+
+    payload = registration_module._linux_no_socket_seccomp_filter()
+    assert len(payload) == 13 * 8
+    instructions = [
+        registration_module.struct.unpack("=HBBI", payload[index : index + 8])
+        for index in range(0, len(payload), 8)
+    ]
+    assert instructions[6][3] == 41  # socket
+    assert instructions[7][3] == 53  # socketpair
+    assert [instruction[3] for instruction in instructions[8:11]] == [425, 426, 427]
+    assert instructions[-1][3] == 0x00050000 | errno.EPERM
+    descriptor = registration_module._open_linux_seccomp_filter(tmp_path)
+    try:
+        metadata = os.fstat(descriptor)
+        assert stat.S_IMODE(metadata.st_mode) == 0o600
+        assert metadata.st_nlink == 0
+        assert os.read(descriptor, len(payload)) == payload
+    finally:
+        os.close(descriptor)
+    assert not list(tmp_path.glob("network-deny.*.seccomp.private"))
+
+
+def test_linux_engine_refuses_unshare_without_bwrap(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(registration_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(registration_module.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(
+        registration_module.shutil,
+        "which",
+        lambda name: "/usr/bin/unshare" if name == "unshare" else None,
+    )
+    status = registration_module._network_isolation_status()
+    assert status["available"] is False
+    with pytest.raises(ValueError, match="OS-enforced network isolation"):
+        registration_module._sandboxed_engine_command(
+            ["/opt/Slicer/Slicer"],
+            tmp_path,
+        )
 
 
 def test_engine_timeout_terminates_the_private_process_group(tmp_path: Path) -> None:

@@ -7,6 +7,7 @@ import mimetypes
 import os
 import secrets
 import stat
+import tempfile
 import threading
 import time
 import webbrowser
@@ -25,6 +26,10 @@ from .comparison_reviews import (
     comparison_review_summary,
 )
 from .navigation import NAVIGATION_FRAGMENT_PREFIX
+from .registration_display import (
+    reviewed_registration_display_context,
+    reviewed_registration_display_summary,
+)
 from .registration_reviews import (
     MAX_REQUEST_BYTES as MAX_REGISTRATION_REVIEW_REQUEST_BYTES,
     registration_qa_context,
@@ -47,11 +52,117 @@ from .viewer_state import (
 )
 
 
+REVIEWED_REGISTRATION_BUNDLE_FILES = (
+    "engine-report.json",
+    "fixed.nrrd",
+    "moving-to-fixed.tfm",
+    "moving.nrrd",
+    "registered-moving.nrrd",
+    "registration.json",
+)
+
+
 def _distinct_token(excluded: set[str]) -> str:
     while True:
         candidate = secrets.token_urlsafe(24)
         if candidate not in excluded:
             return candidate
+
+
+def _absolute_without_resolving_links(path: Path) -> Path:
+    return Path(os.path.abspath(os.fspath(path.expanduser())))
+
+
+def _catalog_instances(catalog: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    instances: dict[str, dict[str, Any]] = {}
+    for study in catalog.get("studies", []):
+        if not isinstance(study, dict):
+            continue
+        for series in study.get("series", []):
+            if not isinstance(series, dict):
+                continue
+            for instance in series.get("instances", []):
+                if isinstance(instance, dict) and isinstance(instance.get("id"), str):
+                    instances[instance["id"]] = instance
+    return instances
+
+
+def _guard_instance_sources(
+    catalog: dict[str, Any], registry: dict[str, Path]
+) -> tuple[dict[str, Path], dict[str, dict[str, Any]]]:
+    catalog_instances = _catalog_instances(catalog)
+    guarded_registry: dict[str, Path] = {}
+    guards: dict[str, dict[str, Any]] = {}
+    for instance_id, requested_path in registry.items():
+        path = _absolute_without_resolving_links(requested_path)
+        descriptor = os.open(
+            path,
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            metadata = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("indexed DICOM source must be a regular file")
+        catalog_instance = catalog_instances.get(instance_id, {})
+        expected_bytes = catalog_instance.get("bytes")
+        if expected_bytes is not None and expected_bytes != metadata.st_size:
+            raise ValueError("indexed DICOM source changed after cataloging")
+        expected_sha256 = catalog_instance.get("sha256")
+        if expected_sha256 is not None and (
+            not isinstance(expected_sha256, str)
+            or len(expected_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in expected_sha256)
+        ):
+            raise ValueError("indexed DICOM source has an invalid catalog hash")
+        guarded_registry[instance_id] = path
+        guards[instance_id] = {
+            "device": metadata.st_dev,
+            "inode": metadata.st_ino,
+            "bytes": metadata.st_size,
+            "mtime_ns": metadata.st_mtime_ns,
+            "ctime_ns": metadata.st_ctime_ns,
+            "sha256": expected_sha256,
+        }
+    return guarded_registry, guards
+
+
+def _path_metadata_guard(path: Path) -> dict[str, Any]:
+    metadata = path.lstat()
+    return {
+        "device": metadata.st_dev,
+        "inode": metadata.st_ino,
+        "mode": metadata.st_mode,
+        "uid": metadata.st_uid,
+        "links": metadata.st_nlink,
+        "bytes": metadata.st_size,
+        "mtime_ns": metadata.st_mtime_ns,
+        "ctime_ns": metadata.st_ctime_ns,
+    }
+
+
+def _reviewed_registration_input_guards(
+    bundle: Path,
+    review: Path,
+) -> list[tuple[Path, dict[str, Any]]]:
+    paths = [
+        bundle,
+        review,
+        *(bundle / name for name in REVIEWED_REGISTRATION_BUNDLE_FILES),
+    ]
+    return [(path, _path_metadata_guard(path)) for path in paths]
+
+
+def _metadata_guards_unchanged(
+    guards: list[tuple[Path, dict[str, Any]]],
+) -> bool:
+    try:
+        return all(_path_metadata_guard(path) == expected for path, expected in guards)
+    except OSError:
+        return False
 
 
 def _registration_agent_summary(
@@ -88,6 +199,7 @@ def _registration_agent_summary(
 class ScanViewServer(ThreadingHTTPServer):
     catalog: dict[str, Any]
     registry: dict[str, Path]
+    instance_guards: dict[str, dict[str, Any]]
     token: str
     browser_bootstrap_token: str
     browser_session_token: str
@@ -99,11 +211,21 @@ class ScanViewServer(ThreadingHTTPServer):
     viewer_state_revoked_publishers: set[str]
     registration_bundle: Path | None
     registration_context: dict[str, Any] | None
+    registration_review: Path | None
+    reviewed_registration_context: dict[str, Any] | None
+    reviewed_registration_guards: list[tuple[Path, dict[str, Any]]]
     registration_agent_summary: dict[str, Any]
     registration_review_lock: threading.Lock
     registration_review_request_sha256: str | None
     registration_review_payload: bytes | None
     registration_review_filename: str | None
+
+    def reviewed_registration_inputs_unchanged(self) -> bool:
+        if self.registration_review is None:
+            return True
+        if self.reviewed_registration_context is None or not self.reviewed_registration_guards:
+            return False
+        return _metadata_guards_unchanged(self.reviewed_registration_guards)
 
     def publish_viewer_state(self, state: dict[str, Any]) -> bool:
         with self.viewer_state_lock:
@@ -301,7 +423,20 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(suggest_pairs(self.server.catalog))
             return
         if path == "/v1/registration-qa":
-            self._send_json(self.server.registration_agent_summary)
+            summary = self.server.registration_agent_summary
+            if (
+                self.server.reviewed_registration_context is not None
+                and not self.server.reviewed_registration_inputs_unchanged()
+            ):
+                summary = {
+                    **summary,
+                    "available": False,
+                    "display_status": "invalid",
+                    "display_authorized": False,
+                    "allowed_display_modes": [],
+                    "errors": ["reviewed registration inputs changed after startup"],
+                }
+            self._send_json(summary)
             return
         if path == "/v1/registration-qa/preview":
             if not self._browser_authorized():
@@ -318,25 +453,36 @@ class Handler(BaseHTTPRequestHandler):
                 path.removeprefix(registration_file_prefix)
             )
             return
+        if path == "/v1/reviewed-registration/display":
+            if not self._browser_authorized():
+                self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
+                return
+            if self.server.reviewed_registration_context is None:
+                if self.server.registration_review is not None:
+                    self._send_json(
+                        {"error": "reviewed_registration_locked"},
+                        HTTPStatus.LOCKED,
+                    )
+                else:
+                    self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+                return
+            if not self.server.reviewed_registration_inputs_unchanged():
+                self._send_json(
+                    {"error": "reviewed_registration_changed"},
+                    HTTPStatus.LOCKED,
+                )
+                return
+            self._send_json(self.server.reviewed_registration_context)
+            return
+        reviewed_registration_file_prefix = "/v1/reviewed-registration/files/"
+        if path.startswith(reviewed_registration_file_prefix):
+            self._send_reviewed_registration_file(
+                path.removeprefix(reviewed_registration_file_prefix)
+            )
+            return
         prefix = "/v1/instances/"
         if path.startswith(prefix):
-            instance_id = path[len(prefix) :]
-            source = self.server.registry.get(instance_id)
-            if not source:
-                self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
-                return
-            try:
-                size = source.stat().st_size
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "application/dicom")
-                self.send_header("Content-Length", str(size))
-                self._security_headers()
-                self.end_headers()
-                with source.open("rb") as stream:
-                    while chunk := stream.read(1024 * 1024):
-                        self.wfile.write(chunk)
-            except (BrokenPipeError, OSError):
-                return
+            self._send_instance_file(path[len(prefix) :])
             return
         self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
 
@@ -429,11 +575,111 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def _send_registration_qa_file(self, filename: str) -> None:
-        allowed = {"fixed.nrrd", "moving.nrrd", "registered-moving.nrrd"}
+        self._send_registration_file(
+            filename,
+            context=self.server.registration_context,
+            allowed={"fixed.nrrd", "moving.nrrd", "registered-moving.nrrd"},
+        )
+
+    def _send_instance_file(self, instance_id: str) -> None:
+        source = self.server.registry.get(instance_id)
+        guard = self.server.instance_guards.get(instance_id)
+        if source is None or guard is None:
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        descriptor = -1
+        headers_sent = False
+        try:
+            descriptor = os.open(
+                source,
+                os.O_RDONLY
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+            )
+            metadata = os.fstat(descriptor)
+            observed = {
+                "device": metadata.st_dev,
+                "inode": metadata.st_ino,
+                "bytes": metadata.st_size,
+                "mtime_ns": metadata.st_mtime_ns,
+                "ctime_ns": metadata.st_ctime_ns,
+            }
+            if not stat.S_ISREG(metadata.st_mode) or any(
+                observed[field] != guard[field] for field in observed
+            ):
+                raise ValueError("indexed DICOM source changed")
+
+            digest = hashlib.sha256()
+            copied = 0
+            with tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b") as snapshot:
+                while chunk := os.read(descriptor, 1024 * 1024):
+                    copied += len(chunk)
+                    if copied > guard["bytes"]:
+                        raise ValueError("indexed DICOM source grew while it was read")
+                    digest.update(chunk)
+                    snapshot.write(chunk)
+                final_metadata = os.fstat(descriptor)
+                final_observed = {
+                    "device": final_metadata.st_dev,
+                    "inode": final_metadata.st_ino,
+                    "bytes": final_metadata.st_size,
+                    "mtime_ns": final_metadata.st_mtime_ns,
+                    "ctime_ns": final_metadata.st_ctime_ns,
+                }
+                if copied != guard["bytes"] or any(
+                    final_observed[field] != guard[field] for field in final_observed
+                ):
+                    raise ValueError("indexed DICOM source changed while it was read")
+                observed_sha256 = digest.hexdigest()
+                if guard["sha256"] is not None and observed_sha256 != guard["sha256"]:
+                    raise ValueError("indexed DICOM source hash changed")
+                snapshot.seek(0)
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/dicom")
+                self.send_header("Content-Length", str(copied))
+                self.send_header("X-Content-SHA256", observed_sha256)
+                self._security_headers()
+                self.end_headers()
+                headers_sent = True
+                while chunk := snapshot.read(1024 * 1024):
+                    self.wfile.write(chunk)
+        except (ValueError, OSError, BrokenPipeError):
+            if not headers_sent:
+                self._send_json(
+                    {"error": "dicom_source_changed"},
+                    HTTPStatus.CONFLICT,
+                )
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+
+    def _send_reviewed_registration_file(self, filename: str) -> None:
+        if (
+            self.server.reviewed_registration_context is not None
+            and not self.server.reviewed_registration_inputs_unchanged()
+        ):
+            self._send_json(
+                {"error": "reviewed_registration_changed"},
+                HTTPStatus.CONFLICT,
+            )
+            return
+        self._send_registration_file(
+            filename,
+            context=self.server.reviewed_registration_context,
+            allowed={"fixed.nrrd", "registered-moving.nrrd"},
+        )
+
+    def _send_registration_file(
+        self,
+        filename: str,
+        *,
+        context: dict[str, Any] | None,
+        allowed: set[str],
+    ) -> None:
         if (
             filename not in allowed
             or self.server.registration_bundle is None
-            or self.server.registration_context is None
+            or context is None
         ):
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
             return
@@ -445,7 +691,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             volume = next(
                 item
-                for item in self.server.registration_context["volumes"].values()
+                for item in context["volumes"].values()
                 if item["filename"] == filename
             )
             source = self.server.registration_bundle / filename
@@ -474,7 +720,7 @@ class Handler(BaseHTTPRequestHandler):
             headers_sent = True
             while chunk := os.read(descriptor, 1024 * 1024):
                 self.wfile.write(chunk)
-        except (StopIteration, ValueError):
+        except (KeyError, StopIteration, TypeError, ValueError):
             if not headers_sent:
                 self._send_json(
                     {"error": "registration_bundle_invalid"},
@@ -497,7 +743,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin():
             self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
             return
-        if self.server.registration_bundle is None:
+        if (
+            self.server.registration_bundle is None
+            or self.server.registration_context is None
+        ):
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
             return
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
@@ -647,20 +896,79 @@ def create_server(
     token: str | None = None,
     ui_dist: Path | None = None,
     registration_bundle: Path | None = None,
+    registration_review: Path | None = None,
 ) -> ScanViewServer:
     if host not in {"127.0.0.1", "::1", "localhost"}:
         raise ValueError("ScanView only supports loopback binding in this release")
+    guarded_registry, instance_guards = _guard_instance_sources(catalog, registry)
     resolved_ui = ui_dist.expanduser().resolve(strict=True) if ui_dist else None
     if resolved_ui is not None and not (resolved_ui / "index.html").is_file():
         raise ValueError(f"ScanView UI bundle is missing index.html: {resolved_ui}")
+    if registration_review is not None and registration_bundle is None:
+        raise ValueError("--registration-review requires --registration-bundle")
     resolved_registration = None
+    resolved_registration_review = None
     cached_registration_context = None
+    cached_reviewed_registration_context = None
+    reviewed_registration_guards: list[tuple[Path, dict[str, Any]]] = []
+    cached_registration_summary = _registration_agent_summary(None)
     if registration_bundle is not None:
-        resolved_registration = registration_bundle.expanduser().resolve(strict=True)
-        cached_registration_context = registration_qa_context(resolved_registration)
+        if registration_review is None:
+            resolved_registration = _absolute_without_resolving_links(
+                registration_bundle
+            )
+            cached_registration_context = registration_qa_context(resolved_registration)
+            cached_registration_summary = _registration_agent_summary(
+                cached_registration_context
+            )
+        else:
+            # Reviewed-display mode is deliberately separate from pending QA. Missing,
+            # rejected, malformed, or tampered review inputs leave the ordinary DICOM
+            # server running but never republish the QA preview or registration pixels.
+            resolved_registration = _absolute_without_resolving_links(
+                registration_bundle
+            )
+            resolved_registration_review = _absolute_without_resolving_links(
+                registration_review
+            )
+            cached_registration_summary = reviewed_registration_display_summary(
+                resolved_registration,
+                resolved_registration_review,
+            )
+            if cached_registration_summary.get("display_authorized") is True:
+                try:
+                    candidate_guards = _reviewed_registration_input_guards(
+                        resolved_registration,
+                        resolved_registration_review,
+                    )
+                    cached_reviewed_registration_context = (
+                        reviewed_registration_display_context(
+                            resolved_registration,
+                            resolved_registration_review,
+                        )
+                    )
+                    if not _metadata_guards_unchanged(candidate_guards):
+                        raise ValueError(
+                            "reviewed registration evidence changed during validation"
+                        )
+                    reviewed_registration_guards = candidate_guards
+                except (KeyError, OSError, TypeError, ValueError):
+                    cached_reviewed_registration_context = None
+                    reviewed_registration_guards = []
+                    cached_registration_summary = {
+                        **cached_registration_summary,
+                        "available": False,
+                        "display_status": "invalid",
+                        "display_authorized": False,
+                        "allowed_display_modes": [],
+                        "errors": [
+                            "Reviewed registration display validation failed."
+                        ],
+                    }
     server = ScanViewServer((host, port), Handler)
     server.catalog = catalog
-    server.registry = registry
+    server.registry = guarded_registry
+    server.instance_guards = instance_guards
     server.token = token or secrets.token_urlsafe(24)
     server.browser_bootstrap_token = _distinct_token({server.token})
     server.browser_session_token = _distinct_token(
@@ -674,9 +982,10 @@ def create_server(
     server.viewer_state_revoked_publishers = set()
     server.registration_bundle = resolved_registration
     server.registration_context = cached_registration_context
-    server.registration_agent_summary = _registration_agent_summary(
-        cached_registration_context
-    )
+    server.registration_review = resolved_registration_review
+    server.reviewed_registration_context = cached_reviewed_registration_context
+    server.reviewed_registration_guards = reviewed_registration_guards
+    server.registration_agent_summary = cached_registration_summary
     server.registration_review_lock = threading.Lock()
     server.registration_review_request_sha256 = None
     server.registration_review_payload = None
@@ -695,6 +1004,7 @@ def serve(
     open_browser: bool = False,
     navigation_fragment: str | None = None,
     registration_bundle: Path | None = None,
+    registration_review: Path | None = None,
 ) -> None:
     if navigation_fragment is not None and (
         not navigation_fragment.startswith(NAVIGATION_FRAGMENT_PREFIX)
@@ -709,6 +1019,7 @@ def serve(
         token=token,
         ui_dist=ui_dist,
         registration_bundle=registration_bundle,
+        registration_review=registration_review,
     )
     url_host = f"[{host}]" if ":" in host else host
     base_url = f"http://{url_host}:{server.server_port}"
@@ -722,10 +1033,18 @@ def serve(
         print(f"ScanView local workspace: {session_url}")
         if open_browser:
             webbrowser.open(session_url)
+    if server.registration_review is not None:
+        registration_notice = (
+            "Reviewed-registration display is browser-session-only and bound to "
+            "the startup-validated review."
+            if server.reviewed_registration_context is not None
+            else "Reviewed-registration display is locked; ordinary DICOM remains available."
+        )
+    else:
+        registration_notice = "Registration QA preview is human-session-only."
     print(
         "Source mutation and deletion are disabled; visit/review derivatives and opt-in "
-        "viewer state remain memory-only. Registration QA preview is human-session-only. "
-        "Press Ctrl-C to stop."
+        f"viewer state remain memory-only. {registration_notice} Press Ctrl-C to stop."
     )
     try:
         server.serve_forever()

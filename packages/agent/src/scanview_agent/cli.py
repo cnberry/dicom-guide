@@ -27,6 +27,7 @@ from .registration import (
     run_rigid_registration,
 )
 from .registration_reviews import (
+    import_registration_review,
     registration_review_summary,
     write_registration_review,
 )
@@ -80,6 +81,7 @@ def parser() -> argparse.ArgumentParser:
     api.add_argument("--token")
     api.add_argument("--no-hashes", action="store_true")
     api.add_argument("--registration-bundle", type=Path)
+    api.add_argument("--registration-review", type=Path)
 
     launch = commands.add_parser(
         "launch",
@@ -92,6 +94,7 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--no-open", action="store_true")
     launch.add_argument("--ui-dist", type=Path)
     launch.add_argument("--registration-bundle", type=Path)
+    launch.add_argument("--registration-review", type=Path)
     launch.add_argument("--baseline-series", help="Exact opaque baseline series ID")
     launch.add_argument("--baseline-instance", help="Exact opaque baseline instance ID")
     launch.add_argument("--followup-series", help="Optional exact opaque follow-up series ID")
@@ -297,6 +300,14 @@ def parser() -> argparse.ArgumentParser:
     record_registration_review.add_argument("--output", "-o", type=Path, required=True)
     record_registration_review.add_argument("--previous-review", type=Path)
 
+    import_review = commands.add_parser(
+        "import-registration-review",
+        help="Validate and seal a downloaded QA record as one owner-only local file",
+    )
+    import_review.add_argument("directory", type=Path)
+    import_review.add_argument("downloaded_review", type=Path)
+    import_review.add_argument("--output", "-o", type=Path, required=True)
+
     validate_registration_review = commands.add_parser(
         "validate-registration-review",
         help="Validate a registration QA record and optionally its live source bundle",
@@ -309,6 +320,12 @@ def parser() -> argparse.ArgumentParser:
 def main() -> None:
     argument_parser = parser()
     args = argument_parser.parse_args()
+    if (
+        args.command in {"serve", "launch"}
+        and args.registration_review is not None
+        and args.registration_bundle is None
+    ):
+        argument_parser.error("--registration-review requires --registration-bundle")
     if args.command == "manifest":
         catalog, _ = build_catalog(
             args.root,
@@ -328,6 +345,7 @@ def main() -> None:
             port=args.port,
             token=args.token,
             registration_bundle=args.registration_bundle,
+            registration_review=args.registration_review,
         )
     elif args.command == "launch":
         try:
@@ -373,6 +391,7 @@ def main() -> None:
             open_browser=not args.no_open,
             navigation_fragment=navigation_fragment,
             registration_bundle=args.registration_bundle,
+            registration_review=args.registration_review,
         )
     elif args.command == "viewer-link":
         try:
@@ -563,6 +582,16 @@ def main() -> None:
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)
+    elif args.command == "import-registration-review":
+        try:
+            summary = import_registration_review(
+                args.directory,
+                args.downloaded_review,
+                args.output,
+            )
+        except (OSError, ValueError) as error:
+            argument_parser.error(str(error))
+        _write_json(summary, None)
     elif args.command == "validate-registration-review":
         summary = registration_review_summary(
             args.record,

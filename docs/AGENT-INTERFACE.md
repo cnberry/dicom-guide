@@ -329,7 +329,12 @@ Before staging, a no-data process checks the self-reported version/revision and
 BRAINSFit availability. Those checks are provenance—not distributor or code-signature
 authentication. Neither ScanView command calls an external API. Slicer
 settings, `.slicerrc.py`, user-site Python packages, proxy/credential variables, and
-extension-server configuration are excluded from the private job environment.
+extension-server configuration are excluded from the private job environment. The
+engine process must also run with OS-enforced network isolation: macOS uses a
+deny-all-network sandbox; supported 64-bit Linux requires `bwrap` private namespaces
+plus seccomp denial of socket creation, socket pairs, and io_uring. A weaker
+`unshare`-only setup is refused. Missing isolation fails closed and there is no
+unsandboxed fallback.
 
 The v1 bundle contains exactly six owner-only files: fixed, moving, and
 registered-moving NRRDs; a moving-to-fixed text ITK transform in DICOM patient LPS;
@@ -344,8 +349,8 @@ and registered geometry to match, and rejects non-owner-only or linked files.
 Generation is not acceptance. The registration bundle remains
 `generated_pending_qa`/`unreviewed` forever; review never mutates it.
 `review-registration` mounts a visibly watermarked browser-capability human preview
-with native and registered views, three-plane traversal, four comparison modes,
-landmarks, and physical-point residual tools. A bearer token can read only
+with derived fixed/moving reference and registered views, three-plane traversal, four
+comparison modes, landmarks, and physical-point residual tools. A bearer token can read only
 `GET /v1/registration-qa`, a privacy-minimized status. Preview context, allowlisted
 NRRD bytes, and decision POST
 require the distinct HttpOnly browser session; the bearer agent interface cannot
@@ -366,8 +371,41 @@ response conclusions remain false. If quantitative QA is unavailable, only a
 non-accepting record can be created and it carries a permanent
 spatial-error-not-quantified label.
 Agents must validate the record with its live bundle before relying on display flags;
-standalone validation deliberately reports source integrity as false. The ordinary
-viewer does not yet consume an accepted record.
+standalone validation deliberately reports source integrity as false. Because a
+browser cannot guarantee Unix file modes, first validate and import the download into
+one owner-only, non-overwriting local copy:
+
+```bash
+scanview-agent import-registration-review '/safe/local/registration-job' \
+  ~/Downloads/scanview-registration-review.json \
+  --output '/safe/local/registration-review.json'
+```
+
+The ordinary viewer consumes an accepted record only when launched with that imported
+owner-only record and its exact live bundle:
+
+```bash
+scanview-agent launch '/safe/local/DICOM/root' \
+  --registration-bundle '/safe/local/registration-job' \
+  --registration-review '/safe/local/registration-review.json'
+```
+
+The server creates one strict `reviewed_registration_display_context` only after full
+bundle/review validation, then rechecks review, bundle-directory, and all six evidence-
+file identities and metadata before every reviewed response. The browser session can fetch exactly `fixed.nrrd` and
+`registered-moving.nrrd`; the bearer interface receives only a privacy-minimized
+authorization summary. The context binds review/event/bundle/manifest/transform/file
+hashes, source roles/dates, identical geometry, and self-attested reviewer role/training
+without name or organization. Only opacity and swipe are implemented. Native moving,
+subtraction, masks, segmentation, resampled-image measurements, exports, and response
+conclusions are unavailable. The fixed NRRD is a derived reference representation and
+registered moving is resampled; neither replaces native DICOM. Shared coverage is
+reviewer-identified because no pixel-level transformed coverage mask exists.
+
+Rejected, tampered, linked, mismatched, missing, malformed, or non-owner-only review
+inputs keep registered context and pixels unavailable while ordinary DICOM remains
+usable. Supplying `--registration-review` also suppresses the pending-QA routes so the
+reviewed launch cannot silently reopen review authority.
 
 ## Source-read-only HTTP surface
 
@@ -393,6 +431,8 @@ GET /v1/comparison-candidates
 GET /v1/registration-qa
 GET /v1/registration-qa/preview
 GET /v1/registration-qa/files/{fixed.nrrd|moving.nrrd|registered-moving.nrrd}
+GET /v1/reviewed-registration/display
+GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd}
 GET /v1/instances/{opaque_id}
 POST /v1/viewer-state
 POST /v1/visit-packets
@@ -407,8 +447,11 @@ revocation, and a 30-second TTL apply. The other two POSTs are stateless derivat
 responses with exact ZIP allowlists. Visit input contains `baseline.zip` and
 `followup.zip`; review input adds only `comparison.json`. Both return
 `application/zip` with `no-store`. Non-health
-agent requests require `Authorization: Bearer <token>`. QA preview files and QA review
-submission reject bearer-only authorization and require the human browser cookie.
+agent requests require `Authorization: Bearer <token>`. QA preview and reviewed-display
+files plus QA review submission reject bearer-only authorization and require the human
+browser cookie. Reviewed routes exist only for one startup-validated accepted review;
+the server rechecks the review, bundle directory, and all six evidence-file identities
+and metadata before each reviewed context or file response.
 The browser receives a
 SameSite, HttpOnly session cookie after a one-time loopback redirect; the token is
 not exposed to viewer JavaScript or retained in the visible URL.
@@ -438,10 +481,10 @@ it in `missing_context`; do not synthesize a diagnosis or response category.
 
 ## Future write boundary
 
-Ordinary-viewer consumption of accepted registration QA, segmentation and volume-
-measurement types, and signed evidence packets remain future explicit derivative
-workflows. Each must preserve the implemented registration and QA source hashes,
-algorithm/tool version, parameters, outputs, limitations, and review state. Native
-DICOM files remain read-only. No ordinary registration-derived display will unlock
-until an accepted record is revalidated against its exact live bundle; that future
-integration may unlock exploratory overlay/swipe only.
+The ordinary viewer now consumes an accepted registration QA record only through the
+implemented live-bundle-validated opacity/swipe surface. Segmentation, volume-
+measurement types, transformed coverage masks, and signed evidence packets remain
+future explicit derivative workflows. Each must preserve the implemented registration
+and QA source hashes, algorithm/tool version, parameters, outputs, limitations, and
+review state. Native DICOM files remain read-only; subtraction, propagation,
+segmentation, resampled measurements, and response conclusions remain locked.

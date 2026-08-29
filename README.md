@@ -69,13 +69,17 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   Patient identity remains unverified. Outputs are source-hashed, published without
   replacement, and locked pending human QA; CT/MR registration and subtraction are
   prohibited.
-- Isolated browser-capability human registration QA with native and registered
+- Isolated browser-capability human registration QA with fixed/moving reference and registered
   side-by-side views,
   axial/coronal/sagittal traversal, opacity, swipe, checkerboard, edge comparison,
   qualitative landmarks, physical-point residual tools, and a separate hash-linked
   self-attested accept/reject JSON record. Acceptance requires quantitative 3-D
   residual evidence. The bearer agent interface cannot fetch QA pixels or approve it;
   this is a capability boundary, not proof a person is present.
+- Live-bundle-validated accepted reviews can open a separate exploratory comparison
+  surface with only opacity and swipe. Both inputs are visibly derived, registered
+  moving is resampled, shared coverage is reviewer-identified rather than mask-enforced,
+  and native DICOM remains authoritative.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
 - Versioned measurement, key-image, comparison, visit-packet, review-record,
@@ -107,8 +111,8 @@ pnpm build
 .venv/bin/python scripts/build_release.py --output-dir release
 ```
 
-The release builder stages the viewer, workers, and codecs inside the wheel. A
-regular agent-only wheel remains lightweight and can still run `manifest`,
+The release builder stages the viewer, workers, codecs, and all versioned JSON Schemas
+inside the wheel. A regular agent-only wheel remains lightweight and can still run `manifest`,
 `candidates`, and `serve`; pass `--ui-dist` to `launch` when using that form.
 
 ## Run the folder-picker viewer
@@ -171,6 +175,9 @@ python3 -m venv .venv
 .venv/bin/scanview-agent review-registration '/safe/local/registration-job'
 .venv/bin/scanview-agent record-registration-review '/safe/local/registration-job' \
   review-request.json --output registration-review.json
+.venv/bin/scanview-agent import-registration-review '/safe/local/registration-job' \
+  ~/Downloads/scanview-registration-review.json \
+  --output '/safe/local/registration-review.json'
 .venv/bin/scanview-agent validate-registration-review registration-review.json \
   --registration-bundle '/safe/local/registration-job'
 ```
@@ -184,6 +191,9 @@ The server exposes:
 - `GET /v1/registration-qa` (privacy-minimized agent status)
 - `GET /v1/registration-qa/preview` (separate browser session capability only)
 - `GET /v1/registration-qa/files/{allowlisted_nrrd}` (separate browser session capability only)
+- `GET /v1/reviewed-registration/display` (accepted-review browser session only)
+- `GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd}`
+  (accepted-review browser session only)
 - `GET /v1/instances/{opaque_id}`
 - `POST /v1/viewer-state` (same-origin browser publication/clear; memory only)
 - `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
@@ -239,6 +249,10 @@ transform in DICOM patient LPS coordinates, the engine report, and
 `registration.json`. Existing outputs and source files are never overwritten.
 Slicer settings, the user startup script, and user-site Python packages are disabled
 for the job so local customizations cannot silently change the version-gated workflow.
+The process also runs inside a required OS network boundary: macOS uses a deny-all-
+network sandbox, while supported 64-bit Linux requires `bwrap` private namespaces plus
+a seccomp filter that denies socket creation, socket pairs, and io_uring. The weaker
+`unshare`-only path is refused, and there is no unsandboxed fallback.
 
 The expected SHA-256 must match before any DICOM is staged and is checked again after
 execution. A no-data preflight first verifies the self-reported Slicer version,
@@ -246,8 +260,8 @@ revision, and BRAINSFit availability. `registration-doctor` can show the observe
 launcher hash, but ScanView does not authenticate the distributor or code signature;
 obtain and record the expected
 digest through a trusted software-installation process. ScanView strips proxy,
-credential, extension-server, and Python-path variables and requests no external API,
-but it cannot prove that an arbitrary third-party executable made no network access.
+credential, extension-server, and Python-path variables; the OS sandbox prevents the
+registration process from reaching external or host network services.
 
 Every generated bundle is `generated_pending_qa` and `unreviewed`; the registration
 directory itself is never mutated by review. Validate integrity locally with
@@ -262,17 +276,38 @@ For one valid pending bundle, open the isolated local human QA workspace:
 .venv/bin/scanview-agent review-registration '/safe/local/registration-job'
 ```
 
-It visibly watermarks the resampled preview, keeps both native volumes available,
+It visibly watermarks the resampled preview, keeps fixed and moving derived reference
+volumes available alongside registered moving,
 requires full traversal in all three patient-space planes and four comparison modes,
 and can download one separate self-attested JSON decision. A qualified self-attested
 acceptance can authorize only exploratory shared-coverage overlay and swipe; it
 requires quantitative 3-D landmark error within the fixed geometry-derived tolerance.
 Subtraction, mask propagation, segmentation, measurements on the resampled image, and
 response conclusions remain locked. Reviewer identity and training are not
-authenticated, event hashes are not digital signatures, and the ordinary
-viewer does not yet consume an accepted record. Use `validate-registration-review`
-with the live bundle to recheck the full six-file source anchor before trusting its
-display flags.
+authenticated, and event hashes are not digital signatures. A browser download is not
+accepted directly because its Unix permissions are outside browser control. Run
+`import-registration-review` with the live bundle to validate the exact record and
+create one non-overwriting owner-only copy, then use `validate-registration-review`
+with the live bundle to recheck the full six-file source anchor.
+
+After saving a valid accepted review, launch the ordinary local workspace with both
+exact inputs to enable the strictly limited exploratory comparison:
+
+```bash
+.venv/bin/scanview-agent launch '/safe/local/DICOM/root' \
+  --registration-bundle '/safe/local/registration-job' \
+  --registration-review '/safe/local/registration-review.json'
+```
+
+The server revalidates the saved owner-only review against the live six-file bundle at
+startup and checks the review, bundle directory, and all six evidence-file identities
+and metadata again before every context or pixel access. Rejected,
+tampered, linked, mismatched, or missing inputs leave ordinary DICOM available but all
+registered pixels locked. The accepted surface implements only opacity and swipe;
+subtraction, masks, segmentation, measurements, exports, and response conclusions are
+absent. Because the current bundle has no transformed coverage mask, the authorization
+applies only where both volumes visibly contain anatomy and is not enforced pixel by
+pixel.
 
 The currently copied CD contains one MRI exam and one CT
 exam, so it cannot produce a valid registration pair. A future same-modality

@@ -17,6 +17,10 @@ quality-system, and regulatory review.
 
 - ScanView has no source write/delete operation; copied originals are hashed. This is
   an application boundary, not an operating-system immutable-file flag.
+- Loopback DICOM streaming anchors each source to its startup device/inode/size/change
+  metadata, opens with no symlink following, copies and hashes one exact-size local
+  snapshot before sending headers, and refuses any changed source. The temporary
+  snapshot is owner-only, unlinked after rollover, and deleted at request completion.
 - The app makes no external runtime network request; unified-workspace traffic stays
   on the loopback origin.
 - DICOM processing never depends on an external API; the CSP blocks external origins.
@@ -62,8 +66,11 @@ quality-system, and regulatory review.
   mask propagation locked. User settings, `.slicerrc.py`, and user-site Python
   packages are disabled, and Slicer temporary/cache paths are redirected into the
   private job directory. Proxy, credential, extension-server, and Python-path
-  variables are not inherited. ScanView requests no external API but, without an OS
-  network sandbox, does not claim to observe every action of a third-party binary.
+  variables are not inherited. The engine is required to run inside OS-enforced
+  network isolation: macOS uses a deny-all-network sandbox; supported 64-bit Linux
+  requires `bwrap` private namespaces plus seccomp denial of socket creation, socket
+  pairs, and io_uring. A weaker `unshare`-only path is refused. Missing isolation
+  fails closed; there is no unsandboxed fallback.
   Engine diagnostics exist only inside the deleted private job directory because
   third-party errors could contain patient context; a timeout terminates the process
   group before cleanup.
@@ -81,8 +88,24 @@ quality-system, and regulatory review.
   a digital signature. Qualified self-attested acceptance is limited to exploratory
   shared-coverage overlay/swipe;
   subtraction, mask propagation, segmentation, resampled-image measurements, and
-  response conclusions remain locked. The ordinary viewer does not consume acceptance
-  yet.
+  response conclusions remain locked.
+- Browser downloads cannot establish owner-only Unix permissions. The local
+  `import-registration-review` command validates the downloaded bytes against the live
+  bundle and creates one non-overwriting `0600`, single-link copy; only that protected
+  copy is eligible for reviewed launch.
+- Reviewed registration display requires the exact saved owner-only, unlinked accepted
+  record and its live six-file bundle at server startup. It rechecks the review, bundle
+  directory, and all six evidence-file identities and metadata before each reviewed
+  response. The browser session can fetch
+  only fixed reference and registered-moving NRRDs; bearer agents receive only a
+  minimized authorization summary. Rejected, invalid, linked, missing, mismatched, or
+  tampered inputs leave registered pixels inaccessible while ordinary DICOM remains
+  usable. Supplying a review suppresses the pending-QA routes.
+- The reviewed surface provides opacity and swipe only. Both displayed NRRDs are
+  derived; registered moving is resampled; native DICOM remains authoritative. The
+  bundle has no pixel-level transformed coverage mask, so shared coverage is identified
+  by reviewer inspection and is not machine-enforced. Subtraction, masks, segmentation,
+  resampled measurements, exports, and response conclusions are absent.
 - A key-image ZIP remains sensitive medical data. Its PNG can contain burned-in
   identifiers or recognizable anatomy inherited from the displayed pixels, so it
   requires the same sharing safeguards as the original DICOM even though its JSON

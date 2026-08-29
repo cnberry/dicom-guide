@@ -13,6 +13,7 @@ import secrets
 import shutil
 import signal
 import stat
+import struct
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ SCHEMA_VERSION = "1.0.0"
 SUPPORTED_SLICER_VERSION = "5.12.3"
 SUPPORTED_SLICER_REVISION = "34627"
 REQUEST_ENVIRONMENT_VARIABLE = "SCANVIEW_REGISTRATION_REQUEST"
+MACOS_NETWORK_DENY_PROFILE = "(version 1) (allow default) (deny network*)"
 REGISTRATION_PARAMETERS = {
     "transform_type": "Rigid",
     "degrees_of_freedom": 6,
@@ -488,6 +490,24 @@ def _discover_slicer(explicit: Path | None = None) -> Path | None:
 def registration_doctor(slicer_executable: Path | None = None) -> dict[str, Any]:
     supported_platform = platform.system() in {"Darwin", "Linux"}
     executable = _discover_slicer(slicer_executable)
+    network_isolation = _network_isolation_status()
+    if not supported_platform:
+        note = "Registration execution is supported only on macOS and Linux."
+    elif executable is None:
+        note = (
+            "Install the required local Slicer build; ScanView does not download an "
+            "engine or use an external processing API."
+        )
+    elif not network_isolation["available"]:
+        note = (
+            "Install a supported OS network-isolation mechanism; ScanView has no "
+            "unsandboxed fallback."
+        )
+    else:
+        note = (
+            "The exact Slicer version and BRAINSFit completion are checked during "
+            "OS-enforced no-network execution."
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "local_only": True,
@@ -507,16 +527,141 @@ def registration_doctor(slicer_executable: Path | None = None) -> dict[str, Any]
             if executable
             else "unavailable"
         ),
-        "ready_for_execution_check": bool(supported_platform and executable),
-        "note": (
-            "The exact Slicer version and BRAINSFit completion are checked during execution."
-            if executable
-            else (
-                "Install the required Slicer build locally or pass --slicer; no download "
-                "is performed."
-            )
+        "network_isolation": network_isolation,
+        "ready_for_execution_check": bool(
+            supported_platform and executable and network_isolation["available"]
         ),
+        "note": note,
     }
+
+
+def _network_isolation_status() -> dict[str, Any]:
+    system = platform.system()
+    mechanism: str | None = None
+    if system == "Darwin":
+        sandbox = Path("/usr/bin/sandbox-exec")
+        if sandbox.is_file() and os.access(sandbox, os.X_OK):
+            mechanism = "macos_sandbox_exec_deny_all_network"
+    elif system == "Linux":
+        if shutil.which("bwrap") and _linux_seccomp_architecture() is not None:
+            mechanism = "linux_bwrap_network_namespace_seccomp_no_sockets"
+    return {
+        "required": True,
+        "available": mechanism is not None,
+        "mechanism": mechanism,
+        "external_network_denied": mechanism is not None,
+        "host_network_isolated": mechanism is not None,
+        "unsandboxed_fallback": False,
+    }
+
+
+def _linux_seccomp_architecture() -> tuple[int, int, int] | None:
+    machine = platform.machine().lower()
+    if machine in {"x86_64", "amd64"}:
+        return 0xC000003E, 41, 53
+    if machine in {"aarch64", "arm64"}:
+        return 0xC00000B7, 198, 199
+    return None
+
+
+def _linux_no_socket_seccomp_filter() -> bytes:
+    architecture = _linux_seccomp_architecture()
+    if architecture is None:
+        raise ValueError("Linux registration network isolation is unsupported on this CPU")
+    audit_arch, socket_syscall, socketpair_syscall = architecture
+    load_word_absolute = 0x20
+    jump_equal_constant = 0x15
+    jump_greater_or_equal_constant = 0x35
+    return_constant = 0x06
+    seccomp_allow = 0x7FFF0000
+    seccomp_kill_process = 0x80000000
+    seccomp_errno = 0x00050000 | errno.EPERM
+    instructions = [
+        (load_word_absolute, 0, 0, 4),
+        (jump_equal_constant, 1, 0, audit_arch),
+        (return_constant, 0, 0, seccomp_kill_process),
+        (load_word_absolute, 0, 0, 0),
+        # Reject the x32 syscall range on x86-64 and any unexpected high syscall
+        # namespace on the supported 64-bit architectures.
+        (jump_greater_or_equal_constant, 0, 1, 0x40000000),
+        (return_constant, 0, 0, seccomp_kill_process),
+        (jump_equal_constant, 5, 0, socket_syscall),
+        (jump_equal_constant, 4, 0, socketpair_syscall),
+        (jump_equal_constant, 3, 0, 425),
+        (jump_equal_constant, 2, 0, 426),
+        (jump_equal_constant, 1, 0, 427),
+        (return_constant, 0, 0, seccomp_allow),
+        (return_constant, 0, 0, seccomp_errno),
+    ]
+    return b"".join(struct.pack("=HBBI", *instruction) for instruction in instructions)
+
+
+def _open_linux_seccomp_filter(temporary: Path) -> int:
+    descriptor, name = tempfile.mkstemp(
+        prefix="network-deny.",
+        suffix=".seccomp.private",
+        dir=temporary,
+    )
+    path = Path(name)
+    try:
+        payload = _linux_no_socket_seccomp_filter()
+        written = os.write(descriptor, payload)
+        if written != len(payload):
+            raise OSError("short seccomp filter write")
+        os.fsync(descriptor)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        path.unlink()
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        path.unlink(missing_ok=True)
+        raise
+
+
+def _sandboxed_engine_command(
+    command: list[str], temporary: Path, *, seccomp_descriptor: int | None = None
+) -> tuple[list[str], str]:
+    status = _network_isolation_status()
+    mechanism = status["mechanism"]
+    if not status["available"] or not isinstance(mechanism, str):
+        raise ValueError(
+            "local Slicer registration requires supported OS-enforced network isolation"
+        )
+    if mechanism == "macos_sandbox_exec_deny_all_network":
+        return [
+            "/usr/bin/sandbox-exec",
+            "-p",
+            MACOS_NETWORK_DENY_PROFILE,
+            *command,
+        ], mechanism
+    if mechanism == "linux_bwrap_network_namespace_seccomp_no_sockets":
+        executable = shutil.which("bwrap")
+        if executable is None or seccomp_descriptor is None or seccomp_descriptor < 0:
+            raise ValueError("local registration network isolation became unavailable")
+        private = str(temporary.resolve(strict=True))
+        return [
+            executable,
+            "--die-with-parent",
+            "--new-session",
+            "--unshare-all",
+            "--seccomp",
+            str(seccomp_descriptor),
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "--bind",
+            private,
+            private,
+            "--chdir",
+            private,
+            "--",
+            *command,
+        ], mechanism
+    raise ValueError("local registration network isolation mechanism is unsupported")
 
 
 def _verify_and_stage_series(
@@ -579,23 +724,45 @@ def _run_local_engine(
     temporary: Path,
     environment: dict[str, str],
     timeout_seconds: int,
-) -> None:
+) -> str:
     stdout_path = temporary / "engine-stdout.private"
     stderr_path = temporary / "engine-stderr.private"
     with stdout_path.open("wb") as stdout_stream, stderr_path.open("wb") as stderr_stream:
         stdout_path.chmod(0o600)
         stderr_path.chmod(0o600)
+        isolation = _network_isolation_status()
+        seccomp_descriptor = -1
+        if isolation.get("mechanism") == (
+            "linux_bwrap_network_namespace_seccomp_no_sockets"
+        ):
+            seccomp_descriptor = _open_linux_seccomp_filter(temporary)
         try:
-            process = subprocess.Popen(
+            sandboxed_command, network_isolation_mechanism = _sandboxed_engine_command(
                 command,
-                cwd=temporary,
-                env=environment,
-                stdout=stdout_stream,
-                stderr=stderr_stream,
-                start_new_session=True,
+                temporary,
+                seccomp_descriptor=(
+                    seccomp_descriptor if seccomp_descriptor >= 0 else None
+                ),
             )
-        except OSError as error:
-            raise ValueError("the required local Slicer process could not be started") from error
+            try:
+                process = subprocess.Popen(
+                    sandboxed_command,
+                    cwd=temporary,
+                    env=environment,
+                    stdout=stdout_stream,
+                    stderr=stderr_stream,
+                    start_new_session=True,
+                    pass_fds=(
+                        (seccomp_descriptor,) if seccomp_descriptor >= 0 else ()
+                    ),
+                )
+            except OSError as error:
+                raise ValueError(
+                    "the required local Slicer process could not be started"
+                ) from error
+        finally:
+            if seccomp_descriptor >= 0:
+                os.close(seccomp_descriptor)
         try:
             return_code = process.wait(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
@@ -612,6 +779,7 @@ def _run_local_engine(
             raise ValueError("local Slicer registration exceeded its bounded timeout") from None
     if return_code != 0:
         raise ValueError("local Slicer registration failed; private diagnostics were deleted")
+    return network_isolation_mechanism
 
 
 def _fsync_directory_tree(directory: Path) -> None:
@@ -925,6 +1093,7 @@ def _manifest(
     executable_sha256: str,
     runner: Path,
     engine_report: dict[str, Any],
+    network_isolation_mechanism: str,
     staged_output: Path,
     created_at: str,
 ) -> dict[str, Any]:
@@ -978,6 +1147,13 @@ def _manifest(
                 "distributor_not_authenticated"
             ),
             "external_api_requested_by_scanview": False,
+            "network_isolation": {
+                "status": "os_enforced",
+                "mechanism": network_isolation_mechanism,
+                "external_network": "denied",
+                "host_network": "isolated",
+                "unsandboxed_fallback": False,
+            },
         },
         "files": files,
         "qa": {
@@ -1077,7 +1253,7 @@ def run_rigid_registration(
             "--python-script",
             str(runner),
         ]
-        _run_local_engine(
+        preflight_network_isolation = _run_local_engine(
             command,
             temporary=temporary,
             environment=environment,
@@ -1103,12 +1279,14 @@ def run_rigid_registration(
             "parameters": REGISTRATION_PARAMETERS,
         }
         request_path.write_text(json.dumps(request, separators=(",", ":")) + "\n")
-        _run_local_engine(
+        execution_network_isolation = _run_local_engine(
             command,
             temporary=temporary,
             environment=environment,
             timeout_seconds=timeout_seconds,
         )
+        if execution_network_isolation != preflight_network_isolation:
+            raise ValueError("local registration network isolation changed during execution")
         if hash_file(executable) != executable_sha256:
             raise ValueError("the local Slicer executable changed during registration")
         engine_report = _read_engine_report(report_path)
@@ -1133,6 +1311,7 @@ def run_rigid_registration(
                 executable_sha256=executable_sha256,
                 runner=runner,
                 engine_report=engine_report,
+                network_isolation_mechanism=execution_network_isolation,
                 staged_output=staging,
                 created_at=created_at,
             )
@@ -1398,6 +1577,7 @@ def registration_bundle_errors(directory: Path) -> list[str]:
             "runner_sha256",
             "engine_identity",
             "external_api_requested_by_scanview",
+            "network_isolation",
         }
         or algorithm.get("engine") != "3D Slicer"
         or algorithm.get("application_version") != SUPPORTED_SLICER_VERSION
@@ -1412,6 +1592,23 @@ def registration_bundle_errors(directory: Path) -> list[str]:
             "distributor_not_authenticated"
         )
         or algorithm.get("external_api_requested_by_scanview") is not False
+        or algorithm.get("network_isolation")
+        not in (
+            {
+                "status": "os_enforced",
+                "mechanism": "macos_sandbox_exec_deny_all_network",
+                "external_network": "denied",
+                "host_network": "isolated",
+                "unsandboxed_fallback": False,
+            },
+            {
+                "status": "os_enforced",
+                "mechanism": "linux_bwrap_network_namespace_seccomp_no_sockets",
+                "external_network": "denied",
+                "host_network": "isolated",
+                "unsandboxed_fallback": False,
+            },
+        )
         or not isinstance(algorithm.get("executable_sha256"), str)
         or not SHA256.fullmatch(algorithm["executable_sha256"])
         or not isinstance(algorithm.get("runner_sha256"), str)

@@ -66,8 +66,8 @@ const context: RegistrationQaContext = {
     },
   },
   volumes: {
-    fixed: volume('fixed.nrrd', 'fixed_earlier_native', false),
-    moving: volume('moving.nrrd', 'moving_later_native', false),
+    fixed: volume('fixed.nrrd', 'fixed_earlier_reference', false),
+    moving: volume('moving.nrrd', 'moving_later_reference', false),
     registered_moving: volume(
       'registered-moving.nrrd',
       'moving_later_registered_to_fixed',
@@ -85,9 +85,23 @@ const context: RegistrationQaContext = {
   landmark_statuses: ['aligned', 'uncertain', 'misaligned', 'not_visible'],
   allowed_decisions: ['accepted_for_shared_coverage_overlay_swipe', 'rejected'],
   display_policy: {
-    qa_preview_allowed_while_pending: ['opacity_overlay'],
+    qa_preview_allowed_while_pending: [
+      'reference_volume_side_by_side',
+      'registered_side_by_side',
+      'opacity_overlay',
+      'swipe_or_flicker',
+      'checkerboard',
+      'edge_overlay',
+      'landmark_residuals',
+    ],
     accepted_unlocks: ['overlay', 'swipe'],
-    always_locked: ['subtraction', 'response_conclusions'],
+    always_locked: [
+      'subtraction',
+      'mask_propagation',
+      'segmentation',
+      'resampled_image_measurements',
+      'response_conclusions',
+    ],
   },
   limitations: ['Synthetic test limitation.'],
 };
