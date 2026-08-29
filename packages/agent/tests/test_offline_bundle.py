@@ -111,6 +111,9 @@ def test_offline_bundle_is_exact_deterministic_and_local_only(tmp_path: Path) ->
         ).decode()
         install = archive.read("scanview-offline-0.1.0/install.sh").decode()
         launch = archive.read("scanview-offline-0.1.0/launch.sh").decode()
+        runtime_check = archive.read(
+            "scanview-offline-0.1.0/runtime_check.py"
+        ).decode()
 
     assert manifest["supported_platforms"] == ["macos", "linux"]
     assert manifest["runtime_network_required"] is False
@@ -128,6 +131,7 @@ def test_offline_bundle_is_exact_deterministic_and_local_only(tmp_path: Path) ->
     assert requirements.count("--hash=sha256:") == 2
     assert "--no-index" in install and "--require-hashes" in install
     assert "runtime_check.py" in install + launch
+    assert '"external_dicom_processing_api_required": False' in runtime_check
     assert "http://" not in install + launch
     assert "https://" not in install + launch
 

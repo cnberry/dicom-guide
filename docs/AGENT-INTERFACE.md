@@ -386,11 +386,14 @@ original-primary brain/head images, a conservatively matched sequence family, on
 explicit contrast category, consistent per-instance classic-image geometry, at least
 five slices/10 mm coverage, source SHA-256 values, and a compatibility score of 80 or
 higher. It rehashes the source before and after staging, never mutates DICOM, and uses
-an atomic no-replace publication. The required local 3D Slicer 5.12.3 revision 34627
+an atomic no-replace publication. The required local 3D Slicer 5.12.3 computed
+revision 34627/runtime repository revision `9034c71`
 launcher must match a caller-supplied SHA-256 before data staging and after execution.
-Before staging, a no-data process checks the self-reported version/revision and
-BRAINSFit availability. Those checks are provenance—not distributor or code-signature
-authentication. Neither ScanView command calls an external API. Slicer
+Before staging, a no-data process checks the self-reported version/runtime repository
+revision and BRAINSFit availability. Those checks are provenance—not distributor or code-signature
+authentication. This host's separately authenticated official package is documented
+in [`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). Neither ScanView command calls
+an external API. Slicer
 settings, `.slicerrc.py`, user-site Python packages, proxy/credential variables, and
 extension-server configuration are excluded from the private job environment. The
 engine process must also run with OS-enforced network isolation: macOS uses a

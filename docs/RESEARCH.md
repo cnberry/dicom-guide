@@ -33,9 +33,11 @@ interoperability foundation.
 
 ## Registration engine verification
 
-The local execution foundation requires [3D Slicer 5.12.3 revision
-34627](https://github.com/Slicer/Slicer/wiki/Release-Details), the current stable
-release documented for macOS and Linux on the research date. Slicer's official
+The local execution foundation requires [3D Slicer 5.12.3 computed revision
+34627](https://github.com/Slicer/Slicer/wiki/Release-Details), whose full Git commit is
+`9034c71a8fce68ab312458b3d7d16f610562263d` and whose running application reports
+`slicer.app.repositoryRevision` as `9034c71`. This distinction is now explicit in the
+doctor output and runner gate. Slicer's official
 [headless scripting guidance](https://slicer.readthedocs.io/en/latest/developer_guide/script_repository/gui.html)
 supports `--no-splash --no-main-window --python-script`; ScanView additionally uses
 `--disable-settings`, `--ignore-slicerrc`, and `PYTHONNOUSERSITE=1`, and never
@@ -45,10 +47,14 @@ required version-gated job.
 
 The launcher must match a caller-supplied expected SHA-256 before DICOM staging and
 again after execution. This protects against accidental substitution relative to an
-independently recorded digest, but it does not authenticate the distributor, macOS
-code signature, Linux package, SlicerApp-real process, BRAINSFit binary, or dependent
-libraries. End-to-end official-release signature/checksum verification remains a
-required packaging milestone. ScanView now requires OS-enforced network isolation for
+independently recorded digest, but the generic runtime check does not authenticate the
+distributor, code signature, SlicerApp-real process, BRAINSFit binary, or dependent
+libraries. For this macOS host, the official 447,327,067-byte DMG's published SHA-512
+matched exactly; DMG integrity/stapled notarization, Gatekeeper assessment, deep strict
+app signature, Kitware team identity, launcher hash, and BRAINSFit hash were verified
+before installation. Exact evidence and its limitations are recorded in
+[`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). Linux package authentication is
+still pending. ScanView requires OS-enforced network isolation for
 the child: a macOS deny-all-network sandbox or, on supported 64-bit Linux, `bwrap`
 private namespaces plus a seccomp filter denying socket creation, socket pairs, and
 io_uring. It refuses weaker `unshare`-only execution and has no unsandboxed fallback.
@@ -75,10 +81,15 @@ swipe, checkerboard, and edges. Landmark residuals remain location-specific
 supplemental evidence. Any spatial authorization must be limited to the exact hashed
 transform and shared coverage; it cannot establish lesion identity or response.
 
-No required Slicer executable is installed on the current host, so the wrapper and
-bundle have been tested with a synthetic engine double but not yet with a real Slicer
-process. This limitation is explicit in status and does not trigger a download or
-cloud fallback.
+The authenticated official macOS engine is installed locally and passed the no-data
+preflight plus a full synthetic same-modality MR registration through real
+Slicer/BRAINSFit under the mandatory deny-all-network sandbox. Source bytes remained
+unchanged, the expected synthetic translation was recovered, all derivative-use
+flags stayed locked, and the produced NRRDs rendered locally in all three planes and
+four QA modes without browser errors. No patient data was used, no QA decision was
+submitted, and the synthetic bundle was moved to recoverable Trash. Real
+same-modality patient QA and real Linux engine execution remain pending; neither has
+a cloud fallback.
 
 ## Longitudinal comparison findings
 

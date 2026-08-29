@@ -116,15 +116,16 @@ Opt-out revokes that ephemeral publisher so an in-flight older update cannot res
 sharing. This is transient navigation context, not observation or clinical review.
 
 Rigid registration also stays local. `registration-doctor` looks for the required 3D
-Slicer 5.12.3 revision 34627 executable but never downloads it and reports its
+Slicer 5.12.3 computed revision 34627/runtime repository revision `9034c71`
+executable but never downloads it and reports its
 observed launcher hash without authenticating the distributor.
 `run-rigid-registration` requires an explicit human series-selection attestation,
 one matching but identity-unverified opaque patient context, original-primary
 brain/head MR↔MR or CT↔CT, distinct chronological studies, one conservative sequence
 and explicit contrast category, regular per-instance geometry, hashes, and a score
 of at least 80. The expected launcher SHA-256 must match before staging and after the
-job; a no-data preflight checks the self-reported version/revision and BRAINSFit
-availability before source staging. Source bytes are rehashed before private staging;
+job; a no-data preflight checks the self-reported version/runtime repository revision
+and BRAINSFit availability before source staging. Source bytes are rehashed before private staging;
 Slicer/BRAINSFit receives only
 local generic paths, and user settings/startup scripts and user-site Python packages
 are disabled. OS-enforced network isolation is mandatory: macOS uses a deny-all-network

@@ -80,7 +80,9 @@ result into a medical conclusion.
 ### Phase 3 — reviewed derivatives
 
 - Version-gated local Slicer/BRAINSFit rigid-registration execution and source-hashed,
-  generated-pending-QA bundles (implemented; real-engine case execution pending).
+  generated-pending-QA bundles (implemented; an authenticated official macOS engine
+  passed a synthetic same-modality run, while real-patient and Linux execution remain
+  pending).
 - Isolated local registration QA with derived reference/registered views, all three planes,
   opacity, swipe, checkerboard, edges, qualitative landmarks, quantitative 3-D
   residuals mandatory for acceptance, and a separate hash-linked accept/reject record

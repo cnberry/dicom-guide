@@ -65,15 +65,22 @@ quality-system, and regulatory review.
 - Manifests and derivatives stay outside Git and are treated as sensitive.
 - Source delete and overwrite operations do not exist.
 - Generated content is `derived` and `unreviewed` until explicitly accepted.
-- Rigid registration invokes a version-gated local Slicer/BRAINSFit process. It
-  requires attested, identity-unverified matching opaque patient context; same
+- Rigid registration invokes a version-gated local Slicer 5.12.3/BRAINSFit process.
+  The release computed revision is 34627; the enforced runtime repository revision is
+  `9034c71`. The official macOS package and this host's installed copy were
+  independently checksum/signature/Gatekeeper verified as recorded in
+  [`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). The generic runtime gate still
+  requires a caller-supplied launcher SHA-256 and does not claim to authenticate
+  arbitrary installations. It requires attested, identity-unverified matching opaque
+  patient context; same
   modality and strict chronology; original-primary brain/head images; explicit
   sequence/contrast matching; and consistent per-instance volume geometry. It
   rehashes every source before and after private staging and records exact engine,
   runner, parameters, and output hashes. The caller-supplied expected launcher hash
   must match before DICOM staging and after execution; this is substitution
   protection, not distributor/signature authentication. A no-data preflight verifies
-  self-reported version/revision and BRAINSFit availability before source staging.
+  self-reported version/runtime repository revision and BRAINSFit availability before
+  source staging.
   The generated bundle is always pending QA, with overlay, swipe, subtraction, and
   mask propagation locked. User settings, `.slicerrc.py`, and user-site Python
   packages are disabled, and Slicer temporary/cache paths are redirected into the

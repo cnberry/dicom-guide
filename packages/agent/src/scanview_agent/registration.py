@@ -26,7 +26,10 @@ from .comparison import score_pair
 
 SCHEMA_VERSION = "1.0.0"
 SUPPORTED_SLICER_VERSION = "5.12.3"
-SUPPORTED_SLICER_REVISION = "34627"
+# The public release table calls 34627 the computed revision. The running app
+# exposes the Git revision through slicer.app.repositoryRevision instead.
+SUPPORTED_SLICER_COMPUTED_REVISION = "34627"
+SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION = "9034c71"
 REQUEST_ENVIRONMENT_VARIABLE = "SCANVIEW_REGISTRATION_REQUEST"
 MACOS_NETWORK_DENY_PROFILE = "(version 1) (allow default) (deny network*)"
 REGISTRATION_PARAMETERS = {
@@ -517,7 +520,10 @@ def registration_doctor(slicer_executable: Path | None = None) -> dict[str, Any]
         "required_engine": {
             "name": "3D Slicer",
             "version": SUPPORTED_SLICER_VERSION,
-            "revision": SUPPORTED_SLICER_REVISION,
+            "computed_revision": SUPPORTED_SLICER_COMPUTED_REVISION,
+            "runtime_repository_revision": (
+                SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION
+            ),
             "module": "BRAINSFit",
         },
         "executable_found": executable is not None,
@@ -865,7 +871,8 @@ def _read_engine_report(
         or report["status"] != expected_status
         or report["engine"] != "3D Slicer"
         or report["application_version"] != SUPPORTED_SLICER_VERSION
-        or str(report["repository_revision"]) != SUPPORTED_SLICER_REVISION
+        or str(report["repository_revision"])
+        != SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION
         or report["module"] != "BRAINSFit"
         or not isinstance(report["platform"], str)
         or not 1 <= len(report["platform"]) <= 80
@@ -1581,7 +1588,8 @@ def registration_bundle_errors(directory: Path) -> list[str]:
         }
         or algorithm.get("engine") != "3D Slicer"
         or algorithm.get("application_version") != SUPPORTED_SLICER_VERSION
-        or algorithm.get("repository_revision") != SUPPORTED_SLICER_REVISION
+        or algorithm.get("repository_revision")
+        != SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION
         or algorithm.get("module") != "BRAINSFit"
         or not isinstance(algorithm.get("platform"), str)
         or not 1 <= len(algorithm["platform"]) <= 80

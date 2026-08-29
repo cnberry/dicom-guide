@@ -162,7 +162,7 @@ report = {
     'status': 'preflight_completed' if request.get('mode') == 'preflight' else 'completed',
     'engine': '3D Slicer',
     'application_version': '5.12.3',
-    'repository_revision': '34627',
+    'repository_revision': '9034c71',
     'module': 'BRAINSFit',
     'platform': 'Synthetic-test',
     'parameters': request['parameters'],
@@ -526,6 +526,13 @@ def test_registration_failure_or_source_change_creates_no_partial_output(
     doctor = registration_doctor(tmp_path / "Slicer-ok")
     assert doctor["local_only"] is True
     assert doctor["external_api_required"] is False
+    assert doctor["required_engine"] == {
+        "name": "3D Slicer",
+        "version": "5.12.3",
+        "computed_revision": "34627",
+        "runtime_repository_revision": "9034c71",
+        "module": "BRAINSFit",
+    }
     assert doctor["executable_found"] is True
     assert doctor["network_isolation"]["required"] is True
     assert doctor["network_isolation"]["available"] is True

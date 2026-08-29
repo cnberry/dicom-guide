@@ -128,7 +128,7 @@
       "properties": {
         "engine": { "const": "3D Slicer" },
         "application_version": { "const": "5.12.3" },
-        "repository_revision": { "const": "34627" },
+        "repository_revision": { "const": "9034c71" },
         "module": { "const": "BRAINSFit" },
         "platform": { "type": "string", "minLength": 1, "maxLength": 80 },
         "parameters": { "$ref": "#/$defs/parameters" },

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 18:16 PDT
+Last updated: 2026-08-28 18:52 PDT
 
 ## Data transfer
 
@@ -85,7 +85,8 @@ Last updated: 2026-08-28 18:16 PDT
   expiry, visible opt-out, publisher revocation, `no-store`, and default-off behavior
   are enforced. It contains no pixels, descriptions, dates, measurement content,
   paths, or direct identifiers.
-- A version-gated local Slicer 5.12.3 revision 34627/BRAINSFit rigid-registration
+- A version-gated local Slicer 5.12.3 computed revision 34627/runtime repository
+  revision `9034c71`/BRAINSFit rigid-registration
   executor now accepts only explicitly attested, identity-unverified matching opaque
   patient context; same-modality distinct-study chronology; original-primary
   brain/head images; conservative sequence and explicit contrast matching; regular
@@ -228,21 +229,23 @@ Last updated: 2026-08-28 18:16 PDT
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- UI-embedded staged Python wheel build: passing; the 2,909,473-byte wheel contains the
+- UI-embedded staged Python wheel build: passing; the 2,909,942-byte wheel contains the
   registration host/runner/review/display module, viewer-state server module, viewer
   entry point, all 11 built UI/worker/codec files (9,882,460 bytes uncompressed), and
-  all 16 JSON Schemas (122,332 bytes). A fresh isolated installation resolved its
+  all 16 JSON Schemas (122,334 bytes). A fresh isolated installation resolved its
   embedded UI and schemas without the source checkout; temporary release, installation,
   and installer-log artifacts were moved to recoverable Trash.
 - Offline runtime bundle build and macOS arm64 smoke test: passing. The deterministic
-  5,303,071-byte ZIP contains nine fixed-timestamp members: `bundle.json` plus eight
-  hash-manifested payloads, including the 2,909,473-byte embedded ScanView wheel and
+  5,303,605-byte ZIP contains nine fixed-timestamp members: `bundle.json` plus eight
+  hash-manifested payloads, including the 2,909,942-byte embedded ScanView wheel and
   pinned 2,376,822-byte `pydicom` 3.0.2 wheel. A fresh extraction verified, installed
   with `PIP_NO_INDEX=1`, `--no-index`, and `--require-hashes`, then rechecked both
-  versions, the embedded UI, and all 16 schemas. A second build from the same wheels
-  was byte-identical. Its packaged launcher indexed one
-  synthetic MR instance and served health/manifest over loopback with direct identifiers
-  excluded and deidentification explicitly false. No local Linux container or VM is
+  versions, the embedded UI, all 16 schemas, and an explicit
+  `external_dicom_processing_api_required: false` runtime assertion. A second build
+  from the same wheels was byte-identical. The retained ZIP SHA-256 is
+  `e594af37705c31f719bed38c15dac44da5f85ba521ce2c101306f5b4ea3ef2bb`. Its packaged
+  launcher indexed one synthetic MR instance and served health/manifest over loopback
+  with direct identifiers excluded and deidentification explicitly false. No local Linux container or VM is
   available, so Linux execution is still unverified. One patient-free verified ZIP is
   retained in the ignored local `release/` directory; synthetic sources, extracted
   runtimes, staging directories, and the duplicate build were moved to recoverable
@@ -253,10 +256,29 @@ Last updated: 2026-08-28 18:16 PDT
   atomic no-replace publication, no partial output, private deleted diagnostics,
   process-group timeout, no-data engine preflight, restricted environment,
   source-change refusal, and v1 Schema plus semantic validation.
-  `registration-doctor` confirms the required macOS network sandbox is available but
-  reports that the real required Slicer executable is not installed on this host, so a
-  real-engine registration has not been claimed. A real Linux sandbox execution and
-  binary-distributor authentication remain pending.
+  The official 3D Slicer 5.12.3 macOS amd64 DMG was downloaded from Slicer, matched its
+  published SHA-512, passed `hdiutil verify`, and carried a valid stapled notarization
+  ticket. Gatekeeper and deep strict code-signature checks accepted the mounted and
+  installed app as Kitware Developer ID team `W38PE5Y733`. The launcher and BRAINSFit
+  hashes, release/runtime revision distinction, and precise trust limits are recorded
+  in `docs/SLICER-ENGINE-TRUST.md` and a machine-readable packaging record.
+  `registration-doctor` now finds the installed engine, BRAINSFit, and mandatory
+  macOS network sandbox and reports ready with no external API required.
+- Real-engine synthetic registration test: the normal ScanView command processed two
+  private synthetic 16-slice MR studies through the authenticated official
+  Slicer/BRAINSFit process inside the macOS deny-all-network sandbox. All 32 DICOM
+  source byte counts and SHA-256 values remained identical. The six owner-only outputs
+  independently passed schema and semantic validation, remained
+  `generated_pending_qa`/`unreviewed`, exposed no computation or interpretation, and
+  kept overlay, swipe, subtraction, and mask propagation locked. The known +2 mm
+  synthetic displacement yielded approximately -1.997 mm moving-to-fixed translation
+  with near-identity rotation. No patient data was used and no decision was submitted.
+- Real-engine NRRD browser smoke test: the isolated loopback QA workspace loaded only
+  its local UI plus fixed, moving, and registered-moving NRRDs. All three planes and
+  opacity, swipe, checkerboard, and edge modes rendered visibly with no console warning
+  or error. The session stayed visibly unapproved and all downstream operations
+  remained locked. Synthetic inputs, engine diagnostics, and outputs were moved to
+  recoverable Trash after verification.
 - Registration-QA production-build smoke test: the distinct browser bootstrap/session
   capability opened the isolated workspace while bearer-only access remained denied in
   server tests. Five patient-space canvases rendered with correct sagittal A/P/S/I
@@ -409,9 +431,10 @@ Last updated: 2026-08-28 18:16 PDT
 - Signed/notarized macOS/Linux release packaging remains pending. The wheel, offline
   bundle, and source-checkout launcher are working and verified on macOS; the offline
   bundle still requires host Python 3.11+ and has not executed on Linux.
-- Registration generation, local QA, and accepted-review opacity/swipe display exist,
-  but there is no installed required engine, trusted full-engine signature/checksum
-  verification, real same-modality patient run, or qualified real-case decision. There
-  is still no machine-enforced coverage mask, segmentation, response criteria, or
-  automated medical conclusion.
+- Registration generation, local QA, accepted-review opacity/swipe display, an
+  authenticated official macOS engine, and a real-engine synthetic execution now
+  exist. A real same-modality patient run, qualified real-case decision, Linux engine
+  authentication/execution, and signed ScanView release remain pending. There is still
+  no machine-enforced coverage mask, segmentation, response criteria, or automated
+  medical conclusion.
 - Linux packaging/smoke testing remains pending.

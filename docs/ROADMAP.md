@@ -196,7 +196,8 @@
 
 ## Completed in the fifteenth milestone
 
-1. Added a version-gated local 3D Slicer 5.12.3 revision 34627/BRAINSFit rigid-
+1. Added a version-gated local 3D Slicer 5.12.3 computed revision 34627/runtime
+   repository revision `9034c71`/BRAINSFit rigid-
    registration executor for explicitly attested same-opaque-context (identity
    unverified), same-modality chronological pairs.
 2. Added pre/post-staging source SHA-256 checks, generic private DICOM staging,
@@ -232,8 +233,8 @@
    response conclusions remain locked.
 5. Added CLI/server/schema validation, cookie-versus-bearer authorization tests,
    tamper/refusal tests, 3-D local NRRD parsing, and a production-build browser smoke
-   across all three planes and four QA modes. Real Slicer and real-patient QA remain
-   pending and are not claimed.
+   across all three planes and four QA modes. At that milestone, real Slicer and
+   real-patient QA remained pending and were not claimed.
 
 ## Completed in the seventeenth milestone
 
@@ -296,6 +297,30 @@
    pinned dependencies, and its manifest is corruption evidence—not code signing,
    host-interpreter attestation, clinical validation, or medical-record identity.
 
+## Completed in the twentieth milestone
+
+1. Downloaded the official 3D Slicer 5.12.3 macOS amd64 DMG, matched its published
+   SHA-512, verified DMG integrity and stapled notarization, and authenticated the
+   mounted and installed app with Gatekeeper plus deep strict code-signature checks.
+   The Developer ID is Kitware team `W38PE5Y733`; exact non-PHI evidence is committed
+   in a human and machine-readable trust record.
+2. Installed the x86_64 app under Rosetta 2 at `/Users/chris/Applications/Slicer.app`,
+   recorded the launcher and BRAINSFit SHA-256 values, and confirmed the signed local
+   copy remained unchanged after installation.
+3. Corrected the engine gate: `34627` is Slicer's computed release revision, while
+   the real runtime reports repository revision `9034c71`. The prior mismatch failed
+   closed before source staging; doctor output, runtime checks, tests, schema, and
+   agent documentation now name both values explicitly.
+4. Ran the normal ScanView registration command on two private synthetic 16-slice MR
+   studies through the real official Slicer/BRAINSFit process under mandatory macOS
+   deny-all-network isolation. All 32 source hashes remained identical, the known
+   synthetic translation was recovered, and the validated six-file bundle stayed
+   `generated_pending_qa`/`unreviewed` with every display unlock false.
+5. Loaded those real-engine NRRDs in the isolated local QA viewer. Axial, coronal,
+   sagittal, opacity, swipe, checkerboard, and edge views rendered without browser
+   errors or external requests. No decision was submitted, no patient data was used,
+   and synthetic inputs/derivatives were moved to recoverable Trash.
+
 ## Immediate
 
 1. Use the consultation packet only to prepare questions with Mila's clinicians;
@@ -304,11 +329,10 @@
 2. Import a future same-modality MRI follow-up, have a person confirm the intended
    earlier/later sequences and clinical roles, run the required engine on that pair,
    and complete qualified visual/quantitative QA.
-3. Install or explicitly locate the required Slicer build, independently record its
-   trusted launcher hash, then verify one real local headless job without retaining
-   logs that may contain patient context.
-4. Repeat production packaging and real-codec smoke tests on Linux without exposing
-   metadata or screenshots.
+3. Protect the authenticated local Slicer installation and keep using the recorded
+   launcher hash; reauthenticate any replacement before a future patient-specific job.
+4. Repeat engine, production packaging, and real-codec smoke tests on Linux without
+   exposing metadata or screenshots.
 5. Produce signed/notarized macOS/Linux release artifacts around the verified offline
    bundle, and evaluate whether to include a separately authenticated interpreter.
 6. Design optional authenticated signature integration for clinical organizations;
@@ -333,8 +357,9 @@
 
 ## Registration milestone
 
-1. Verify the version-gated runner against real Slicer on macOS and Linux, including
-   distributor signature/checksum verification for the complete engine bundle.
+1. Repeat the completed macOS real-Slicer verification on Linux, including distributor
+   signature/checksum verification for the complete engine bundle and mandatory
+   namespace/seccomp execution.
 2. Perform the implemented QA workflow on a valid real same-modality pair with a
    qualified reviewer and a predeclared clinically appropriate landmark tolerance.
 3. Verify the implemented accepted-record display on a real reviewed bundle; never

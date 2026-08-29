@@ -258,7 +258,8 @@ the offline local application, not an external processing API.
 ## Generate a rigid registration pending QA
 
 ScanView can run one rigid moving-later-to-fixed-earlier job through a locally
-installed 3D Slicer 5.12.3 revision 34627 and its bundled BRAINSFit module. Earlier
+installed 3D Slicer 5.12.3 computed revision 34627 (runtime repository revision
+`9034c71`) and its bundled BRAINSFit module. Earlier
 and later are registration roles; neither establishes a clinical treatment baseline
 or nadir. ScanView never downloads an engine, sends DICOM to an API, or falls back to
 a cloud service. Check the host first:
@@ -296,10 +297,12 @@ a seccomp filter that denies socket creation, socket pairs, and io_uring. The we
 
 The expected SHA-256 must match before any DICOM is staged and is checked again after
 execution. A no-data preflight first verifies the self-reported Slicer version,
-revision, and BRAINSFit availability. `registration-doctor` can show the observed
-launcher hash, but ScanView does not authenticate the distributor or code signature;
-obtain and record the expected
-digest through a trusted software-installation process. ScanView strips proxy,
+runtime repository revision, and BRAINSFit availability. `registration-doctor` can
+show the observed launcher hash, but ScanView does not authenticate the distributor
+or code signature; obtain and record the expected digest through a trusted
+software-installation process. The authenticated package and installed-copy evidence
+for this macOS host is recorded in
+[`docs/SLICER-ENGINE-TRUST.md`](docs/SLICER-ENGINE-TRUST.md). ScanView strips proxy,
 credential, extension-server, and Python-path variables; the OS sandbox prevents the
 registration process from reaching external or host network services.
 
@@ -349,9 +352,10 @@ absent. Because the current bundle has no transformed coverage mask, the authori
 applies only where both volumes visibly contain anatomy and is not enforced pixel by
 pixel.
 
-The currently copied CD contains one MRI exam and one CT
-exam, so it cannot produce a valid registration pair. A future same-modality
-follow-up and the required local Slicer installation are required for a real run.
+The currently copied CD contains one MRI exam and one CT exam, so it cannot produce a
+valid registration pair. The authenticated local Slicer installation has completed a
+real-engine synthetic MR registration, but a future same-modality follow-up and
+qualified case-specific review are still required for a Mila-specific run.
 
 ## Open exact sources for an agent-assisted conversation
 

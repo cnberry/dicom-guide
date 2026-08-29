@@ -31,6 +31,7 @@ def main() -> None:
                 "embedded_ui": True,
                 "schema_count": schema_count,
                 "runtime_network_required": False,
+                "external_dicom_processing_api_required": False,
             },
             sort_keys=True,
         )

@@ -21,7 +21,9 @@ from DICOMLib import DICOMUtils
 
 REQUEST_ENVIRONMENT_VARIABLE = "SCANVIEW_REGISTRATION_REQUEST"
 SUPPORTED_SLICER_VERSION = "5.12.3"
-SUPPORTED_SLICER_REVISION = "34627"
+# slicer.app.repositoryRevision reports this shortened Git revision. The separate
+# computed release revision published for 5.12.3 is 34627.
+SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION = "9034c71"
 OUTPUTS = {
     "fixed_volume": "fixed.nrrd",
     "moving_volume": "moving.nrrd",
@@ -122,7 +124,7 @@ def run() -> None:
     repository_revision = str(slicer.app.repositoryRevision)
     if (
         application_version != SUPPORTED_SLICER_VERSION
-        or repository_revision != SUPPORTED_SLICER_REVISION
+        or repository_revision != SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION
     ):
         raise RuntimeError("the installed Slicer build does not match the required version")
     if not getattr(slicer.modules, "brainsfit", None):

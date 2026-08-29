@@ -173,8 +173,9 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    runner stages rehashed source instances under generic private filenames, passes
    paths through a private environment request rather than command arguments, captures
    diagnostics only in the deleted private job directory, terminates the process group
-   on timeout, and accepts only the required version/revision report, expected launcher
-   hash, parsed scalar-volume geometry, and finite proper-rigid transform. The engine
+   on timeout, and accepts only the required version/runtime repository revision
+   report, expected launcher hash, parsed scalar-volume geometry, and finite
+   proper-rigid transform. The engine
    runs inside a mandatory macOS deny-network sandbox or, on supported 64-bit Linux,
    `bwrap` private namespaces plus a no-socket/io_uring seccomp filter; no weaker
    `unshare`-only or unsandboxed fallback exists. The hash

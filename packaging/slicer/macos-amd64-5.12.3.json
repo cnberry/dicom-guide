@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "scanview_slicer_engine_trust",
+  "verified_at": "2026-08-28T18:42:39-07:00",
+  "release": {
+    "application_version": "5.12.3",
+    "computed_revision": "34627",
+    "git_commit": "9034c71a8fce68ab312458b3d7d16f610562263d",
+    "runtime_repository_revision": "9034c71",
+    "module": "BRAINSFit"
+  },
+  "official_package": {
+    "download_page": "https://download.slicer.org/",
+    "release_details": "https://github.com/Slicer/Slicer/wiki/Release-Details",
+    "download_url": "https://download.slicer.org/bitstream/6a61a0b02eb3d967f032af6c",
+    "filename": "Slicer-5.12.3-macosx-amd64.dmg",
+    "platform": "macosx-amd64",
+    "bytes": 447327067,
+    "sha512": "2076f23458936a028d3d1a91686369b5979d3373012f11db0e90c30fdb34874eec2b150da4d5225b2ac6b1bf5552795e1783e621a8ae3c39c01983593b07283a"
+  },
+  "publisher": {
+    "developer_id_application": "Kitware Inc. (W38PE5Y733)",
+    "team_identifier": "W38PE5Y733",
+    "hardened_runtime": true,
+    "dmg_stapled_notarization_ticket_valid": true,
+    "gatekeeper_install_assessment": "accepted; Notarized Developer ID",
+    "mounted_app_gatekeeper_assessment": "accepted; Notarized Developer ID",
+    "mounted_app_deep_strict_codesign_verification": "passed",
+    "app_stapled_ticket": false
+  },
+  "host_installation": {
+    "host": "macOS arm64",
+    "package_architecture": "x86_64",
+    "compatibility": "Rosetta 2",
+    "path": "/Users/chris/Applications/Slicer.app",
+    "installed_kib": 1647276,
+    "launcher": {
+      "path_within_app": "Contents/MacOS/Slicer",
+      "sha256": "710dfa764bf407377ee516b63f84cfb4cf0e0719218c7f43712cc0f231ed6b23"
+    },
+    "brainsfit": {
+      "path_within_app": "Contents/lib/Slicer-5.12/cli-modules/BRAINSFit",
+      "sha256": "75d173916e0d2d48f6d9ba9b0cd093349661953538748809d7ea2ad93c85da93"
+    }
+  },
+  "verification": {
+    "download_sha512_matches_official_page": true,
+    "hdiutil_verify": "passed",
+    "installed_copy_deep_strict_codesign_verification": "passed",
+    "installed_copy_gatekeeper_assessment": "accepted; Notarized Developer ID",
+    "scanview_no_data_preflight": "passed",
+    "scanview_real_engine_synthetic_registration": "passed",
+    "scanview_network_isolation": "macos_sandbox_exec_deny_all_network",
+    "external_api_required": false
+  },
+  "limitations": [
+    "This record documents one official macOS package and one local installation; ScanView still requires the caller-supplied launcher SHA-256 at execution time.",
+    "The app bundle does not itself carry a stapled ticket; the downloaded DMG did, and Gatekeeper accepted both the DMG install assessment and the app as Notarized Developer ID.",
+    "Linux engine authentication and execution remain unverified.",
+    "A successful synthetic registration does not validate a patient-specific registration or authorize medical interpretation."
+  ]
+}
