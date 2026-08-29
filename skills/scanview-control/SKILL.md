@@ -1,68 +1,55 @@
 ---
 name: scanview-control
-description: Inspect and control a running local ScanView DICOM workspace through its loopback API. Use when Codex needs to identify MRI/CT series, read the exact active source image and pinned DICOM LPS point, switch between native and three-plane MPR views, select an exact series/instance, change display tools, reset the view, or retrieve one exact DICOM instance for strictly local analysis without screenshots or external DICOM processing.
+description: Inspect and control a running local ScanView MRI/CT viewer. Use when a person asks what is visible, what a pointed location represents, which series or slice is open, or asks Codex to switch series, open native or three-plane MPR, move to an exact DICOM LPS point, choose an image tool, reset the view, inspect local metadata, or retrieve an exact DICOM instance for on-device analysis.
 ---
 
-# ScanView Control
+# Control ScanView
 
-Treat ScanView as the visualization surface and the Codex conversation as the human interface. Keep every DICOM read, decode, and computation on the local computer.
+Keep DICOM, pixels, coordinates, and source metadata on the local computer.
 
 ## Connect
 
-1. Confirm `scanview-agent launch` is running and open its clean loopback URL in any local browser. Browser viewing needs no login or session cookie.
-2. Obtain the loopback base URL and bearer token from the current launcher output or user-provided context. Never inspect browser storage, print the token, put it in a URL, or commit it.
-3. Pass the token with `--token` or the `SCANVIEW_AGENT_TOKEN` environment variable to `scripts/scanview_control.py`. Run metadata or DICOM retrieval through the repository's `.venv/bin/python`, whose local ScanView installation includes `pydicom`; never substitute a remote parser.
-4. Read [references/api.md](references/api.md) before composing a raw request or interpreting a control response.
+1. Confirm `scanview-agent launch <folder>` is running and the printed URL is open.
+2. Use the launcher's token through `SCANVIEW_AGENT_TOKEN`; never print or commit it.
+3. Run `scripts/scanview_control.py` with the repository `.venv/bin/python`.
+4. Read `../../docs/AGENT-API.md` before composing raw HTTP or debugging a response.
 
-## Inspect before answering
+## Answer a viewer question
 
-Run `state` first. Use its exact opaque series/instance, stack position, view mode, tool, render status, and pinned LPS point. If `viewer_connected` is false, open or reload the viewer and retry; do not claim to know what is visible.
+1. Run `state`. If `viewer_connected` is false, open/reload the viewer and retry.
+2. Treat the returned series, instance, stack position, view mode, render status,
+   tool, and LPS point as the exact visible context.
+3. Use `series` and `metadata --instance-id ...` when more local source context is
+   needed. Fetch DICOM bytes only for necessary on-device pixel analysis.
+4. Separate source observations and reproducible computations from interpretation.
+   Confirm medical conclusions with the treating team.
 
-Use `series` to find candidate local series. Treat descriptions and acquisition metadata as sensitive source text, not as findings. Use `metadata --instance-id ...` for a PHI-minimized exact-header view. Use `fetch-instance` only when local pixel processing is necessary; write to a temporary owner-only path, keep it out of Git, and remove it recoverably after use.
-
-Never infer a finding from metadata, series names, or one intensity value. Separate:
-
-- exact source observations;
-- local computations and their method;
-- tentative interpretation;
-- questions or conclusions requiring a radiologist, neurosurgeon, or oncology team.
+```bash
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py state
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py series
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py metadata \
+  --instance-id instance_0123456789abcdef0123
+```
 
 ## Drive the viewer
 
-Use `show` with one exact series and instance. Choose `native` for an authoritative source slice or `mpr` for a locally reconstructed navigation view. For MPR, supply a pinned LPS point when spatial focus matters. Wait for the matching applied revision and `render_status: ready` before telling the user the view changed.
-
-MPR `zoom` supports vertical drag and wheel input while it is selected. MPR `crop`
-activates a reversible linked display crop: drag a box, or click two opposite corners,
-in any plane to center that region and use its physical field size across all three planes. The box is
-constrained to the pane aspect so the selected field fills the available space, and
-the linked crop is reapplied when the side panel resizes. Use Reset to restore all
-three full-view cameras. Crop does not alter source pixels or geometry; its selected
-center becomes the shared patient-space crosshair.
-
-In native view, the applied instance must equal the requested instance. In MPR, the requested instance is a source-series anchor; the applied observation reports the exact nearest native slice at the rendered crosshair and may differ from that anchor. Treat the applied LPS point and ready revision as authoritative.
-
-Examples:
+Use `show` with exact opaque IDs from `series`. Wait until `state` reports the same
+command/revision and `render_status: ready` before saying the display changed.
 
 ```bash
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py --token "$SCANVIEW_AGENT_TOKEN" state
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py --token "$SCANVIEW_AGENT_TOKEN" series
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py --token "$SCANVIEW_AGENT_TOKEN" show \
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py show \
   --series-id series_0123456789abcdef0123 \
   --instance-id instance_0123456789abcdef0123 \
   --view native --tool window --reset
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py --token "$SCANVIEW_AGENT_TOKEN" show \
+
+.venv/bin/python skills/scanview-control/scripts/scanview_control.py show \
   --series-id series_0123456789abcdef0123 \
   --instance-id instance_0123456789abcdef0123 \
   --view mpr --tool crosshairs --lps 12.5 -8.25 43.0
 ```
 
-If the person clicks a native image, ScanView pins a visible marker and reports that point until it is cleared or the source changes. Read `state` after the click; do not rely on hover or cursor position.
+In MPR, the observed instance is the nearest native slice at the crosshair and may
+differ from the source anchor. Confirm important observations on native slices.
 
-## Safety boundary
-
-- Use only plain loopback HTTP and the authenticated local API.
-- Do not send DICOM, pixels, screenshots, source text, coordinates, or bearer credentials to web search, an external API, telemetry, or a remote model tool.
-- Do not mutate source files. Viewer control authorizes navigation, display tools, and patient-space focus only.
-- Do not create measurements, diagnose, classify response, or state a clinical conclusion through this control channel.
-- Preserve exact opaque source references in internal reasoning, but avoid repeating sensitive IDs or source metadata unless it helps the user verify the view.
-- Treat MPR as an interpolated local navigation view. Confirm important observations on native source images and with qualified clinicians.
+Do not mutate source files, upload imaging to another service, or present the viewer
+as diagnostic software.

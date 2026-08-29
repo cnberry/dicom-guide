@@ -1,0 +1,4 @@
+interface:
+  display_name: "Install ScanView"
+  short_description: "Install and launch the local DICOM viewer"
+  default_prompt: "Use $scanview-install to install ScanView and launch it with my local DICOM folder."
