@@ -710,6 +710,34 @@
    Exact artifact hashes and platform commissioning evidence are recorded in
    `docs/STATUS.md`; no patient data enters release or interoperability testing.
 
+## Completed in the thirty-fourth milestone
+
+1. Added a distinct v1 source DICOM SEG boundary-review archive instead of converting
+   source content into ScanView manual ROI evidence. The record binds the exact
+   catalog, original SEG, source series, reconstructed mask, source metadata, and
+   technical arithmetic while retaining explicit source-authority locks.
+2. Added a read-only MPR review form with a qualified role, self-asserted identity,
+   acquisition suitability, reviewer-defined represented tissue and boundary rules,
+   ten source-specific checklist items, fixed attestation, and accept/revise/reject
+   decision. Acceptance requires suitable acquisition and every check.
+3. Added a browser-session-only same-origin loopback assembler. The browser sends no
+   DICOM or mask; the server reopens guarded local sources, builds and independently
+   validates the five-file sensitive ZIP entirely in memory, returns `no-store`, and
+   persists nothing. Bearer authorization alone cannot manufacture the human review.
+4. Added local CLI creation and privacy-minimized agent validation. Stable bounded
+   no-follow reads, owner-only non-overwriting output, strict JSON/ZIP/member limits,
+   exact static-page regeneration, recursive live-source validation, and tamper/source-
+   change refusal fail closed.
+5. Kept source labels/codes, creator, algorithm, accuracy, and clinical meaning
+   unauthenticated, unverified, or not assessed. Even acceptance permits only
+   one-timepoint boundary/technical-volume discussion and future pairing-review
+   eligibility; current comparison assembly does not consume the artifact and every
+   longitudinal, change, response, diagnostic, and clinical-conclusion permission is
+   false.
+6. Bumped the local-only offline distribution to v0.14.0 with 32 embedded schemas.
+   Exact artifact hashes and platform commissioning evidence are recorded in
+   `docs/STATUS.md`; no patient data enters release or browser testing.
+
 ## Immediate
 
 1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
@@ -746,8 +774,8 @@
 1. Test source-SEG v2 against a real vendor-produced or clinical-system-exported
    patient-free fixture in addition to highdicom and dcmqi, while retaining the
    conservative fail-closed profile.
-2. Restore authenticated Strawberry access and rerun the exact v0.13 viewer-state,
-   source-SEG, dcmqi, no-index-package, and loopback endpoint gates under Linux
+2. Restore authenticated Strawberry access and rerun the exact v0.14 source-SEG review,
+   viewer-state, dcmqi, no-index-package, and loopback endpoint gates under Linux
    bubblewrap.
 3. Import a future same-modality Mila follow-up and complete explicit series pairing,
    separately reviewed ROI boundaries, same-lesion/tissue confirmation, and qualified

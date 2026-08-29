@@ -135,6 +135,21 @@ quality-system, and regulatory review.
   read it. Opt-out clears and revokes the ephemeral publisher; absent heartbeats
   expire within 30 seconds. Opaque IDs and hashes remain sensitive and potentially
   linkable; the state is explicitly not de-identified.
+- A source-SEG review is deliberately separate from live viewer state and manual ROI
+  evidence. Its browser request contains an opaque catalog/object/segment binding and
+  reviewer-entered declaration, but the returned local ZIP embeds the exact original
+  SEG, source-carried text, decoded mask pixels, technical volume, hashes, and reviewer
+  declaration. It may contain direct identifiers and is explicitly not de-identified.
+  The server writes no copy; a downloaded or CLI-created archive must be protected as
+  sensitive medical data.
+- Accepted source-SEG review means only that a self-asserted qualified person reviewed
+  that exact boundary on its source images and considered it suitable for discussion.
+  The static report never reproduces the source label/codes as a finding and keeps
+  creator identity, algorithm/accuracy, and source clinical meaning unverified or not
+  assessed. It grants no longitudinal lesion link, change, response classification,
+  diagnosis, treatment conclusion, medical-record sign-off, or regulatory status.
+  The privacy-minimized agent summary withholds reviewer identity, IDs, source text,
+  pixels, paths, hashes, and all measurement values.
 - Longitudinal readiness is metadata-only and never turns a candidate into a pairing.
   It requires valid distinct DICOM dates, separate studies, eligible MR↔MR or CT↔CT
   stacks, and one matching opaque patient context. Its agent form omits descriptions,
@@ -450,6 +465,13 @@ that a lesion exists, that two series are comparable, that measurements are corr
 or that a person reviewed the images. An active source-SEG reference only identifies
 which exact guarded object/segment is displayed. It supplies neither the mask nor its
 source-carried meaning, accuracy, provenance interpretation, or clinical authority.
+
+A valid source-SEG boundary-review archive is also not a clinical observation by
+itself. It records a bounded self-attested human decision about one exact technical
+boundary while preserving the source object’s unverified authority. “Reviewed source
+boundary suitable for discussion” is allowed; “the source label is the tumor,” “this
+is the same lesion at follow-up,” and “the volume proves response” remain impossible
+without separate qualified evidence and review contracts.
 
 Registration QA is a human authority boundary. Agents may inspect its minimized
 availability/review-status contract and validate a saved record, but they may not load

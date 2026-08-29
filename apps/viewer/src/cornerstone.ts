@@ -593,7 +593,7 @@ const buildDicomSeg = async ({
   dataset.SeriesDescription = 'ScanView unreviewed manual lesion ROI';
   dataset.Manufacturer = 'ScanView local';
   dataset.ManufacturerModelName = 'ScanView';
-  dataset.SoftwareVersions = '0.13.0';
+  dataset.SoftwareVersions = '0.14.0';
   const segmentItem = Array.isArray(dataset.SegmentSequence)
     ? dataset.SegmentSequence[0]
     : dataset.SegmentSequence;

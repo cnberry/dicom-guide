@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 05:45 PDT
+Last updated: 2026-08-29 06:31 PDT
 
 ## Data transfer
 
@@ -63,6 +63,25 @@ Last updated: 2026-08-29 05:45 PDT
   sensitive full catalog, while CLI validation output is privacy-minimized. Paint,
   erase, evidence conversion, export, identity, accuracy, diagnosis, response, and
   clinical conclusions are all unavailable.
+- A distinct v1 source-SEG boundary-review workflow now lets a qualified person review
+  the exact read-only mask on its original images without converting it into ScanView
+  manual ROI evidence. The bounded record separates reviewer-defined represented
+  tissue and boundary criteria from unverified source label/codes, records ten explicit
+  source-specific checks and a fixed self-attestation, and retains creator, algorithm,
+  accuracy, source meaning, longitudinal, response, diagnosis, and conclusion locks.
+- The browser sends only an opaque exact source reference and reviewer declaration to
+  a browser-session-only same-origin loopback route. The server revalidates the guarded
+  original SEG and every source image, reconstructs the dense native mask, assembles
+  the five-file sensitive ZIP in memory, independently revalidates it, returns
+  `no-store`, and persists nothing. Bearer authorization alone is refused. The CLI
+  supports owner-only non-overwriting creation and privacy-minimized validation with
+  bounded no-follow request reads; tamper, symlink, oversize, incomplete acceptance,
+  source mutation, catalog mismatch, and authority escalation fail closed.
+- An accepted source-SEG review permits only one-timepoint boundary and technical-
+  volume discussion plus structural eligibility for a future pairing review. Current
+  comparison assembly deliberately does not consume it, and it computes no change or
+  treatment response. The copied Mila media contains no SEG objects, so all new tests
+  and browser QA remain patient-free.
 - An optional patient-free interoperability gate now uses pinned highdicom 0.28.1 as
   an independent writer and reader. It proved that a standard sparse SEG may list its
   complete 24-image source series at top level while encoding only 11 nonempty frames;
@@ -333,6 +352,42 @@ Last updated: 2026-08-29 05:45 PDT
 
 ## Verification
 
+- v0.14.0 source-SEG boundary-review milestone: passing on macOS arm64. The full
+  Python suite reports 262 tests; the viewer reports 141 tests across 29 files;
+  TypeScript typecheck, production build, Python bytecode compilation, diff hygiene,
+  and all 32 Draft 2020-12 schemas pass. Adversarial coverage rejects incomplete
+  acceptance, malformed/oversize/symlink/FIFO request input, interrupted-output
+  cleanup, archive/mask/source tamper, catalog/source mutation, bearer POST, cross-
+  origin POST, wrong media type, non-overwrite, and every authority escalation
+  represented by the fixed permission locks.
+- Patient-free production-browser QA used one generated 24-source/11-frame binary SEG.
+  The native stack plus axial/coronal/sagittal MPR rendered four canvases; the source-
+  authority warning and distinct qualified-review form remained visible. A revision-
+  requested record traversed the real loopback POST and downloaded a 7,339-byte ZIP.
+  CLI revalidation confirmed the exact original SEG/mask/source chain and five archive
+  members; the static report omitted the source-carried label and retained creator,
+  longitudinal, and response locks. The temporary fixture and download were moved to
+  Trash; Mila data was not used.
+- Offline runtime bundle v0.14.0: passing on macOS arm64. The retained owner-only
+  5,555,555-byte ZIP has nine fixed-timestamp members and SHA-256
+  `6ac7e02e53887089f6e54f496d7f578936ff4388be5923cf376eba800a38a729`.
+  It contains the 3,157,956-byte ScanView wheel (SHA-256
+  `78f9a6a5399e87e914ece316c3cd31ef37809bd003a9f13fb30606a7de6eaae4`),
+  11 UI/worker/codec files (10,302,292 uncompressed bytes), all 32 schemas (307,629
+  bytes), and pinned pydicom 3.0.2. The wheel and final ZIP were each built twice
+  byte-identically.
+- A fresh exact-artifact extraction verified and installed with `PIP_NO_INDEX=1`,
+  reported version 0.14.0, embedded UI, 32 schemas, and both runtime-network and
+  external-DICOM-processing-API requirements false. The packaged CLI created and
+  validated an owner-only source-SEG review, refused overwrite, and the packaged
+  loopback route refused bearer creation with 403 while accepting the browser-session
+  same-origin request with 200 `application/zip` and `no-store`; the returned archive
+  independently validated against the patient-free live source. dcmqi, highdicom, and
+  NumPy were absent.
+- Strawberry Linux v0.14 commissioning is pending: `strawberry.local` still resolves
+  and answers on SSH, but the configured credentials were refused again on 2026-08-29.
+  No password, host configuration, remote state, software, or patient data was changed
+  or transferred. The exact v0.11 Linux gate remains passing.
 - v0.13.0 viewer-state v2/source-SEG milestone: passing on macOS arm64. The full
   Python suite reports 259 tests; the viewer reports 136 tests across 28 files;
   TypeScript typecheck, production build, Python bytecode compilation, diff hygiene,

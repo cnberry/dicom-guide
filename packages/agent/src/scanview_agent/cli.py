@@ -63,6 +63,10 @@ from .source_segmentations import (
     registry_segmentation_source_loader,
     source_segmentation_summary,
 )
+from .source_segmentation_reviews import (
+    source_segmentation_review_summary,
+    write_source_segmentation_review,
+)
 from .visit_packets import visit_packet_summary, write_visit_packet
 
 
@@ -155,6 +159,27 @@ def parser() -> argparse.ArgumentParser:
     )
     validate_source_segmentations.add_argument("root", type=Path)
     validate_source_segmentations.add_argument("artifact", type=Path)
+
+    create_source_segmentation_review = commands.add_parser(
+        "create-source-segmentation-review",
+        help=(
+            "Create one source-bound self-attested review archive for an exact "
+            "source DICOM SEG object and segment"
+        ),
+    )
+    create_source_segmentation_review.add_argument("root", type=Path)
+    create_source_segmentation_review.add_argument("request", type=Path)
+    create_source_segmentation_review.add_argument("--output", "-o", type=Path, required=True)
+
+    validate_source_segmentation_review = commands.add_parser(
+        "validate-source-segmentation-review",
+        help=(
+            "Revalidate one source-SEG boundary review, its original SEG, mask, "
+            "and every exact local source byte"
+        ),
+    )
+    validate_source_segmentation_review.add_argument("archive", type=Path)
+    validate_source_segmentation_review.add_argument("root", type=Path)
 
     api = commands.add_parser("serve", help="Run the source-read-only loopback agent API")
     api.add_argument("root", type=Path)
@@ -619,6 +644,26 @@ def main() -> None:
             artifact,
             catalog=catalog,
             load_source=loader,
+        )
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "create-source-segmentation-review":
+        try:
+            summary = write_source_segmentation_review(
+                args.root,
+                args.request,
+                args.output,
+            )
+        except (OSError, TypeError, ValueError) as error:
+            argument_parser.error(str(error))
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-source-segmentation-review":
+        summary = source_segmentation_review_summary(
+            args.archive,
+            source_root=args.root,
         )
         _write_json(summary, None)
         if not summary["valid"]:

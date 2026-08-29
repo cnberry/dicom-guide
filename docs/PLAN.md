@@ -304,3 +304,15 @@ result into a medical conclusion.
     algorithms, volume, accuracy, or interpretation. All navigation-from-state,
     mutation, mask-read, SEG-interpretation, diagnosis, response, and conclusion
     permissions stay false; opt-out, TTL, and guarded-source change revoke the state.
+30. **Source-SEG review authority separation:** reviewing a source-carried DICOM SEG
+    must create a distinct v1 archive, never relabel the object as ScanView manual ROI
+    evidence. Creation is browser-session/same-origin or explicit local CLI only and
+    must revalidate the guarded catalog, original SEG bytes, every referenced MR/CT
+    source, dense binary mask, source-metadata hash, and arithmetic. The archive must
+    disclose original DICOM, source text, mask pixels, possible identifiers, and
+    self-asserted reviewer identity. Acceptance permits only one-timepoint boundary
+    and technical-volume discussion plus future pairing-review eligibility; source
+    label/codes/creator/algorithm/accuracy/meaning, longitudinal link, change,
+    response, diagnosis, and clinical conclusion remain unauthenticated, unverified,
+    not assessed, or false. Agent validation output must omit IDs, reviewer identity,
+    source text, pixels, paths, hashes, and numeric values.

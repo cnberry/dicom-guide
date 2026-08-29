@@ -71,6 +71,12 @@ from .source_segmentations import (
     build_source_segmentation_catalog,
     registry_segmentation_source_loader,
 )
+from .source_segmentation_reviews import (
+    MAX_REQUEST_BYTES as MAX_SOURCE_SEGMENTATION_REVIEW_REQUEST_BYTES,
+    REQUEST_MEDIA_TYPE as SOURCE_SEGMENTATION_REVIEW_REQUEST_MEDIA_TYPE,
+    source_segmentation_review_archive_bytes,
+    source_segmentation_review_summary,
+)
 from .visit_packets import (
     MAX_VISIT_PACKET_TRANSPORT_BYTES,
     visit_packet_from_transport,
@@ -768,6 +774,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/v1/registration-reviews":
             self._handle_registration_review_post()
             return
+        if path == "/v1/source-segmentation-reviews":
+            self._handle_source_segmentation_review_post()
+            return
         supported = {
             "/v1/visit-packets": (
                 "application/vnd.scanview.visit-input+zip",
@@ -1327,6 +1336,83 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.registration_review_filename = filename
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "application/vnd.scanview.registration-review+json")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(payload)))
+        self._security_headers()
+        self.end_headers()
+        try:
+            self.wfile.write(payload)
+        except OSError:
+            return
+
+    def _handle_source_segmentation_review_post(self) -> None:
+        if not self._browser_authorized():
+            self._send_json(
+                {"error": "browser_session_required"},
+                HTTPStatus.FORBIDDEN,
+            )
+            return
+        if not self._same_origin():
+            self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
+            return
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != SOURCE_SEGMENTATION_REVIEW_REQUEST_MEDIA_TYPE:
+            self._send_json(
+                {"error": "unsupported_media_type"},
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            )
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send_json({"error": "content_length_required"}, HTTPStatus.LENGTH_REQUIRED)
+            return
+        if (
+            content_length <= 0
+            or content_length > MAX_SOURCE_SEGMENTATION_REVIEW_REQUEST_BYTES
+        ):
+            self._send_json(
+                {"error": "request_too_large"},
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+            )
+            return
+        if not self.server.source_segmentation_inputs_unchanged():
+            self._send_json(
+                {"error": "source_segmentation_inputs_changed"},
+                HTTPStatus.CONFLICT,
+            )
+            return
+        body = self.rfile.read(content_length)
+        if len(body) != content_length:
+            self._send_json({"error": "incomplete_request"}, HTTPStatus.BAD_REQUEST)
+            return
+        created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        try:
+            payload = source_segmentation_review_archive_bytes(
+                body,
+                self.server.catalog,
+                self.server.registry,
+                source_segmentation_catalog=self.server.source_segmentation_catalog,
+                source_segmentation_masks=self.server.source_segmentation_masks,
+                created_at=created_at,
+            )
+            summary = source_segmentation_review_summary(
+                io.BytesIO(payload),
+                catalog=self.server.catalog,
+                registry=self.server.registry,
+            )
+            if not summary["valid"]:
+                raise ValueError("assembled source-SEG review failed local validation")
+        except (OSError, TypeError, ValueError) as error:
+            self._send_json(
+                {"error": "invalid_source_segmentation_review", "detail": str(error)},
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+            return
+        timestamp = created_at.replace("-", "").replace(":", "").split(".", 1)[0] + "Z"
+        filename = f"scanview-source-segmentation-review-{timestamp}.zip"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/zip")
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Content-Length", str(len(payload)))
         self._security_headers()

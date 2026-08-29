@@ -235,6 +235,15 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    The service assembles and revalidates every nested derivative in memory, returns
    it with `no-store`, and persists nothing. Service-backed measurement IDs join
    directly to the manifest; legacy folder IDs remain accepted.
+   Source-SEG review creation is a separate human-authority route. It requires the
+   HttpOnly browser session, exact same Origin, a 32 KiB strict JSON media type, and
+   the current guarded catalog hash; bearer authorization alone is refused. The
+   request carries only an opaque SEG/segment reference and bounded reviewer
+   declaration. The service reopens the original SEG and every referenced source,
+   reconstructs the native mask, assembles the five-file sensitive ZIP in memory,
+   and independently validates it against the live catalog before returning it with
+   `no-store`. Explicit local CLI creation and privacy-minimized validation remain
+   available for agent workflows.
    The viewer-state POST is a distinct bounded session-control route, not a source or
    derivative write. It independently validates exact catalog positions, retains one
    latest publication under a lock, marks it `unreviewed`, and serves it only to an
@@ -454,9 +463,9 @@ is not an MVP feature and is never allowed between CT and MRI.
   `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
   payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
   and `--require-hashes`; every launch verifies the bundle and probes installed
-  versions, UI, all 31 schemas, consultation contracts, agent consultation-plan,
+  versions, UI, all 32 schemas, consultation contracts, agent consultation-plan,
   source-segmentation validation, manual ROI review/comparison, native-boundary
-  display, agent-access
+  display, distinct source-SEG boundary review, agent-access
   audit, and longitudinal-readiness support
   before cataloging DICOM.
 - Trust boundary: the offline manifest detects payload corruption but is not publisher

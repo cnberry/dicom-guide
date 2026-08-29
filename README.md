@@ -55,6 +55,15 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   never mask bytes. Passing this narrow profile is not full DICOM conformance
   certification; creator, algorithm, boundary, tissue, diagnosis, response, and
   treatment effect are not verified or inferred.
+- Separate qualified source-SEG boundary reviews: from the read-only MPR, a qualified
+  person can record an accept/revise/reject decision, acquisition suitability,
+  reviewer-defined represented tissue and boundary criteria, ten explicit checks, and
+  a fixed self-attestation. The loopback server revalidates the exact guarded SEG,
+  referenced MR/CT sources, decoded mask, hashes, and arithmetic before returning a
+  sensitive local ZIP containing the original SEG and mask. Acceptance permits
+  one-timepoint boundary/volume discussion and future pairing review only; it does not
+  verify source metadata or authorize lesion linkage, change, response, diagnosis, or
+  a clinical conclusion.
 - Geometry-gated, single-series axial/coronal/sagittal MPR built locally from native
   source slices, with physically linked patient-space crosshairs, visible LPS
   coordinates, window/level, pan, zoom, wheel navigation, and reset.
@@ -218,8 +227,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.13.0.zip
-cd scanview-offline-0.13.0
+unzip release/scanview-offline-0.14.0.zip
+cd scanview-offline-0.14.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -234,6 +243,19 @@ Building the bundle may download the pinned dependency unless `--pydicom-wheel` 
 supplied, but installation, viewing, indexing, comparison, and evidence generation
 are offline. The integrity manifest is corruption evidence, not publisher signing or
 clinical authentication. Output is non-overwriting.
+
+The retained owner-only v0.14.0 ZIP is 5,555,555 bytes with SHA-256
+`6ac7e02e53887089f6e54f496d7f578936ff4388be5923cf376eba800a38a729`.
+It was built twice byte-identically and passed a fresh no-index install, 32-schema
+runtime check, owner-only packaged source-SEG catalog/review creation and validation,
+non-overwrite refusal, bearer review-creation refusal, browser-session same-origin
+assembly, `no-store`, and independent validation of the returned five-file ZIP on
+macOS arm64. Production-browser QA rendered one native stack plus three read-only MPR
+canvases and exported/revalidated a patient-free review. The exact runtime contains
+neither dcmqi, highdicom, nor NumPy and requires no network or external DICOM-processing
+API. Strawberry Linux v0.14 commissioning is pending because its configured SSH
+credentials were refused again on 2026-08-29; no software or patient data was
+transferred.
 
 The retained owner-only v0.13.0 ZIP is 5,540,314 bytes with SHA-256
 `76f3f3bd921dcde675c8487575c1b9d2bea74316e64877af1c22361cedb63780`.
@@ -630,6 +652,33 @@ permissions are fixed false. Turning sharing off clears and revokes that tab's
 ephemeral publisher; closing the page also clears it, and missed cleanup still expires
 within 30 seconds. This state is navigation context, not an imaging observation,
 pairing decision, clinical review, or medical conclusion.
+
+When a supported source DICOM SEG is open, expand **Qualified source-SEG boundary
+review record** to create a distinct review artifact. The browser posts only the
+catalog hash, opaque SEG/segment reference, and bounded reviewer declaration to the
+same-origin loopback service; it does not upload the mask or DICOM. The service
+reopens the exact guarded data, reconstructs the mask, assembles the ZIP entirely in
+memory, independently validates it, and returns it with `no-store`. The archive is
+not de-identified: it embeds the original SEG, source-carried text, decoded mask
+pixels, exact hashes, reviewer identity declaration, and technical volume, so keep it
+private. The static report deliberately separates reviewer-defined tissue wording
+from source label/codes whose meaning remains `not_assessed`.
+
+Agents can create or revalidate the same strict v1 artifact locally without an API:
+
+```bash
+scanview-agent create-source-segmentation-review '/path/to/DICOM' request.json \
+  --output source-seg-review.zip
+scanview-agent validate-source-segmentation-review source-seg-review.zip \
+  '/path/to/DICOM'
+```
+
+Validation emits a privacy-minimized summary without IDs, source text, pixels,
+paths, reviewer identity, or measurement values. A valid accepted summary says only
+that the exact one-timepoint source boundary and technical volume were reviewed for
+discussion and are structurally eligible for a future pairing review. Current
+comparison assembly does not consume this new source-SEG artifact, and no change or
+response is calculated.
 
 ## Save and reopen a measurement draft
 

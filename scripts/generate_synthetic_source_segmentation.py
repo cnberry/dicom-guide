@@ -166,7 +166,7 @@ def main() -> None:
     segmentation.ContentDescription = "Patient-free local source SEG validation"
     segmentation.Manufacturer = "ScanView local"
     segmentation.ManufacturerModelName = "ScanView synthetic generator"
-    segmentation.SoftwareVersions = "0.13.0"
+    segmentation.SoftwareVersions = "0.14.0"
     segmentation.Rows = ROWS
     segmentation.Columns = COLUMNS
     segmentation.NumberOfFrames = len(nonempty)

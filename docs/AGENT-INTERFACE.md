@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.13.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.14.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -19,7 +19,7 @@ sh launch.sh '/safe/local/DICOM/root' --no-open
 ```
 
 Installation invokes pip with `--no-index --require-hashes`; every launch rechecks
-the bundle and installed versions, UI, all 31 schemas, consultation contracts, agent
+the bundle and installed versions, UI, all 32 schemas, consultation contracts, agent
 consultation-plan, GSPS, and source-SEG contracts before any DICOM catalog is built. The launched agent
 interface is the same loopback bearer-
 authorized API documented below. Build-time dependency retrieval is separate from
@@ -88,6 +88,20 @@ runtime network or external DICOM-processing API requirement. Production-browser
 also passed with four visible canvases and immediate opt-out revocation. Strawberry
 Linux v0.13 commissioning is pending because the configured SSH credentials were
 refused again on 2026-08-29; no software or patient data was transferred.
+
+The owner-only v0.14.0 artifact is 5,555,555 bytes with SHA-256
+`6ac7e02e53887089f6e54f496d7f578936ff4388be5923cf376eba800a38a729`.
+Its second build was byte-identical. A fresh macOS arm64 extraction passed
+verification, no-index installation, the embedded 32-schema runtime, packaged
+source-SEG catalog/review creation and revalidation, owner-only/non-overwrite output,
+bearer POST refusal, browser-session same-origin review assembly, `no-store`, and
+independent revalidation of the returned archive. The 3,157,956-byte wheel has
+SHA-256 `78f9a6a5399e87e914ece316c3cd31ef37809bd003a9f13fb30606a7de6eaae4`.
+The installed artifact contains neither dcmqi, highdicom, nor NumPy and declares no
+runtime network or external DICOM-processing API requirement. Production-browser QA
+used only a patient-free synthetic fixture. Strawberry Linux v0.14 commissioning is
+pending because the configured SSH credentials were refused again on 2026-08-29; no
+software or patient data was transferred.
 
 ## Local artifacts
 
@@ -237,6 +251,44 @@ Creator identity is not authenticated; algorithm identity/accuracy, boundary acc
 represented tissue, and clinical meaning are not assessed. Editing, conversion into
 ScanView measurement evidence, longitudinal linking, response classification,
 diagnosis, and conclusion permissions are fixed false. No external API is called.
+
+### Source-SEG boundary review archive
+
+A person can create a distinct review from the visibly open read-only MPR, or an
+explicit local workflow can supply the same strict request to:
+
+```bash
+scanview-agent create-source-segmentation-review '/safe/local/DICOM/root' \
+  source-seg-review-request.json --output source-seg-review.zip
+scanview-agent validate-source-segmentation-review source-seg-review.zip \
+  '/safe/local/DICOM/root'
+```
+
+The v1 `scanview.source-segmentation-review` archive contains exactly `review.json`,
+the original `source-segmentation.dcm`, independently reconstructed `mask.bin`, a
+static `review.html`, and `README.txt`. It is sensitive and not de-identified: source
+text and the original object may contain direct identifiers. Creation binds the exact
+source-SEG catalog content hash, SEG object/segment, original SEG SHA-256, source-set
+SHA-256, source-metadata SHA-256, mask SHA-256, foreground count, and native-grid
+volume. Validation rebuilds the live catalog and mask and refuses tamper or source
+change.
+
+The request records a qualified role, self-asserted identity, acquisition suitability,
+reviewer-defined tissue/inclusion/exclusion wording, ten source-specific checks, and a
+fixed attestation. `accepted_for_discussion` requires suitable acquisition, every
+check, and an opaque patient context. The review wording is separate from source
+labels/codes: creator identity, algorithm, accuracy, and source clinical meaning remain
+unauthenticated, unverified, or `not_assessed`. Acceptance permits one-timepoint
+boundary/technical-volume discussion and future pairing-review eligibility only.
+Current comparison assembly does not consume this artifact; longitudinal linkage,
+change, response, diagnosis, and clinical conclusion stay false.
+
+The browser route `POST /v1/source-segmentation-reviews` requires the HttpOnly browser
+session, same origin, exact request media type, 32 KiB maximum, and unchanged guarded
+source inputs. Bearer authorization alone returns 403. The server assembles and
+independently validates the ZIP in memory, returns `no-store`, and persists nothing.
+CLI validation returns a privacy-minimized summary with no IDs, reviewer identity,
+source text, pixels, paths, hashes, or measurement values. No external API is called.
 
 The optional repository command
 `scripts/verify_highdicom_source_segmentation.py` requires the pinned `interop` extra.

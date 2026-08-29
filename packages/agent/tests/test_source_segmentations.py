@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+import io
 import json
+import os
+import stat
 import sys
 import threading
+import zipfile
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 from pydicom import dcmread
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.sequence import Sequence
@@ -29,6 +33,15 @@ from scanview_agent.source_segmentations import (
     build_source_segmentation_catalog,
     registry_segmentation_source_loader,
     source_segmentation_summary,
+)
+from scanview_agent.source_segmentation_reviews import (
+    ATTESTATION as SOURCE_SEG_REVIEW_ATTESTATION,
+    REQUEST_ARTIFACT_TYPE as SOURCE_SEG_REVIEW_REQUEST_ARTIFACT_TYPE,
+    REQUEST_MEDIA_TYPE as SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
+    source_segmentation_review_archive_bytes,
+    source_segmentation_review_summary,
+    validate_source_segmentation_review_request,
+    write_source_segmentation_review,
 )
 from scanview_agent.server import create_server
 from scanview_agent.viewer_state import VIEWER_STATE_MEDIA_TYPE, VIEWER_STATE_PERMISSIONS
@@ -787,6 +800,66 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
         assert "computed_volume" not in body.decode()
         assert "mask_sha256" not in body.decode()
 
+        review_request = _source_seg_review_request(artifact, accepted=False)
+        status, _, _ = _http(
+            server.server_port,
+            "/v1/source-segmentation-reviews",
+            method="POST",
+            body=json.dumps(review_request).encode(),
+            headers={
+                "Authorization": "Bearer local-agent-token",
+                "Content-Type": SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
+                "Origin": f"http://127.0.0.1:{server.server_port}",
+            },
+        )
+        assert status == 403
+        status, _, body = _http(
+            server.server_port,
+            "/v1/source-segmentation-reviews",
+            method="POST",
+            body=json.dumps(review_request).encode(),
+            headers={
+                "Cookie": cookie,
+                "Content-Type": SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
+                "Origin": "http://evil.invalid",
+            },
+        )
+        assert status == 403
+        assert json.loads(body) == {"error": "same_origin_required"}
+        status, _, body = _http(
+            server.server_port,
+            "/v1/source-segmentation-reviews",
+            method="POST",
+            body=json.dumps(review_request).encode(),
+            headers={
+                "Cookie": cookie,
+                "Content-Type": "application/json",
+                "Origin": f"http://127.0.0.1:{server.server_port}",
+            },
+        )
+        assert status == 415
+        assert json.loads(body) == {"error": "unsupported_media_type"}
+        status, headers, review_body = _http(
+            server.server_port,
+            "/v1/source-segmentation-reviews",
+            method="POST",
+            body=json.dumps(review_request).encode(),
+            headers={
+                "Cookie": cookie,
+                "Content-Type": SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
+                "Origin": f"http://127.0.0.1:{server.server_port}",
+            },
+        )
+        assert status == 200
+        assert headers["Cache-Control"] == "no-store"
+        assert headers["Content-Type"] == "application/zip"
+        assert "scanview-source-segmentation-review-" in headers["Content-Disposition"]
+        assert source_segmentation_review_summary(
+            io.BytesIO(review_body),
+            catalog=catalog,
+            registry=registry,
+        )["valid"] is True
+
         changed_source = registry[state["referenced_series"]["ordered_instance_ids"][0]]
         changed_source.write_bytes(changed_source.read_bytes() + b"changed")
         status, _, body = _http(
@@ -808,7 +881,240 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
         )
         assert status == 409
         assert json.loads(body) == {"error": "source_segmentation_inputs_changed"}
+        status, _, body = _http(
+            server.server_port,
+            "/v1/source-segmentation-reviews",
+            method="POST",
+            body=json.dumps(review_request).encode(),
+            headers={
+                "Cookie": cookie,
+                "Content-Type": SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
+                "Origin": f"http://127.0.0.1:{server.server_port}",
+            },
+        )
+        assert status == 409
+        assert json.loads(body) == {"error": "source_segmentation_inputs_changed"}
     finally:
         server.shutdown()
         thread.join(timeout=5)
         server.server_close()
+
+
+def _source_seg_review_request(artifact: dict, *, accepted: bool = True) -> dict:
+    state = artifact["segmentations"][0]
+    return {
+        "schema_version": "1.0.0",
+        "artifact_type": SOURCE_SEG_REVIEW_REQUEST_ARTIFACT_TYPE,
+        "source": {
+            "catalog_content_sha256": artifact["catalog_content_sha256"],
+            "segmentation_id": state["segmentation_id"],
+            "segment_number": state["segments"][0]["segment_number"],
+        },
+        "reviewer": {
+            "name": "Synthetic Reviewer",
+            "role": "radiologist",
+            "organization": "Synthetic Test Lab",
+            "identity_verification": "self_asserted_unverified",
+        },
+        "decision": "accepted_for_discussion" if accepted else "revision_requested",
+        "acquisition_suitability": "suitable" if accepted else "uncertain",
+        "represented_tissue": "Reviewer-defined synthetic tissue for contract testing.",
+        "inclusion_criteria": "Include the complete displayed synthetic boundary.",
+        "exclusion_criteria": "Exclude everything outside the displayed boundary.",
+        "note": "Patient-free synthetic review.",
+        "checklist": {
+            "original_images_reviewed": accepted,
+            "full_source_boundary_reviewed": accepted,
+            "all_three_planes_reviewed": accepted,
+            "mask_to_source_alignment_reviewed": accepted,
+            "source_segment_metadata_treated_as_unverified": accepted,
+            "creator_and_algorithm_treated_as_unverified": accepted,
+            "motion_considered": accepted,
+            "partial_volume_considered": accepted,
+            "treatment_effect_considered": accepted,
+            "acquisition_protocol_considered": accepted,
+        },
+        "attestation": SOURCE_SEG_REVIEW_ATTESTATION,
+    }
+
+
+def test_source_segmentation_review_is_distinct_source_bound_and_privacy_minimized(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "dicom"
+    catalog, registry, _ = _fixture(root)
+    artifact, _, _ = build_source_segmentation_catalog(
+        catalog,
+        registry_segmentation_source_loader(catalog, registry),
+    )
+    request_value = _source_seg_review_request(artifact)
+    payload = source_segmentation_review_archive_bytes(
+        json.dumps(request_value).encode(),
+        catalog,
+        registry,
+        review_id="source_seg_review_01234567-89ab-4def-8123-456789abcdef",
+        created_at="2026-08-29T13:00:00Z",
+    )
+    summary = source_segmentation_review_summary(
+        io.BytesIO(payload),
+        catalog=catalog,
+        registry=registry,
+    )
+    assert summary == {
+        "schema_version": "1.0.0",
+        "artifact_type": "scanview.source-segmentation-review-summary",
+        "valid": True,
+        "errors": [],
+        "review_status": "accepted_for_discussion",
+        "identity_verification": "self_asserted_unverified",
+        "source_validated": True,
+        "source_creator_authenticated": False,
+        "source_algorithm_verified": False,
+        "source_segment_clinical_meaning": "not_assessed",
+        "reviewed_volume_for_discussion": True,
+        "eligible_for_future_pairing_review": True,
+        "longitudinal_link": False,
+        "percent_change": False,
+        "response_classification": False,
+        "diagnosis": False,
+        "clinical_conclusion": False,
+        "contains_identifiers": False,
+        "contains_source_text": False,
+        "contains_pixels": False,
+        "contains_measurement_values": False,
+        "contains_paths": False,
+        "local_only": True,
+        "external_api_required": False,
+    }
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        assert set(archive.namelist()) == {
+            "review.json",
+            "source-segmentation.dcm",
+            "mask.bin",
+            "review.html",
+            "README.txt",
+        }
+        record = json.loads(archive.read("review.json"))
+        assert record["artifact_type"] == "scanview.source-segmentation-review"
+        assert record["privacy"]["contains_original_dicom"] is True
+        assert record["privacy"]["may_contain_direct_identifiers"] is True
+        assert record["source_snapshot"]["source_creator_identity_authenticated"] is False
+        assert record["source_snapshot"]["source_segment_clinical_meaning"] == "not_assessed"
+        assert "Source label one" not in archive.read("review.html").decode()
+        schema = json.loads(
+            (
+                Path(__file__).resolve().parents[3]
+                / "schemas"
+                / "scanview-source-segmentation-review-v1.schema.json"
+            ).read_text()
+        )
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema, format_checker=FormatChecker()).validate(record)
+
+
+def test_source_segmentation_review_rejects_incomplete_acceptance_and_tamper(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "dicom"
+    catalog, registry, seg_path = _fixture(root)
+    artifact, _, _ = build_source_segmentation_catalog(
+        catalog,
+        registry_segmentation_source_loader(catalog, registry),
+    )
+    incomplete = _source_seg_review_request(artifact)
+    incomplete["checklist"]["full_source_boundary_reviewed"] = False
+    with pytest.raises(ValueError, match="every source-SEG checklist"):
+        validate_source_segmentation_review_request(incomplete)
+
+    request_value = _source_seg_review_request(artifact, accepted=False)
+    payload = source_segmentation_review_archive_bytes(
+        json.dumps(request_value).encode(),
+        catalog,
+        registry,
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as source_archive:
+        members = {name: source_archive.read(name) for name in source_archive.namelist()}
+    mask = bytearray(members["mask.bin"])
+    mask[0] ^= 1
+    members["mask.bin"] = bytes(mask)
+    tampered = io.BytesIO()
+    with zipfile.ZipFile(tampered, "w") as archive:
+        for name, content in members.items():
+            archive.writestr(name, content)
+    summary = source_segmentation_review_summary(
+        io.BytesIO(tampered.getvalue()),
+        catalog=catalog,
+        registry=registry,
+    )
+    assert summary["valid"] is False
+    assert summary["reviewed_volume_for_discussion"] is False
+    assert summary["contains_pixels"] is False
+
+    seg_path.write_bytes(seg_path.read_bytes() + b"changed")
+    changed = source_segmentation_review_summary(
+        io.BytesIO(payload),
+        catalog=catalog,
+        registry=registry,
+    )
+    assert changed["valid"] is False
+    assert changed["source_validated"] is False
+
+
+def test_source_segmentation_review_cli_writer_is_owner_only_and_non_overwriting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "dicom"
+    catalog, registry, _ = _fixture(root)
+    artifact, _, _ = build_source_segmentation_catalog(
+        catalog,
+        registry_segmentation_source_loader(catalog, registry),
+    )
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(_source_seg_review_request(artifact)))
+    output = tmp_path / "source-seg-review.zip"
+    summary = write_source_segmentation_review(root, request_path, output)
+    assert summary["valid"] is True
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    with pytest.raises(ValueError, match="already exists"):
+        write_source_segmentation_review(root, request_path, output)
+
+    symlink_request = tmp_path / "request-link.json"
+    symlink_request.symlink_to(request_path)
+    with pytest.raises(ValueError, match="opened safely"):
+        write_source_segmentation_review(
+            root,
+            symlink_request,
+            tmp_path / "symlink-output.zip",
+        )
+
+    oversized_request = tmp_path / "oversized-request.json"
+    oversized_request.write_bytes(b"x" * (32 * 1024 + 1))
+    with pytest.raises(ValueError, match="bounded regular file"):
+        write_source_segmentation_review(
+            root,
+            oversized_request,
+            tmp_path / "oversized-output.zip",
+        )
+
+    fifo_request = tmp_path / "request.fifo"
+    os.mkfifo(fifo_request)
+    with pytest.raises(ValueError, match="bounded regular file"):
+        write_source_segmentation_review(
+            root,
+            fifo_request,
+            tmp_path / "fifo-output.zip",
+        )
+
+    incomplete_output = tmp_path / "incomplete-output.zip"
+    monkeypatch.setattr(
+        "scanview_agent.source_segmentation_reviews.os.write",
+        lambda _descriptor, _payload: (_ for _ in ()).throw(OSError("synthetic write failure")),
+    )
+    with pytest.raises(OSError, match="synthetic write failure"):
+        write_source_segmentation_review(
+            root,
+            request_path,
+            incomplete_output,
+        )
+    assert not incomplete_output.exists()

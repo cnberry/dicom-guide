@@ -23,10 +23,16 @@ import {
   type LesionVolumeReviewerRole,
 } from '../lesionVolumeReview';
 import type { LoadedSourceSegmentation } from '../sourceSegmentations';
+import {
+  SOURCE_SEGMENTATION_REVIEW_ATTESTATION,
+  requestSourceSegmentationReview,
+  type SourceSegmentationReviewChecklist,
+} from '../sourceSegmentationReview';
 
 type Props = {
   series: DicomSeries;
   readonlySourceSegmentation?: LoadedSourceSegmentation;
+  sourceSegmentationCatalogSha256?: string;
   onReadonlyReady?: () => void;
   onReadonlyError?: (message: string) => void;
   onClose: () => void;
@@ -60,9 +66,36 @@ const emptyReviewChecklist = (): LesionVolumeReviewChecklist => ({
   acquisition_protocol_considered: false,
 });
 
+const sourceReviewChecklistLabels: Array<[keyof SourceSegmentationReviewChecklist, string]> = [
+  ['original_images_reviewed', 'Original local source images reviewed'],
+  ['full_source_boundary_reviewed', 'Complete source-carried boundary reviewed, not selected slices only'],
+  ['all_three_planes_reviewed', 'Boundary traversed in axial, coronal, and sagittal planes'],
+  ['mask_to_source_alignment_reviewed', 'Decoded mask alignment checked against source pixels'],
+  ['source_segment_metadata_treated_as_unverified', 'Source label and coded metadata treated as unverified'],
+  ['creator_and_algorithm_treated_as_unverified', 'Source creator and algorithm treated as unauthenticated and unverified'],
+  ['motion_considered', 'Motion and other image artifacts considered'],
+  ['partial_volume_considered', 'Partial-volume effects considered'],
+  ['treatment_effect_considered', 'Treatment effect and non-tumor tissue considered'],
+  ['acquisition_protocol_considered', 'Sequence and acquisition protocol considered'],
+];
+
+const emptySourceReviewChecklist = (): SourceSegmentationReviewChecklist => ({
+  original_images_reviewed: false,
+  full_source_boundary_reviewed: false,
+  all_three_planes_reviewed: false,
+  mask_to_source_alignment_reviewed: false,
+  source_segment_metadata_treated_as_unverified: false,
+  creator_and_algorithm_treated_as_unverified: false,
+  motion_considered: false,
+  partial_volume_considered: false,
+  treatment_effect_considered: false,
+  acquisition_protocol_considered: false,
+});
+
 export function MprPanel({
   series,
   readonlySourceSegmentation,
+  sourceSegmentationCatalogSha256,
   onReadonlyReady,
   onReadonlyError,
   onClose,
@@ -103,6 +136,10 @@ export function MprPanel({
   const [reviewAttested, setReviewAttested] = useState(false);
   const [reviewExporting, setReviewExporting] = useState(false);
   const [reviewExportStatus, setReviewExportStatus] = useState('');
+  const [sourceReviewChecklist, setSourceReviewChecklist] =
+    useState<SourceSegmentationReviewChecklist>(emptySourceReviewChecklist);
+  const [sourceReviewExporting, setSourceReviewExporting] = useState(false);
+  const [sourceReviewExportStatus, setSourceReviewExportStatus] = useState('');
   const eligibility = assessMprEligibility(series);
   const evidenceEligibility = assessLesionVolumeEligibility(series);
 
@@ -267,6 +304,51 @@ export function MprPanel({
     }
   };
 
+  const downloadSourceSegmentationReview = async () => {
+    if (!readonlySourceSegmentation || !sourceSegmentationCatalogSha256 || !reviewerRole) return;
+    setSourceReviewExporting(true);
+    setSourceReviewExportStatus(
+      'Revalidating the exact local source SEG, referenced source bytes, and decoded mask…',
+    );
+    try {
+      const archive = await requestSourceSegmentationReview({
+        catalogContentSha256: sourceSegmentationCatalogSha256,
+        segmentationId: readonlySourceSegmentation.state.segmentation_id,
+        segmentNumber: readonlySourceSegmentation.segment.segment_number,
+        reviewerName,
+        reviewerRole,
+        reviewerOrganization,
+        decision: reviewDecision,
+        acquisitionSuitability,
+        representedTissue,
+        inclusionCriteria,
+        exclusionCriteria,
+        note: reviewNote,
+        checklist: sourceReviewChecklist,
+        attested: reviewAttested,
+      });
+      const ownedBytes = new Uint8Array(archive.bytes.byteLength);
+      ownedBytes.set(archive.bytes);
+      const url = URL.createObjectURL(new Blob([ownedBytes.buffer], { type: 'application/zip' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = archive.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setSourceReviewExportStatus(
+        reviewDecision === 'accepted_for_discussion'
+          ? 'Exported an exact source-bound self-attested review for discussion only · future pairing still requires a separate review · protect the downloaded file and its permissions'
+          : `Exported ${reviewDecision.replaceAll('_', ' ')} source-SEG record · no future pairing eligibility · protect the downloaded file and its permissions`,
+      );
+    } catch (error) {
+      setSourceReviewExportStatus(
+        error instanceof Error ? error.message : 'Unable to export the local source-SEG review.',
+      );
+    } finally {
+      setSourceReviewExporting(false);
+    }
+  };
+
   const closeWithDraftCheck = () => {
     if (readonlySourceSegmentation) {
       onClose();
@@ -325,7 +407,7 @@ export function MprPanel({
           <button disabled={Boolean(status)} onClick={() => controllerRef.current?.reset()}>
             Reset MPR
           </button>
-          <button disabled={exporting || reviewExporting} onClick={closeWithDraftCheck}>
+          <button disabled={exporting || reviewExporting || sourceReviewExporting} onClick={closeWithDraftCheck}>
             Close MPR
           </button>
         </div>
@@ -364,10 +446,114 @@ export function MprPanel({
             </strong>
             <span>
               Creator identity is not authenticated; algorithm identity and accuracy are not
-              verified. Editing, evidence conversion, longitudinal linking, and response
-              assessment are disabled.
+              verified. Editing, conversion into ScanView manual measurement evidence,
+              longitudinal linking, and response assessment are disabled.
             </span>
           </div>
+          <details className="mpr-boundary-review">
+            <summary>Qualified source-SEG boundary review record</summary>
+            <p>
+              This form records a qualified person’s review of this exact source-carried mask on
+              its original local images. The returned sensitive ZIP embeds the original DICOM SEG
+              and decoded mask and may contain direct identifiers. It never leaves this local
+              loopback service unless you deliberately move the downloaded file.
+            </p>
+            <p>
+              Identity and credentials are self-asserted. The source label, codes, creator,
+              algorithm, accuracy, and clinical meaning remain unauthenticated or unverified.
+              Acceptance means suitable for discussion only—not a finding, diagnosis, response
+              conclusion, or longitudinal lesion link.
+            </p>
+            <div className="mpr-review-fields">
+              <label>
+                Reviewer name
+                <input value={reviewerName} maxLength={120} onChange={(event) => setReviewerName(event.target.value)} />
+              </label>
+              <label>
+                Qualified role
+                <select value={reviewerRole} onChange={(event) => setReviewerRole(event.target.value as LesionVolumeReviewerRole | '')}>
+                  <option value="">Select role</option>
+                  {LESION_VOLUME_REVIEW_ROLES.map((role) => <option value={role} key={role}>{role.replaceAll('_', ' ')}</option>)}
+                </select>
+              </label>
+              <label>
+                Organization (optional)
+                <input value={reviewerOrganization} maxLength={160} onChange={(event) => setReviewerOrganization(event.target.value)} />
+              </label>
+              <label>
+                Boundary decision
+                <select value={reviewDecision} onChange={(event) => setReviewDecision(event.target.value as LesionVolumeReviewDecision)}>
+                  <option value="revision_requested">Revision requested</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="accepted_for_discussion">Accepted for discussion</option>
+                </select>
+              </label>
+              <label>
+                Acquisition suitability
+                <select value={acquisitionSuitability} onChange={(event) => setAcquisitionSuitability(event.target.value as AcquisitionSuitability)}>
+                  <option value="uncertain">Uncertain</option>
+                  <option value="not_suitable">Not suitable</option>
+                  <option value="suitable">Suitable</option>
+                </select>
+              </label>
+              <label className="mpr-review-wide">
+                Reviewer-defined represented tissue
+                <textarea rows={2} maxLength={500} value={representedTissue} onChange={(event) => setRepresentedTissue(event.target.value)} />
+              </label>
+              <label className="mpr-review-wide">
+                Inclusion criteria
+                <textarea rows={2} maxLength={1000} value={inclusionCriteria} onChange={(event) => setInclusionCriteria(event.target.value)} />
+              </label>
+              <label className="mpr-review-wide">
+                Exclusion criteria
+                <textarea rows={2} maxLength={1000} value={exclusionCriteria} onChange={(event) => setExclusionCriteria(event.target.value)} />
+              </label>
+              <label className="mpr-review-wide">
+                Review note (optional)
+                <textarea rows={2} maxLength={2000} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} />
+              </label>
+            </div>
+            <fieldset className="mpr-review-checklist">
+              <legend>Source-SEG boundary review checklist</legend>
+              {sourceReviewChecklistLabels.map(([key, label]) => (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={sourceReviewChecklist[key]}
+                    onChange={(event) => setSourceReviewChecklist((current) => ({ ...current, [key]: event.target.checked }))}
+                  />
+                  {label}
+                </label>
+              ))}
+            </fieldset>
+            <label className="mpr-review-attestation">
+              <input type="checkbox" checked={reviewAttested} onChange={(event) => setReviewAttested(event.target.checked)} />
+              {SOURCE_SEGMENTATION_REVIEW_ATTESTATION}
+            </label>
+            {!sourceSegmentationCatalogSha256 && (
+              <output className="mpr-export-status">Exact source-segmentation catalog binding is unavailable; reopen this overlay from the current source catalog.</output>
+            )}
+            <button
+              disabled={
+                Boolean(status) ||
+                sourceReviewExporting ||
+                !sourceSegmentationCatalogSha256 ||
+                !reviewerName.trim() ||
+                !reviewerRole ||
+                !representedTissue.trim() ||
+                !inclusionCriteria.trim() ||
+                !exclusionCriteria.trim() ||
+                (reviewDecision === 'accepted_for_discussion' &&
+                  (acquisitionSuitability !== 'suitable' ||
+                    Object.values(sourceReviewChecklist).some((value) => value !== true))) ||
+                !reviewAttested
+              }
+              onClick={() => void downloadSourceSegmentationReview()}
+            >
+              {sourceReviewExporting ? 'Validating and building local review…' : 'Export source-SEG review archive'}
+            </button>
+            {sourceReviewExportStatus && <output className="mpr-export-status">{sourceReviewExportStatus}</output>}
+          </details>
         </div>
       ) : (
       <div className="mpr-segmentation-controls" aria-label="Manual lesion ROI evidence controls">

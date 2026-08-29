@@ -21,6 +21,10 @@ scanview-agent source-segmentations '/path/to/copied/DICOM' \
   --output '/safe/private/source-segmentations.json'
 scanview-agent validate-source-segmentations '/path/to/copied/DICOM' \
   '/safe/private/source-segmentations.json'
+scanview-agent create-source-segmentation-review '/path/to/copied/DICOM' \
+  source-seg-review-request.json --output source-seg-review.zip
+scanview-agent validate-source-segmentation-review source-seg-review.zip \
+  '/path/to/copied/DICOM'
 scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM' \
@@ -112,6 +116,23 @@ SEG may contribute only its opaque object/segment/series references and guarded
 catalog hash; mask bytes, source text, labels, algorithms, volume, and interpretation
 remain outside the live state. All navigation, mutation, mask-read, diagnostic,
 response, and clinical permissions are fixed false.
+V0.14 adds a separate source-SEG boundary-review archive. The browser sends only an
+opaque exact source reference and reviewer declaration to the same-origin loopback
+service. The service revalidates the guarded original SEG and every referenced source,
+reconstructs the native mask, assembles and independently validates the sensitive ZIP
+in memory, and persists nothing. CLI creation and validation use the same contract.
+Acceptance permits one-timepoint discussion and future pairing review only; it does
+not verify source labels, codes, creator, algorithm, accuracy, or meaning and cannot
+authorize lesion linkage, change, response, diagnosis, or a conclusion.
+The deterministic owner-only v0.14.0 ZIP was built twice byte-identically. A fresh
+macOS arm64 no-index install passed the 32-schema runtime, packaged source-SEG
+catalog/review creation and validation, owner-only/non-overwrite behavior, bearer POST
+refusal, browser-session same-origin assembly, `no-store`, and independent validation
+of the returned five-file ZIP. The runtime contains neither dcmqi, highdicom, nor
+NumPy and requires no runtime network or external DICOM API. Patient-free production-
+browser QA passed; current Strawberry commissioning is pending SSH authentication and
+no patient data was transferred.
+
 The deterministic owner-only v0.13.0 ZIP was built twice byte-identically. A fresh
 macOS arm64 no-index install passed the
 31-schema runtime and exact packaged source-SEG/viewer-state v2 authorization,
