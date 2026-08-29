@@ -90,9 +90,11 @@ quality-system, and regulatory review.
   private job directory. Proxy, credential, extension-server, and Python-path
   variables are not inherited. The engine is required to run inside OS-enforced
   network isolation: macOS uses a deny-all-network sandbox; supported 64-bit Linux
-  requires `bwrap` private namespaces plus seccomp denial of socket creation, socket
-  pairs, and io_uring. A weaker `unshare`-only path is refused. Missing isolation
-  fails closed; there is no unsandboxed fallback.
+  requires `bwrap` private namespaces plus seccomp that permits only local `AF_UNIX`
+  IPC and rejects network socket domains and io_uring. Linux Slicer uses a private
+  Xvfb display with TCP listening disabled and never inherits the desktop display.
+  A weaker `unshare`-only path is refused. Missing isolation fails closed; there is no
+  unsandboxed fallback.
   Engine diagnostics exist only inside the deleted private job directory because
   third-party errors could contain patient context; a timeout terminates the process
   group before cleanup.

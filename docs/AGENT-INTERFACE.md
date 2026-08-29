@@ -428,16 +428,17 @@ revision 34627/runtime repository revision `9034c71`
 launcher must match a caller-supplied SHA-256 before data staging and after execution.
 Before staging, a no-data process checks the self-reported version/runtime repository
 revision and BRAINSFit/BRAINSResample availability. Those checks are provenance—not distributor or code-signature
-authentication. This host's separately authenticated official package is documented
-in [`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). Neither ScanView command calls
+authentication. Platform-specific package evidence and the Linux no-signature limit are
+documented in [`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). Neither ScanView command calls
 an external API. Slicer
 settings, `.slicerrc.py`, user-site Python packages, proxy/credential variables, and
 extension-server configuration are excluded from the private job environment. The
 engine process must also run with OS-enforced network isolation: macOS uses a
 deny-all-network sandbox; supported 64-bit Linux requires `bwrap` private namespaces
-plus seccomp denial of socket creation, socket pairs, and io_uring. A weaker
-`unshare`-only setup is refused. Missing isolation fails closed and there is no
-unsandboxed fallback.
+plus seccomp that permits only local `AF_UNIX` IPC and rejects network socket domains
+and io_uring. Linux Slicer receives a private Xvfb display with TCP listening disabled
+and never inherits the desktop display. A weaker `unshare`-only setup is refused.
+Missing isolation fails closed and there is no unsandboxed fallback.
 
 The v2 bundle contains exactly seven owner-only files: fixed, moving, and
 registered-moving NRRDs; a binary registered-moving sampling-support NRRD in fixed

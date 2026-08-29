@@ -53,11 +53,14 @@ libraries. For this macOS host, the official 447,327,067-byte DMG's published SH
 matched exactly; DMG integrity/stapled notarization, Gatekeeper assessment, deep strict
 app signature, Kitware team identity, launcher hash, and BRAINSFit/BRAINSResample hashes were verified
 before installation. Exact evidence and its limitations are recorded in
-[`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). Linux package authentication is
-still pending. ScanView requires OS-enforced network isolation for
-the child: a macOS deny-all-network sandbox or, on supported 64-bit Linux, `bwrap`
-private namespaces plus a seccomp filter denying socket creation, socket pairs, and
-io_uring. It refuses weaker `unshare`-only execution and has no unsandboxed fallback.
+[`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). The official Linux package is now
+verified on Strawberry by immutable bitstream, byte count, and published SHA-512, but
+Slicer's documented Linux release process provides no independent package signature.
+ScanView requires OS-enforced network isolation for the child: a macOS deny-all-network
+sandbox or, on supported 64-bit Linux, `bwrap` private namespaces plus seccomp that
+allows only local `AF_UNIX` IPC and rejects network socket domains and io_uring. Linux
+uses private Xvfb with TCP disabled. ScanView refuses inherited displays, weaker
+`unshare`-only execution, and unsandboxed fallback.
 
 The runner uses Slicer's official temporary local [DICOM database/import
 helpers](https://slicer.readthedocs.io/en/latest/developer_guide/script_repository/dicom.html)
@@ -100,10 +103,11 @@ and a mismatched-field-of-view case produced exactly 65,536 supported voxels out
 flags locked; a separately synthetic accepted review then exercised local mask-gated
 opacity/swipe in all three planes with no browser errors or non-loopback requests. No
 patient data was used. Strawberry independently passed the offline Ubuntu 26.04 x86_64
-runtime, loopback UI/catalog, bubblewrap private namespaces, seccomp socket denial,
-and Linux atomic no-replace publication. Strawberry does not yet have Slicer 5.12.3,
-so authenticated real Linux engine execution and real same-modality patient QA remain
-pending; neither has a cloud fallback.
+runtime, loopback UI/catalog, bubblewrap private namespaces, AF_UNIX-only seccomp,
+private no-TCP Xvfb, Linux atomic no-replace publication, and the real official Slicer
+5.12.3 equal-/partial-field registrations. Both Linux masks and transforms matched the
+macOS synthetic oracles and sources stayed unchanged. Real same-modality patient QA
+remains pending; it has no cloud fallback.
 
 ## Longitudinal comparison findings
 

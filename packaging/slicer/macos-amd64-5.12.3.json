@@ -63,7 +63,7 @@
   "limitations": [
     "This record documents one official macOS package and one local installation; ScanView still requires the caller-supplied launcher SHA-256 at execution time.",
     "The app bundle does not itself carry a stapled ticket; the downloaded DMG did, and Gatekeeper accepted both the DMG install assessment and the app as Notarized Developer ID.",
-    "Linux engine authentication and execution remain unverified.",
+    "Linux package and engine evidence is recorded separately; its official-source SHA-512 verification is not an independent publisher signature.",
     "A successful synthetic registration does not validate a patient-specific registration or authorize medical interpretation."
   ]
 }

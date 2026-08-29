@@ -178,8 +178,10 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    report, expected launcher hash, parsed scalar-volume geometry, complete binary
    sampling-support payload/counts, and finite proper-rigid transform. The engine
    runs inside a mandatory macOS deny-network sandbox or, on supported 64-bit Linux,
-   `bwrap` private namespaces plus a no-socket/io_uring seccomp filter; no weaker
-   `unshare`-only or unsandboxed fallback exists. The hash
+   `bwrap` private namespaces plus a seccomp filter that permits only local `AF_UNIX`
+   IPC and rejects network socket domains and io_uring. Linux uses private Xvfb with
+   TCP listening disabled; inherited displays and weaker `unshare`-only or unsandboxed
+   fallback do not exist. The hash
    match does not authenticate the software distributor. A generated transform is not
    display-approved. Registration review does not mutate that bundle: a separate JSON
    event anchors the exact seven filenames, byte counts, hashes, manifest, transform,

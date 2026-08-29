@@ -140,9 +140,10 @@ and BRAINSFit/BRAINSResample availability before source staging. Source bytes ar
 rehashed before private staging; Slicer and those two local modules receive only
 local generic paths, and user settings/startup scripts and user-site Python packages
 are disabled. OS-enforced network isolation is mandatory: macOS uses a deny-all-network
-sandbox; supported 64-bit Linux requires `bwrap` private namespaces plus seccomp denial
-of socket creation, socket pairs, and io_uring. The weaker `unshare`-only path is
-refused, and there is no unsandboxed fallback. A successful non-overwriting, owner-only
+sandbox; supported 64-bit Linux requires `bwrap` private namespaces plus seccomp that
+permits only local `AF_UNIX` IPC and rejects network socket domains and io_uring. Linux
+Slicer runs on private Xvfb with TCP listening disabled; inherited displays, weaker
+`unshare`-only execution, and unsandboxed fallback are refused. A successful non-overwriting, owner-only
 v2 directory contains fixed, moving, registered-moving, and binary registered-moving
 sampling-support NRRDs; a moving-to-fixed text ITK transform; an engine report; and a
 manifest. `validate-registration` rechecks all hashes, required versions and both local

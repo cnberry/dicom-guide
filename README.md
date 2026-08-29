@@ -280,6 +280,10 @@ a cloud service. Check the host first:
 .venv/bin/scanview-agent registration-doctor
 ```
 
+On Linux the doctor also requires `bwrap`, `xvfb-run`, and Xauthority support in
+addition to Slicer's documented Ubuntu runtime libraries. ScanView creates its own
+private no-TCP display; an existing `DISPLAY` does not satisfy or bypass that gate.
+
 Then choose the two exact catalog series IDs and explicitly attest that selection:
 
 ```bash
@@ -305,8 +309,10 @@ Slicer settings, the user startup script, and user-site Python packages are disa
 for the job so local customizations cannot silently change the version-gated workflow.
 The process also runs inside a required OS network boundary: macOS uses a deny-all-
 network sandbox, while supported 64-bit Linux requires `bwrap` private namespaces plus
-a seccomp filter that denies socket creation, socket pairs, and io_uring. The weaker
-`unshare`-only path is refused, and there is no unsandboxed fallback.
+a seccomp filter that permits only local `AF_UNIX` IPC and rejects network socket
+domains and io_uring. Linux Slicer receives a private Xvfb display with TCP listening
+disabled; inherited displays, weaker `unshare`-only execution, and unsandboxed fallback
+are refused.
 
 The expected SHA-256 must match before any DICOM is staged and is checked again after
 execution. A no-data preflight first verifies the self-reported Slicer version,
@@ -314,8 +320,8 @@ runtime repository revision, and both BRAINSFit and BRAINSResample availability.
 `registration-doctor` can
 show the observed launcher hash, but ScanView does not authenticate the distributor
 or code signature; obtain and record the expected digest through a trusted
-software-installation process. The authenticated package and installed-copy evidence
-for this macOS host is recorded in
+software-installation process. Platform-specific package and installed-copy evidence,
+including the Linux checksum-versus-signature limitation, is recorded in
 [`docs/SLICER-ENGINE-TRUST.md`](docs/SLICER-ENGINE-TRUST.md). ScanView strips proxy,
 credential, extension-server, and Python-path variables; the OS sandbox prevents the
 registration process from reaching external or host network services.

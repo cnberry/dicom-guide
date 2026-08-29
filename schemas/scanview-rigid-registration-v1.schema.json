@@ -160,7 +160,8 @@
             "mechanism": {
               "enum": [
                 "macos_sandbox_exec_deny_all_network",
-                "linux_bwrap_network_namespace_seccomp_no_sockets"
+                "linux_bwrap_network_namespace_seccomp_no_sockets",
+                "linux_bwrap_network_namespace_seccomp_no_network_sockets"
               ]
             },
             "external_network": { "const": "denied" },

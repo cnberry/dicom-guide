@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 20:36 PDT
+Last updated: 2026-08-28 21:15 PDT
 
 ## Data transfer
 
@@ -94,9 +94,10 @@ Last updated: 2026-08-28 20:36 PDT
   rehashed before and after generic private staging; Slicer temp/cache paths stay
   inside that deleted private job space. Slicer must run inside OS-enforced network
   isolation—a macOS deny-all-network sandbox or, on supported 64-bit Linux, `bwrap`
-  private namespaces plus seccomp denial of socket creation, socket pairs, and
-  io_uring—with no weaker `unshare`-only or unsandboxed fallback. DICOM is never
-  mutated and ScanView requires no external processing API.
+  private namespaces plus seccomp that allows only local `AF_UNIX` IPC and rejects
+  network socket domains and io_uring. Linux Slicer runs on private no-TCP Xvfb and
+  never inherits the desktop display. There is no weaker `unshare`-only or unsandboxed
+  fallback. DICOM is never mutated and ScanView requires no external processing API.
 - Successful registration creates an atomic no-replace, owner-only seven-file v2
   derivative directory containing fixed/moving/registered scalar NRRDs, a uint8 binary
   registered-moving sampling-support NRRD in fixed geometry, one finite proper-rigid
@@ -194,8 +195,9 @@ Last updated: 2026-08-28 20:36 PDT
   UI-embedded wheel together with all 20 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
-  runtime checks. The package and isolation boundary pass on Strawberry Linux;
-  signing/notarization and real Linux Slicer execution remain pending.
+  runtime checks. The package, private-display/network boundary, and real official
+  checksum-verified Slicer synthetic runs pass on Strawberry Linux; ScanView
+  signing/notarization remains pending.
 - Browser sessions use a one-time local redirect and SameSite, HttpOnly cookie;
   service-backed measurement IDs join directly to the agent manifest while legacy
   folder-import drafts remain supported.
@@ -207,7 +209,7 @@ Last updated: 2026-08-28 20:36 PDT
 
 ## Verification
 
-- Python agent tests: 158 passing, including cross-patient and legacy-context
+- Python agent tests: 161 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -224,8 +226,10 @@ Last updated: 2026-08-28 20:36 PDT
   startup-validation race refusal, stale-evidence relocking,
   native-DICOM path-swap/in-place-change refusal, full raw/gzip uint8 support-mask
   decoding, non-binary/empty/wrong-grid/missing/extra/tampered/legacy-v1 refusal,
-  seven-file review/display anchoring, mask mutation relocking, Linux namespace/seccomp no-socket
-  enforcement, minimized agent summaries, reviewed-route capability separation,
+  seven-file review/display anchoring, mask mutation relocking, Linux namespace plus
+  AF_UNIX-only seccomp enforcement, private no-TCP display gating, staged-runner hash
+  binding, checksum-versus-signature trust claims, minimized agent summaries,
+  reviewed-route capability separation,
   same-descriptor reviewed-volume streaming, consultation MR/CT/patient/study gates,
   live source hash/position binding, hostile nested/final ZIP refusal, strict JSON,
   output permissions/no-overwrite, presentation/source-anchor tamper detection, and
@@ -259,15 +263,15 @@ Last updated: 2026-08-28 20:36 PDT
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- UI-embedded staged Python wheel build: passing; the 2,945,425-byte wheel contains the
+- UI-embedded staged Python wheel build: passing; the 2,946,422-byte wheel contains the
   registration host/runner/review/display module, viewer-state server module, viewer
   entry point, all 11 built UI/worker/codec files (9,912,738 bytes uncompressed), and
-  all 20 JSON Schemas (181,486 bytes). A fresh isolated installation resolved its
+  all 20 JSON Schemas (181,638 bytes). A fresh isolated installation resolved its
   embedded UI and schemas without the source checkout; temporary release, installation,
   and installer-log artifacts were moved to recoverable Trash.
 - Offline runtime bundle build plus macOS arm64 and Strawberry Linux x86_64 smoke tests:
-  passing. The deterministic 5,339,467-byte ZIP contains nine fixed-timestamp members:
-  `bundle.json` plus eight hash-manifested payloads, including the 2,945,425-byte
+  passing. The deterministic 5,340,464-byte ZIP contains nine fixed-timestamp members:
+  `bundle.json` plus eight hash-manifested payloads, including the 2,946,422-byte
   embedded ScanView wheel and
   pinned 2,376,822-byte `pydicom` 3.0.2 wheel. A fresh extraction verified, installed
   with `PIP_NO_INDEX=1`, `--no-index`, and `--require-hashes`, then rechecked both
@@ -275,7 +279,7 @@ Last updated: 2026-08-28 20:36 PDT
   `runtime_network_required: false` and
   `external_dicom_processing_api_required: false` runtime assertions. A second build
   from the same wheels was byte-identical. The retained ZIP SHA-256 is
-  `1b46bfde292c8c3a5f0cbd65921b564c7651c8390139fa9735880a54f9eddf95`. Its packaged
+  `e6ca632f031268eed9139b2a70899c534f4f8a77cf75f3bf08ead86108c47c81`. Its packaged
   launcher indexed synthetic MR and CT instances, served health/manifest over loopback,
   and independently validated the production synthetic consultation board
   with direct identifiers excluded and deidentification explicitly false. The exact
@@ -328,15 +332,20 @@ Last updated: 2026-08-28 20:36 PDT
   warnings. The browser console was empty, and server requests were limited to loopback
   UI/context plus the three allowlisted NRRDs. Synthetic fixtures and review evidence
   were moved to recoverable Trash.
-- Strawberry Linux runtime smoke test: the patient-free offline ZIP verified and
+- Strawberry Linux runtime and engine test: the patient-free offline ZIP verified and
   installed with `PIP_NO_INDEX=1`, `--no-index`, and required hashes on Ubuntu 26.04
   x86_64/Python 3.14.4. It resolved the embedded UI and all 20 schemas, indexed a
   two-instance synthetic MR series with direct identifiers excluded, and returned HTTP
-  200 for embedded UI and bearer-authorized manifest over loopback. Bubblewrap 0.11.1
-  private namespaces plus the generated seccomp filter denied socket creation with
-  `EPERM`; Linux `renameat2` atomic publication succeeded once and refused overwrite.
-  Strawberry has no Slicer 5.12.3 installation, so real Linux engine execution remains
-  pending.
+  200 for embedded UI and bearer-authorized manifest over loopback. The official Slicer
+  5.12.3 Linux amd64 archive matched its immutable bitstream size and published SHA-512;
+  all 10,572 members and 385 links passed safe-root preflight before owner-only install.
+  Slicer's documented Linux release process supplies no independent package signature,
+  so the
+  evidence is explicitly checksum/source verified. Bubblewrap 0.11.1 private namespaces,
+  private Xvfb with TCP disabled inside bubblewrap, and seccomp allowing only `AF_UNIX`
+  completed no-data preflight and both real-engine synthetic registrations. A live probe denied `AF_INET`
+  socket creation with `EPERM`, no X11 TCP listener remained, Linux `renameat2` atomic
+  publication succeeded once and refused overwrite, and no Mila data was transferred.
 - Synthetic browser smoke test: two canvases render; all five viewer controls activate.
 - Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
   1162×1200 canvases; the full folder produces 57 pixel series; local server logs show
@@ -487,9 +496,9 @@ Last updated: 2026-08-28 20:36 PDT
   offline bundle now passes on Strawberry Ubuntu 26.04 x86_64. It still requires host
   Python 3.11+ and is not yet signed.
 - Registration generation, local QA, accepted-review opacity/swipe display, an
-  authenticated official macOS engine, real-engine synthetic execution, and mandatory
-  pixel-level moving sampling-support gating now exist. A real same-modality patient
-  run, qualified real-case decision, Linux Slicer authentication/execution, and signed
-  ScanView release remain pending. Sampling support is not shared-anatomy or
-  registration-quality evidence, and there is still no tumor segmentation, response
+  authenticated official macOS engine, an official-source/checksum-verified Linux
+  engine, real-engine synthetic execution on both platforms, and mandatory pixel-level
+  moving sampling-support gating now exist. A real same-modality patient run, qualified
+  real-case decision, and signed ScanView release remain pending. Sampling support is
+  not shared-anatomy or registration-quality evidence, and there is still no tumor segmentation, response
   criteria, or automated medical conclusion.

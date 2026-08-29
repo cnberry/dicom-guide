@@ -429,6 +429,7 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
     assert network_isolation["mechanism"] in {
         "macos_sandbox_exec_deny_all_network",
         "linux_bwrap_network_namespace_seccomp_no_sockets",
+        "linux_bwrap_network_namespace_seccomp_no_network_sockets",
     }
     assert network_isolation["external_network"] == "denied"
     assert network_isolation["host_network"] == "isolated"
@@ -724,10 +725,19 @@ def test_registration_failure_or_source_change_creates_no_partial_output(
     assert doctor["network_isolation"]["mechanism"] in {
         "macos_sandbox_exec_deny_all_network",
         "linux_bwrap_network_namespace_seccomp_no_sockets",
+        "linux_bwrap_network_namespace_seccomp_no_network_sockets",
     }
     assert doctor["network_isolation"]["external_network_denied"] is True
     assert doctor["network_isolation"]["host_network_isolated"] is True
     assert doctor["network_isolation"]["unsandboxed_fallback"] is False
+    assert doctor["display_runtime"] == {
+        "required": False,
+        "available": True,
+        "mechanism": "native_platform_display_runtime",
+        "private_local_display": True,
+        "external_network_listener": False,
+        "inherited_display_allowed": False,
+    }
     assert doctor["ready_for_execution_check"] is True
 
 
@@ -797,7 +807,9 @@ def test_linux_engine_sandbox_command_is_network_isolated(
         tmp_path,
         seccomp_descriptor=9,
     )
-    assert mechanism == "linux_bwrap_network_namespace_seccomp_no_sockets"
+    assert mechanism == (
+        "linux_bwrap_network_namespace_seccomp_no_network_sockets"
+    )
     assert {
         "--new-session",
         "--unshare-all",
@@ -810,8 +822,8 @@ def test_linux_engine_sandbox_command_is_network_isolated(
     assert command[command.index("--seccomp") + 1] == "9"
     assert command[-2:] == ["/opt/Slicer/Slicer", "--no-main-window"]
 
-    payload = registration_module._linux_no_socket_seccomp_filter()
-    assert len(payload) == 13 * 8
+    payload = registration_module._linux_network_socket_seccomp_filter()
+    assert len(payload) == 16 * 8
     instructions = [
         registration_module.struct.unpack("=HBBI", payload[index : index + 8])
         for index in range(0, len(payload), 8)
@@ -819,8 +831,10 @@ def test_linux_engine_sandbox_command_is_network_isolated(
     assert instructions[6][3] == 41  # socket
     assert instructions[7][3] == 53  # socketpair
     assert [instruction[3] for instruction in instructions[8:11]] == [425, 426, 427]
+    assert instructions[12][3] == 16  # seccomp_data.args[0], socket domain
+    assert instructions[13][3] == 1  # AF_UNIX
     assert instructions[-1][3] == 0x00050000 | errno.EPERM
-    descriptor = registration_module._open_linux_seccomp_filter(tmp_path)
+    descriptor = registration_module._open_linux_network_seccomp_filter(tmp_path)
     try:
         metadata = os.fstat(descriptor)
         assert stat.S_IMODE(metadata.st_mode) == 0o600
@@ -846,6 +860,81 @@ def test_linux_engine_refuses_unshare_without_bwrap(tmp_path: Path, monkeypatch)
             ["/opt/Slicer/Slicer"],
             tmp_path,
         )
+
+
+def test_linux_slicer_uses_private_xvfb_without_tcp(monkeypatch) -> None:
+    monkeypatch.setattr(registration_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(
+        registration_module.shutil,
+        "which",
+        lambda name: "/usr/bin/xvfb-run" if name == "xvfb-run" else None,
+    )
+    status = registration_module._slicer_display_runtime_status()
+    assert status == {
+        "required": True,
+        "available": True,
+        "mechanism": "linux_private_xvfb_no_tcp",
+        "private_local_display": True,
+        "external_network_listener": False,
+        "inherited_display_allowed": False,
+    }
+    command = registration_module._private_display_command(
+        ["/usr/bin/bwrap", "--", "/opt/Slicer/Slicer"]
+    )
+    assert command[:3] == [
+        "/usr/bin/xvfb-run",
+        "--auto-servernum",
+        "--server-args=-screen 0 1280x1024x24 -nolisten tcp",
+    ]
+    assert command[-3:] == ["/usr/bin/bwrap", "--", "/opt/Slicer/Slicer"]
+
+
+def test_linux_doctor_refuses_inherited_display_without_xvfb(
+    tmp_path: Path, monkeypatch
+) -> None:
+    slicer = tmp_path / "Slicer"
+    slicer.write_text("#!/bin/sh\nexit 0\n")
+    slicer.chmod(0o700)
+    monkeypatch.setattr(registration_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(registration_module.platform, "machine", lambda: "x86_64")
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setattr(
+        registration_module.shutil,
+        "which",
+        lambda name: "/usr/bin/bwrap" if name == "bwrap" else None,
+    )
+    doctor = registration_doctor(slicer)
+    assert doctor["network_isolation"]["available"] is True
+    assert doctor["display_runtime"] == {
+        "required": True,
+        "available": False,
+        "mechanism": None,
+        "private_local_display": False,
+        "external_network_listener": None,
+        "inherited_display_allowed": False,
+    }
+    assert doctor["ready_for_execution_check"] is False
+    assert "Xvfb" in doctor["note"]
+
+
+def test_linux_engine_trust_record_keeps_checksum_and_signature_distinct() -> None:
+    repository = Path(__file__).parents[3]
+    record = json.loads(
+        (repository / "packaging/slicer/linux-amd64-5.12.3.json").read_text()
+    )
+    assert record["record_type"] == "scanview_slicer_engine_trust"
+    assert record["official_package"]["bytes"] == 498_683_944
+    assert record["official_package"]["sha512"] == (
+        "66bd3a1b9a7f636b40b96cb8c49f395ee783cdcaf7b43a4b895d6a40df9e0af"
+        "8393f5ab7631ba50f6bbe06aa17dbcd8a46984a53b693bdf203d34337e2e80401"
+    )
+    assert record["publisher"]["download_sha512_matches_official_metadata"] is True
+    assert record["publisher"]["linux_package_signature_provided"] is False
+    assert record["publisher"]["publisher_signature_verified"] is False
+    assert record["verification"]["source_sha256_manifests_unchanged"] is True
+    assert record["verification"]["seccomp_af_inet_socket"] == "denied with EPERM"
+    assert record["verification"]["external_api_required"] is False
+    assert record["verification"]["patient_data_used"] is False
 
 
 def test_engine_timeout_terminates_the_private_process_group(tmp_path: Path) -> None:

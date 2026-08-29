@@ -256,8 +256,9 @@
    twenty-second milestone now fails v1 closed and enforces sampling support per pixel.
 5. Added mandatory OS-enforced network denial for Slicer execution: macOS uses a
    deny-all-network sandbox; supported 64-bit Linux requires `bwrap` private namespaces
-   plus seccomp denial of socket creation, socket pairs, and io_uring. Weaker
-   `unshare`-only execution fails closed with no unsandboxed fallback.
+   plus seccomp rejection of network socket domains and io_uring. Only local `AF_UNIX`
+   IPC is allowed for the private no-TCP Xvfb display. Inherited displays and weaker
+   `unshare`-only execution fail closed with no unsandboxed fallback.
 
 ## Completed in the eighteenth milestone
 
@@ -375,9 +376,37 @@
    browser diagnostics and loopback-only page resources.
 6. Verified the patient-free offline runtime on Strawberry Ubuntu 26.04 x86_64/Python
    3.14.4: no-index installation, embedded UI, all 20 schemas, local DICOM catalog/server,
-   bubblewrap network namespaces plus seccomp socket denial, and atomic no-replace
-   publication passed. Strawberry does not yet have the pinned Slicer engine, so real
-   Linux engine authentication/execution remains open.
+   bubblewrap network namespaces plus the then-current no-socket seccomp probe, and
+   atomic no-replace publication passed. Strawberry did not yet have the pinned Slicer
+   engine at that milestone; the twenty-third milestone closes that execution gate.
+
+## Completed in the twenty-third milestone
+
+1. Pinned the immutable official Slicer 5.12.3 Linux amd64 bitstream, byte count, and
+   published SHA-512. Strawberry's owner-only download matched all three, and a
+   pre-extraction audit found one safe package root across 10,572 members and 385 links.
+2. Installed the package owner-only on Strawberry Ubuntu 26.04 x86_64, recorded exact
+   launcher/BRAINSFit/BRAINSResample hashes and ELF build IDs, and installed only the
+   documented Ubuntu/Qt dependencies plus bubblewrap and private Xvfb support. Slicer's
+   Linux process supplies no independent publisher signature, so trust remains
+   explicitly official-source/checksum verified rather than signature verified.
+3. Added a fail-closed headless Linux display path. ScanView refuses inherited displays,
+   launches private Xvfb with TCP disabled inside bubblewrap's separate
+   network namespace, permits only local `AF_UNIX` IPC in seccomp, and rejects network
+   socket domains and io_uring. A live probe allowed `AF_UNIX` and denied `AF_INET`
+   with `EPERM`; no X11 TCP listener remained.
+4. Rebuilt the deterministic offline release with this production path. The owner-only
+   5,340,464-byte ZIP has SHA-256
+   `e6ca632f031268eed9139b2a70899c534f4f8a77cf75f3bf08ead86108c47c81`,
+   verified, and installed on Strawberry with `PIP_NO_INDEX=1`, `--no-index`, and
+   required hashes.
+5. Ran normal real-engine equal- and partial-field synthetic MR registrations. Both
+   owner-only seven-file v2 bundles validated, sources stayed byte-identical, every
+   display use remained locked, and computed/interpretation arrays stayed empty. The
+   transforms recovered -2.008290 mm and -1.998159 mm x translation; support was
+   65,536/65,536 and 65,536/69,632 (94.117647%), matching the macOS oracles.
+6. Used no Mila data on Strawberry and no external DICOM-processing API. The detailed
+   human and machine-readable Linux provenance records are committed with the repo.
 
 ## Immediate
 
@@ -389,10 +418,10 @@
    and complete qualified visual/quantitative QA.
 3. Protect the authenticated local Slicer installation and keep using the recorded
    launcher hash; reauthenticate any replacement before a future patient-specific job.
-4. Authenticate the pinned Slicer engine on Strawberry and repeat the real synthetic
-   seven-file v2 engine run inside the already verified Linux namespace/seccomp boundary.
-5. Produce signed/notarized macOS/Linux release artifacts around the verified offline
-   bundle, and evaluate whether to include a separately authenticated interpreter.
+4. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
+   hash; repeat authentication and synthetic commissioning after any replacement.
+5. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
+   offline bundle, and evaluate whether to include a separately authenticated interpreter.
 6. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
 7. Design an append-only, privacy-minimized local audit for bearer access to live
@@ -402,25 +431,22 @@
 
 ## Next milestone
 
-1. Authenticate and run the pinned Slicer engine on Strawberry Linux x86_64 without
-   weakening the verified network or atomic-publication boundary.
-2. Import a future same-modality Mila follow-up and complete the explicit pairing and
+1. Import a future same-modality Mila follow-up and complete the explicit pairing and
    qualified review workflow before enabling reviewed comparison.
-3. Add platform signing and notarization without weakening local-only runtime behavior.
-4. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
+2. Add platform signing and notarization without weakening local-only runtime behavior.
+3. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
    configuration.
-5. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-6. Extend append-only audit records from review decisions to local evidence access.
+4. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
+5. Extend append-only audit records from review decisions to local evidence access.
 
 ## Registration milestone
 
-1. Repeat the completed macOS real-Slicer verification on Linux, including distributor
-   signature/checksum verification for the complete engine bundle and mandatory
-   namespace/seccomp execution.
-2. Perform the implemented QA workflow on a valid real same-modality pair with a
+1. Perform the implemented QA workflow on a valid real same-modality pair with a
    qualified reviewer and a predeclared clinically appropriate landmark tolerance.
-3. Verify the implemented accepted-record display on a real reviewed bundle; never
+2. Verify the implemented accepted-record display on a real reviewed bundle; never
    overwrite originals and never unlock subtraction, segmentation, or mask propagation.
+3. Re-run both platform commissioning cases after any engine, sandbox, Xvfb, or
+   packaging dependency changes; never infer Linux publisher signing from a checksum.
 
 ## Decisions needed with clinicians
 

@@ -72,9 +72,10 @@ result into a medical conclusion.
 - Deterministic macOS/Linux offline runtime bundle with the embedded UI/contracts,
   pinned pure-Python DICOM dependency, exact payload manifest, hash-locked no-index
   installer, and per-launch runtime checks. Python 3.11+ is an explicit prerequisite;
-  the packaged runtime and mandatory engine sandbox boundary pass on Strawberry
-  Ubuntu x86_64, while publisher signing and real Linux Slicer execution remain
-  pending.
+  the packaged runtime, official checksum-verified Linux Slicer, private-display and
+  mandatory engine network boundaries, and real synthetic registrations pass on
+  Strawberry Ubuntu x86_64. ScanView release signing remains pending; Slicer's Linux
+  artifact has no independent publisher signature in its documented release process.
 
 ### Phase 2 — robust local archive and tools
 
@@ -87,9 +88,10 @@ result into a medical conclusion.
 
 - Version-gated local Slicer/BRAINSFit/BRAINSResample rigid-registration execution and
   source-hashed, generated-pending-QA seven-file v2 bundles with an explicit binary
-  moving-image sampling-support mask (implemented; an authenticated official macOS
-  engine passed equal- and partial-field synthetic same-modality runs, while a real
-  patient pair and real Linux Slicer execution remain pending).
+  moving-image sampling-support mask (implemented; the authenticated official macOS
+  engine and official-source/checksum-verified Strawberry Linux engine passed equal-
+  and partial-field synthetic same-modality runs, while a real patient pair remains
+  pending).
 - Isolated local registration QA with derived reference/registered views, all three planes,
   opacity, swipe, checkerboard, edges, qualitative landmarks, quantitative 3-D
   residuals mandatory for acceptance, and a separate hash-linked accept/reject record

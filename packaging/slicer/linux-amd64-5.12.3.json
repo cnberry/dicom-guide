@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "scanview_slicer_engine_trust",
+  "verified_at": "2026-08-28T21:15:00-07:00",
+  "release": {
+    "application_version": "5.12.3",
+    "computed_revision": "34627",
+    "git_commit": "9034c71a8fce68ab312458b3d7d16f610562263d",
+    "runtime_repository_revision": "9034c71",
+    "module": "BRAINSFit",
+    "coverage_module": "BRAINSResample"
+  },
+  "official_package": {
+    "download_page": "https://download.slicer.org/",
+    "release_details": "https://github.com/Slicer/Slicer/wiki/Release-Details",
+    "download_url": "https://download.slicer.org/bitstream/6a6159372eb3d967f032505f",
+    "filename": "Slicer-5.12.3-linux-amd64.tar.gz",
+    "platform": "linux-amd64",
+    "bytes": 498683944,
+    "sha512": "66bd3a1b9a7f636b40b96cb8c49f395ee783cdcaf7b43a4b895d6a40df9e0af8393f5ab7631ba50f6bbe06aa17dbcd8a46984a53b693bdf203d34337e2e80401"
+  },
+  "publisher": {
+    "official_https_source": true,
+    "official_sha512_published": true,
+    "download_sha512_matches_official_metadata": true,
+    "linux_package_signature_provided": false,
+    "publisher_signature_verified": false,
+    "verification_basis": "official HTTPS bitstream plus exact SHA-512 published by Slicer/Kitware",
+    "limitation": "Slicer documents package signing for macOS and Windows, but its 5.12 release process marks Linux signing not applicable; this is checksum-verified official-source provenance, not an independent publisher signature."
+  },
+  "archive_preflight": {
+    "member_count": 10572,
+    "top_level_directory": "Slicer-5.12.3-linux-amd64",
+    "link_count": 385,
+    "absolute_or_parent_traversal_members": 0,
+    "links_resolving_outside_package_root": 0,
+    "result": "passed before extraction"
+  },
+  "host_installation": {
+    "host": "Ubuntu 26.04 LTS x86_64; Linux 7.0.0-30-generic; glibc 2.43",
+    "package_architecture": "x86_64",
+    "path": "/home/chris-berry/Applications/Slicer-5.12.3-linux-amd64",
+    "installed_kib": 1708032,
+    "permissions": "recursively owner-only",
+    "launcher": {
+      "path_within_install": "Slicer",
+      "bytes": 12291944,
+      "sha256": "4ae4a2ce8a2221e0b8a2e9047fbac1d698352df39f5159ce7b322d800085b6ef",
+      "elf_build_id": "527cb19e5908294eb8d810c105a5ae47d7211241"
+    },
+    "brainsfit": {
+      "path_within_install": "lib/Slicer-5.12/cli-modules/BRAINSFit",
+      "bytes": 32056,
+      "sha256": "ebe31c26141ac6ebf47aa535642e323ef6f3bd114e0638148748dc846761f8c7",
+      "elf_build_id": "d4dff4d98f5f26a906fcf25d3e43b90749dd51d6"
+    },
+    "brainsresample": {
+      "path_within_install": "lib/Slicer-5.12/cli-modules/BRAINSResample",
+      "bytes": 15376,
+      "sha256": "0a9728c2834ce89487e0da1ba055dd14c099cbd28e3a9234e9f81bd01249138a",
+      "elf_build_id": "65ab174d7a34eade8b97e468925298cf51009e94"
+    }
+  },
+  "local_dependencies": {
+    "bubblewrap": "0.11.1-1ubuntu0.1",
+    "xvfb": "2:21.1.22-1ubuntu1",
+    "xauth": "1:1.1.2-1.1build1",
+    "libglu1-mesa": "9.0.2-1.1build2",
+    "libpulse-mainloop-glib0": "1:17.0+dfsg1-2ubuntu4",
+    "libnss3": "2:3.120-1ubuntu2.1",
+    "libasound2t64": "1.2.15.3-1ubuntu1.1",
+    "qt5dxcb-plugin": "5.7.12-1build3",
+    "libxcb-icccm4": "0.4.2-1build1"
+  },
+  "scanview_release": {
+    "filename": "scanview-offline-0.1.0.zip",
+    "bytes": 5340464,
+    "sha256": "e6ca632f031268eed9139b2a70899c534f4f8a77cf75f3bf08ead86108c47c81",
+    "offline_installation": "passed with PIP_NO_INDEX=1, --no-index, and required hashes",
+    "runtime_network_required": false,
+    "external_dicom_processing_api_required": false
+  },
+  "verification": {
+    "download_sha512_matches_official_page": true,
+    "archive_structure_preflight": "passed",
+    "scanview_no_data_preflight": "passed",
+    "scanview_real_engine_synthetic_registration": "passed for equal and deliberately partial fixed fields",
+    "scanview_real_engine_v2_sampling_support_mask": "passed; 65536 of 65536 voxels for equal fields and 65536 of 69632 voxels for a deliberately wider fixed field",
+    "scanview_real_engine_equal_field_transform_x_mm": -2.0082900813167757,
+    "scanview_real_engine_partial_field_transform_x_mm": -1.9981585838559544,
+    "source_sha256_manifests_unchanged": true,
+    "outputs_owner_only": true,
+    "outputs_validated": true,
+    "computed_results_empty": true,
+    "candidate_interpretations_empty": true,
+    "display_unlocks_false": true,
+    "scanview_network_isolation": "linux_bwrap_network_namespace_seccomp_no_network_sockets",
+    "seccomp_af_unix_socketpair": "allowed for private local display IPC",
+    "seccomp_af_inet_socket": "denied with EPERM",
+    "scanview_display_runtime": "linux_private_xvfb_no_tcp",
+    "xvfb_inside_bubblewrap_and_seccomp": true,
+    "host_tmp_and_run_hidden_from_engine": true,
+    "runner_hash_checked_before_and_after_private_staging": true,
+    "x11_tcp_listener_after_runs": false,
+    "external_api_required": false,
+    "patient_data_used": false
+  },
+  "limitations": [
+    "The Linux package has no independent publisher signature in Slicer's documented release process; official HTTPS plus the published SHA-512 establish the recorded provenance and integrity basis.",
+    "This record documents one official Linux package and one Strawberry installation; ScanView still requires the caller-supplied launcher SHA-256 at execution time.",
+    "The private Xvfb connection requires local AF_UNIX IPC. Seccomp rejects network socket domains, bubblewrap supplies a separate network namespace, Xvfb disables TCP listening, and no unsandboxed fallback exists.",
+    "The retained ScanView offline bundle is unsigned and depends on the host Python interpreter and recorded local OS packages.",
+    "A successful synthetic registration does not validate a patient-specific registration or authorize medical interpretation."
+  ]
+}
