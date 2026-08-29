@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { updateReviewedWindow } from './components/ReviewedRegistrationWorkspace';
+import {
+  reviewedSliceRgba,
+  updateReviewedWindow,
+} from './components/ReviewedRegistrationWorkspace';
 
 describe('reviewed registration display controls', () => {
   it('keeps percentile windows ordered when either boundary is dragged across the other', () => {
@@ -17,5 +20,31 @@ describe('reviewed registration display controls', () => {
     ]);
     expect(updateReviewedWindow([20, 80], 'lower', -10)).toEqual([0, 80]);
     expect(updateReviewedWindow([20, 80], 'upper', 110)).toEqual([20, 100]);
+  });
+
+  it('mattes every unsupported registered pixel instead of rendering its value', () => {
+    const slice = {
+      width: 2,
+      height: 2,
+      pixels: new Uint8ClampedArray([25, 100, 175, 250]),
+    };
+    const coverage = {
+      width: 2,
+      height: 2,
+      pixels: new Uint8Array([1, 0, 1, 0]),
+    };
+    expect(Array.from(reviewedSliceRgba(slice, coverage))).toEqual([
+      25, 25, 25, 255,
+      9, 18, 16, 255,
+      175, 175, 175, 255,
+      9, 18, 16, 255,
+    ]);
+    expect(() =>
+      reviewedSliceRgba(slice, { ...coverage, pixels: new Uint8Array([1, 2, 1, 0]) }),
+    ).toThrow(/non-binary/i);
+    expect(() =>
+      reviewedSliceRgba(slice, { ...coverage, width: 1 }),
+    ).toThrow(/does not match/i);
+    expect(() => reviewedSliceRgba(slice, undefined, true)).toThrow(/requires/i);
   });
 });

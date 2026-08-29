@@ -5,7 +5,74 @@ export const REGISTRATION_REVIEW_INPUT_MEDIA_TYPE =
 export const REGISTRATION_REVIEW_MEDIA_TYPE =
   'application/vnd.scanview.registration-review+json';
 export const MAX_REGISTRATION_QA_ENCODED_VOLUME_BYTES = 512 * 1024 * 1024;
+export const MAX_REGISTRATION_QA_ENCODED_MASK_BYTES = 512 * 1024 * 1024;
 export const MAX_REGISTRATION_QA_ENCODED_TOTAL_BYTES = 1024 * 1024 * 1024;
+export const MAX_REGISTRATION_QA_DECODED_TOTAL_BYTES = 384 * 1024 * 1024;
+export const REGISTRATION_QA_COVERAGE_MASK_URL =
+  '/v1/registration-qa/files/registered-moving-coverage.nrrd';
+
+export const REGISTRATION_QA_PREVIEW_MODES = [
+  'reference_volume_side_by_side',
+  'registered_side_by_side',
+  'opacity_overlay',
+  'swipe_or_flicker',
+  'checkerboard',
+  'edge_overlay',
+  'coverage_mask_boundary',
+  'landmark_residuals',
+] as const;
+
+export const REGISTRATION_QA_ALWAYS_LOCKED = [
+  'subtraction',
+  'mask_propagation',
+  'segmentation',
+  'resampled_image_measurements',
+  'response_conclusions',
+] as const;
+
+export const REGISTRATION_QA_QUALITATIVE_CHECKS = [
+  ['correct_series_roles_and_intended_use_confirmed', 'Correct series, chronological roles, and shared-coverage exploratory use confirmed.'],
+  ['full_shared_volume_axial_reviewed', 'Full shared volume reviewed axially.'],
+  ['full_shared_volume_coronal_reviewed', 'Full shared volume reviewed coronally.'],
+  ['full_shared_volume_sagittal_reviewed', 'Full shared volume reviewed sagittally.'],
+  ['native_and_registered_side_by_side_reviewed', 'Native and registered-moving views reviewed side by side.'],
+  ['opacity_overlay_reviewed', 'Adjustable opacity overlay reviewed.'],
+  ['swipe_or_flicker_reviewed', 'Swipe or flicker comparison reviewed.'],
+  ['checkerboard_reviewed', 'Checkerboard comparison reviewed.'],
+  ['edge_alignment_reviewed', 'Fixed and registered-moving edge agreement reviewed.'],
+  [
+    'coverage_mask_boundary_and_excluded_region_reviewed',
+    'Moving-image sampling-support mask boundary and excluded regions reviewed; the mask was not interpreted as anatomy, tumor, segmentation, or registration quality.',
+  ],
+  ['region_of_importance_reviewed', 'Region of greatest importance reviewed.'],
+  ['distant_anatomy_reviewed', 'Distant stable anatomy reviewed for global error.'],
+  [
+    'artifacts_coverage_and_anatomical_change_reviewed',
+    'Artifacts, shared coverage, surgery, edema, mass effect, and anatomical change reviewed.',
+  ],
+  [
+    'laterality_and_orientation_reviewed',
+    'Laterality, orientation, and gross translation or rotation reviewed.',
+  ],
+  [
+    'no_reject_condition_identified',
+    'No global mismatch, material regional mismatch, laterality error, unusable coverage, or rigid-model failure was identified.',
+  ],
+] as const;
+
+export const REGISTRATION_QA_LIMITATIONS = [
+  'Acceptance means only spatially acceptable for exploratory overlay and swipe where the required sampling-support mask is one and shared anatomy was visually reviewed.',
+  'The coverage mask identifies transformed moving-image sampling support only; it is not anatomy, tumor, segmentation, registration quality, or clinical comparability.',
+  'The sampling-support mask excludes default-filled registered-moving pixels but does not establish shared anatomy.',
+  'Reviewer identity, role, training, and organization are self asserted and unauthenticated.',
+  'Registration QA does not establish patient identity, clinical baseline, lesion identity, tumor boundary, or response.',
+  'Registered-moving pixels are resampled and must remain distinguishable from native DICOM.',
+  'Tumor, edema, surgery, artifacts, distortion, mass effect, and coverage changes can make rigid alignment misleading.',
+  'Subtraction, segmentation, mask propagation, resampled-image measurements, and response conclusions remain locked.',
+  'Landmark residuals depend on point-selection uncertainty and do not replace full-volume qualitative inspection.',
+  'This investigational workflow is not validated or cleared for primary diagnosis or treatment planning.',
+  'The event SHA-256 and any previous-review reference are tamper evidence only, not a digital signature or reviewer authentication.',
+] as const;
 
 export type RegistrationVolumeGeometry = {
   sizes: [number, number, number];
@@ -29,8 +96,21 @@ export type RegistrationQaVolume = {
   geometry: RegistrationVolumeGeometry;
 };
 
+export type RegistrationQaCoverageMask = {
+  role: 'registered_moving_sampling_support_in_fixed_geometry';
+  filename: 'registered-moving-coverage.nrrd';
+  url: typeof REGISTRATION_QA_COVERAGE_MASK_URL;
+  bytes: number;
+  sha256: string;
+  derived: true;
+  scalar_type: 'uint8';
+  binary_values: [0, 1];
+  semantics: 'technical_sampling_support_not_anatomy_or_segmentation';
+  geometry: RegistrationVolumeGeometry;
+};
+
 export type RegistrationQaContext = {
-  schema_version: '1.0.0';
+  schema_version: '2.0.0';
   artifact_type: 'registration_qa_context';
   mode: 'human_qa_preview';
   qa_preview_only: true;
@@ -60,6 +140,7 @@ export type RegistrationQaContext = {
     moving: RegistrationQaVolume;
     registered_moving: RegistrationQaVolume;
   };
+  coverage_mask: RegistrationQaCoverageMask;
   transform: {
     filename: 'moving-to-fixed.tfm';
     sha256: string;
@@ -71,11 +152,15 @@ export type RegistrationQaContext = {
   landmark_statuses: ('aligned' | 'uncertain' | 'misaligned' | 'not_visible')[];
   allowed_decisions: ('accepted_for_shared_coverage_overlay_swipe' | 'rejected')[];
   display_policy: {
-    qa_preview_allowed_while_pending: string[];
+    qa_preview_allowed_while_pending: [...typeof REGISTRATION_QA_PREVIEW_MODES];
     accepted_unlocks: ['overlay', 'swipe'];
-    always_locked: string[];
+    always_locked: [...typeof REGISTRATION_QA_ALWAYS_LOCKED];
+    sampling_support_enforcement: 'required_pixel_mask';
+    shared_anatomy_scope: 'reviewer_attested_visual_only';
+    mask_failure_behavior: 'lock_display';
+    mask_sampling: 'nearest_neighbor';
   };
-  limitations: string[];
+  limitations: [...typeof REGISTRATION_QA_LIMITATIONS];
 };
 
 export type LandmarkPairDraft = {
@@ -85,7 +170,7 @@ export type LandmarkPairDraft = {
 };
 
 export type RegistrationReviewRequest = {
-  schema_version: '1.0.0';
+  schema_version: '2.0.0';
   reviewer: {
     name: string;
     role:
@@ -97,7 +182,7 @@ export type RegistrationReviewRequest = {
     organization: string | null;
     training_status: 'self_attested_trained' | 'self_attested_not_trained';
   };
-  attest: boolean;
+  attest: true;
   decision: 'accepted_for_shared_coverage_overlay_swipe' | 'rejected';
   region_of_importance: string;
   qualitative_checks: Record<string, boolean>;
@@ -135,7 +220,12 @@ const exactKeys = (value: Record<string, unknown>, keys: string[]): boolean =>
 const finiteTuple = (value: unknown): value is [number, number, number] =>
   Array.isArray(value) &&
   value.length === 3 &&
-  value.every((item) => typeof item === 'number' && Number.isFinite(item));
+  value.every(
+    (item) =>
+      typeof item === 'number' &&
+      Number.isFinite(item) &&
+      Math.abs(item) <= 1_000_000,
+  );
 
 const isSha256 = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
@@ -143,11 +233,29 @@ const isSha256 = (value: unknown): value is string =>
 const isOpaque = (value: unknown, prefix: string): value is string =>
   typeof value === 'string' && new RegExp(`^${prefix}_[0-9a-f]{20}$`).test(value);
 
-const sameStringSet = (value: unknown, expected: string[]): boolean =>
+const sameSequence = (value: unknown, expected: readonly unknown[]): boolean =>
   Array.isArray(value) &&
   value.length === expected.length &&
-  value.every((item) => typeof item === 'string') &&
-  [...value].sort().every((item, index) => item === [...expected].sort()[index]);
+  value.every((item, index) => {
+    const expectedItem = expected[index];
+    if (Array.isArray(item) && Array.isArray(expectedItem)) {
+      return sameSequence(item, expectedItem);
+    }
+    return item === expectedItem;
+  });
+
+const geometriesEqual = (
+  left: RegistrationVolumeGeometry,
+  right: RegistrationVolumeGeometry,
+): boolean =>
+  left.coordinate_system === right.coordinate_system &&
+  sameSequence(left.sizes, right.sizes) &&
+  sameSequence(left.voxel_spacing_mm, right.voxel_spacing_mm) &&
+  sameSequence(left.space_directions, right.space_directions) &&
+  sameSequence(left.space_origin, right.space_origin);
+
+const vectorLength = (value: [number, number, number]): number =>
+  Math.hypot(value[0], value[1], value[2]);
 
 const directionDeterminant = (directions: RegistrationVolumeGeometry['space_directions']) =>
   directions[0][0] *
@@ -182,7 +290,13 @@ const readGeometry = (value: unknown): RegistrationVolumeGeometry | undefined =>
     return undefined;
   }
   const geometry = value as RegistrationVolumeGeometry;
-  return Math.abs(directionDeterminant(geometry.space_directions)) > 1e-9
+  if (Math.abs(directionDeterminant(geometry.space_directions)) <= 1e-9) {
+    return undefined;
+  }
+  return geometry.space_directions.every((direction, index) => {
+    const expected = geometry.voxel_spacing_mm[index];
+    return Math.abs(vectorLength(direction) - expected) <= Math.max(1e-6, expected * 1e-6);
+  })
     ? geometry
     : undefined;
 };
@@ -202,6 +316,7 @@ const readVolume = (
     typeof value.bytes !== 'number' ||
     !Number.isSafeInteger(value.bytes) ||
     value.bytes <= 0 ||
+    value.bytes > MAX_REGISTRATION_QA_ENCODED_VOLUME_BYTES ||
     !isSha256(value.sha256) ||
     value.resampled !== resampled
   ) {
@@ -209,6 +324,55 @@ const readVolume = (
   }
   const geometry = readGeometry(value.geometry);
   return geometry ? ({ ...value, geometry } as RegistrationQaVolume) : undefined;
+};
+
+const readCoverageMask = (
+  value: unknown,
+): RegistrationQaCoverageMask | undefined => {
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, [
+      'role',
+      'filename',
+      'url',
+      'bytes',
+      'sha256',
+      'derived',
+      'scalar_type',
+      'binary_values',
+      'semantics',
+      'geometry',
+    ]) ||
+    value.role !== 'registered_moving_sampling_support_in_fixed_geometry' ||
+    value.filename !== 'registered-moving-coverage.nrrd' ||
+    value.url !== REGISTRATION_QA_COVERAGE_MASK_URL ||
+    typeof value.bytes !== 'number' ||
+    !Number.isSafeInteger(value.bytes) ||
+    value.bytes <= 0 ||
+    value.bytes > MAX_REGISTRATION_QA_ENCODED_MASK_BYTES ||
+    !isSha256(value.sha256) ||
+    value.derived !== true ||
+    value.scalar_type !== 'uint8' ||
+    !sameSequence(value.binary_values, [0, 1]) ||
+    value.semantics !== 'technical_sampling_support_not_anatomy_or_segmentation'
+  ) {
+    return undefined;
+  }
+  const geometry = readGeometry(value.geometry);
+  return geometry ? ({ ...value, geometry } as RegistrationQaCoverageMask) : undefined;
+};
+
+const isAcquisitionDate = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !/^\d{8}$/.test(value)) return false;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(4, 6));
+  const day = Number(value.slice(6, 8));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 };
 
 const readSourceSide = (
@@ -221,8 +385,7 @@ const readSourceSide = (
     value.role !== role ||
     !isOpaque(value.study_id, 'study') ||
     !isOpaque(value.series_id, 'series') ||
-    typeof value.acquisition_date !== 'string' ||
-    !/^[0-9]{8}$/.test(value.acquisition_date)
+    !isAcquisitionDate(value.acquisition_date)
   ) {
     return undefined;
   }
@@ -245,6 +408,7 @@ export const readRegistrationQaContext = (
       'review_status',
       'source',
       'volumes',
+      'coverage_mask',
       'transform',
       'intended_use',
       'qualitative_checks',
@@ -254,7 +418,7 @@ export const readRegistrationQaContext = (
       'display_policy',
       'limitations',
     ]) ||
-    value.schema_version !== '1.0.0' ||
+    value.schema_version !== '2.0.0' ||
     value.artifact_type !== 'registration_qa_context' ||
     value.mode !== 'human_qa_preview' ||
     value.qa_preview_only !== true ||
@@ -265,6 +429,7 @@ export const readRegistrationQaContext = (
     value.intended_use !== 'shared_coverage_exploratory_overlay_swipe' ||
     !isRecord(value.source) ||
     !isRecord(value.volumes) ||
+    !isRecord(value.coverage_mask) ||
     !isRecord(value.transform) ||
     !Array.isArray(value.qualitative_checks) ||
     !Array.isArray(value.landmark_options) ||
@@ -307,12 +472,21 @@ export const readRegistrationQaContext = (
     'moving_later_registered_to_fixed',
     true,
   );
+  const coverageMask = readCoverageMask(value.coverage_mask);
   if (
     !fixed ||
     !moving ||
     !fixedVolume ||
     !movingVolume ||
     !registered ||
+    !coverageMask ||
+    fixed.acquisition_date >= moving.acquisition_date ||
+    fixed.study_id === moving.study_id ||
+    fixed.series_id === moving.series_id ||
+    fixedVolume.bytes + movingVolume.bytes + registered.bytes + coverageMask.bytes >
+      MAX_REGISTRATION_QA_ENCODED_TOTAL_BYTES ||
+    !geometriesEqual(fixedVolume.geometry, registered.geometry) ||
+    !geometriesEqual(fixedVolume.geometry, coverageMask.geometry) ||
     !isSha256(value.source.manifest_sha256) ||
     value.source.transform_direction !== 'moving_later_to_fixed_earlier' ||
     !['MR', 'CT'].includes(String(value.source.modality)) ||
@@ -320,26 +494,37 @@ export const readRegistrationQaContext = (
     value.transform.filename !== 'moving-to-fixed.tfm' ||
     !isSha256(value.transform.sha256) ||
     value.transform.coordinate_system !== 'DICOM patient LPS' ||
-    !value.qualitative_checks.every(
-      (item) =>
+    value.qualitative_checks.length !== REGISTRATION_QA_QUALITATIVE_CHECKS.length ||
+    !value.qualitative_checks.every((item, index) => {
+      const expected = REGISTRATION_QA_QUALITATIVE_CHECKS[index];
+      return (
         isRecord(item) &&
         exactKeys(item, ['id', 'label']) &&
-        typeof item.id === 'string' &&
-        /^[a-z][a-z0-9_]{1,79}$/.test(item.id) &&
-        typeof item.label === 'string' &&
-        item.label.length >= 1 &&
-        item.label.length <= 500,
-    ) ||
-    new Set(
-      value.qualitative_checks.flatMap((item) =>
-        isRecord(item) && typeof item.id === 'string' ? [item.id] : [],
-      ),
-    ).size !== value.qualitative_checks.length ||
-    !value.landmark_options.every((item) => typeof item === 'string') ||
-    !value.landmark_statuses.every((item) =>
-      ['aligned', 'uncertain', 'misaligned', 'not_visible'].includes(String(item)),
-    ) ||
-    !sameStringSet(value.allowed_decisions, [
+        item.id === expected[0] &&
+        item.label === expected[1]
+      );
+    }) ||
+    !sameSequence(value.landmark_options, [
+      'brainstem',
+      'clivus',
+      'external_auditory_canals',
+      'nose',
+      'optic_nerves',
+      'orbits',
+      'other_stable_landmark',
+      'outer_brain_or_skull_boundary',
+      'region_of_importance',
+      'sagittal_suture',
+      'sella_turcica',
+      'ventricles',
+    ]) ||
+    !sameSequence(value.landmark_statuses, [
+      'aligned',
+      'misaligned',
+      'not_visible',
+      'uncertain',
+    ]) ||
+    !sameSequence(value.allowed_decisions, [
       'accepted_for_shared_coverage_overlay_swipe',
       'rejected',
     ]) ||
@@ -347,27 +532,22 @@ export const readRegistrationQaContext = (
       'qa_preview_allowed_while_pending',
       'accepted_unlocks',
       'always_locked',
+      'sampling_support_enforcement',
+      'shared_anatomy_scope',
+      'mask_failure_behavior',
+      'mask_sampling',
     ]) ||
-    !sameStringSet(value.display_policy.accepted_unlocks, ['overlay', 'swipe']) ||
-    !sameStringSet(value.display_policy.qa_preview_allowed_while_pending, [
-      'reference_volume_side_by_side',
-      'registered_side_by_side',
-      'opacity_overlay',
-      'swipe_or_flicker',
-      'checkerboard',
-      'edge_overlay',
-      'landmark_residuals',
-    ]) ||
-    !sameStringSet(value.display_policy.always_locked, [
-      'subtraction',
-      'mask_propagation',
-      'segmentation',
-      'resampled_image_measurements',
-      'response_conclusions',
-    ]) ||
-    !value.limitations.every(
-      (item) => typeof item === 'string' && item.length >= 1 && item.length <= 300,
-    )
+    !sameSequence(value.display_policy.accepted_unlocks, ['overlay', 'swipe']) ||
+    !sameSequence(
+      value.display_policy.qa_preview_allowed_while_pending,
+      REGISTRATION_QA_PREVIEW_MODES,
+    ) ||
+    !sameSequence(value.display_policy.always_locked, REGISTRATION_QA_ALWAYS_LOCKED) ||
+    value.display_policy.sampling_support_enforcement !== 'required_pixel_mask' ||
+    value.display_policy.shared_anatomy_scope !== 'reviewer_attested_visual_only' ||
+    value.display_policy.mask_failure_behavior !== 'lock_display' ||
+    value.display_policy.mask_sampling !== 'nearest_neighbor' ||
+    !sameSequence(value.limitations, REGISTRATION_QA_LIMITATIONS)
   ) {
     return undefined;
   }
@@ -395,6 +575,12 @@ export const loadRegistrationQaContext = async (
         message: `Local registration QA probe failed (${response.status}).`,
       };
     }
+    if (response.headers.get('Content-Type')?.split(';', 1)[0] !== 'application/json') {
+      return {
+        status: 'error',
+        message: 'Local registration QA context has an unexpected media type.',
+      };
+    }
     const context = readRegistrationQaContext(await response.json());
     return context
       ? { status: 'available', context }
@@ -415,36 +601,72 @@ const sha256Hex = async (buffer: ArrayBuffer): Promise<string> => {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
-export const fetchRegistrationQaVolume = async (
-  volume: RegistrationQaVolume,
+const fetchRegistrationQaFile = async (
+  descriptor: RegistrationQaVolume | RegistrationQaCoverageMask,
   signal?: AbortSignal,
 ): Promise<ArrayBuffer> => {
-  if (volume.bytes > MAX_REGISTRATION_QA_ENCODED_VOLUME_BYTES) {
-    throw new Error('Local registration QA volume exceeds the browser safety limit.');
+  const isMask = descriptor.filename === 'registered-moving-coverage.nrrd';
+  const label = isMask ? 'sampling-support mask' : 'volume';
+  const byteLimit = isMask
+    ? MAX_REGISTRATION_QA_ENCODED_MASK_BYTES
+    : MAX_REGISTRATION_QA_ENCODED_VOLUME_BYTES;
+  if (descriptor.bytes > byteLimit) {
+    throw new Error(`Local registration QA ${label} exceeds the browser safety limit.`);
   }
-  const response = await fetch(volume.url, {
+  const validatedDescriptor =
+    descriptor.filename === 'fixed.nrrd'
+      ? readVolume(descriptor, 'fixed.nrrd', 'fixed_earlier_reference', false)
+      : descriptor.filename === 'moving.nrrd'
+        ? readVolume(descriptor, 'moving.nrrd', 'moving_later_reference', false)
+        : descriptor.filename === 'registered-moving.nrrd'
+          ? readVolume(
+              descriptor,
+              'registered-moving.nrrd',
+              'moving_later_registered_to_fixed',
+              true,
+            )
+          : descriptor.filename === 'registered-moving-coverage.nrrd'
+            ? readCoverageMask(descriptor)
+            : undefined;
+  if (!validatedDescriptor) {
+    throw new Error(`Local registration QA ${label} descriptor failed strict validation.`);
+  }
+  const response = await fetch(validatedDescriptor.url, {
     cache: 'no-store',
     credentials: 'same-origin',
     headers: { Accept: 'application/vnd.nrrd' },
     signal,
   });
-  if (!response.ok) throw new Error('Local registration QA volume could not be loaded.');
+  if (!response.ok) throw new Error(`Local registration QA ${label} could not be loaded.`);
   if (response.headers.get('Content-Type')?.split(';', 1)[0] !== 'application/vnd.nrrd') {
-    throw new Error('Local registration QA volume has an unexpected media type.');
+    throw new Error(`Local registration QA ${label} has an unexpected media type.`);
   }
   const declaredLength = Number(response.headers.get('Content-Length'));
-  if (!Number.isSafeInteger(declaredLength) || declaredLength !== volume.bytes) {
-    throw new Error('Local registration QA response byte count changed.');
+  if (!Number.isSafeInteger(declaredLength) || declaredLength !== validatedDescriptor.bytes) {
+    throw new Error(`Local registration QA ${label} response byte count changed.`);
+  }
+  if (response.headers.get('X-Content-SHA256') !== validatedDescriptor.sha256) {
+    throw new Error(`Local registration QA ${label} response digest changed.`);
   }
   const buffer = await response.arrayBuffer();
-  if (buffer.byteLength !== volume.bytes) {
-    throw new Error('Local registration QA volume byte count changed.');
+  if (buffer.byteLength !== validatedDescriptor.bytes) {
+    throw new Error(`Local registration QA ${label} byte count changed.`);
   }
-  if ((await sha256Hex(buffer)) !== volume.sha256) {
-    throw new Error('Local registration QA volume SHA-256 changed.');
+  if ((await sha256Hex(buffer)) !== validatedDescriptor.sha256) {
+    throw new Error(`Local registration QA ${label} SHA-256 changed.`);
   }
   return buffer;
 };
+
+export const fetchRegistrationQaVolume = async (
+  volume: RegistrationQaVolume,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> => fetchRegistrationQaFile(volume, signal);
+
+export const fetchRegistrationQaCoverageMask = async (
+  mask: RegistrationQaCoverageMask,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> => fetchRegistrationQaFile(mask, signal);
 
 export const submitRegistrationReview = async (
   request: RegistrationReviewRequest,

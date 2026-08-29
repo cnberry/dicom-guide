@@ -67,6 +67,7 @@ REVIEWED_REGISTRATION_BUNDLE_FILES = (
     "fixed.nrrd",
     "moving-to-fixed.tfm",
     "moving.nrrd",
+    "registered-moving-coverage.nrrd",
     "registered-moving.nrrd",
     "registration.json",
 )
@@ -180,12 +181,13 @@ def _registration_agent_summary(
 ) -> dict[str, Any]:
     if context is None:
         return {
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "available": False,
             "artifact_type": "registration_qa_summary",
             "qa_status": "unavailable",
             "display_unlocked": False,
             "human_preview_required": True,
+            "sampling_support_mask_required": True,
             "external_api_required": False,
         }
     return {
@@ -197,6 +199,8 @@ def _registration_agent_summary(
         "qa_status": "pending_human_review",
         "display_unlocked": False,
         "human_preview_required": True,
+        "sampling_support_mask_required": True,
+        "sampling_support_mask_available": context.get("coverage_mask") is not None,
         "external_api_required": False,
         "source_manifest_sha256": context["source"]["manifest_sha256"],
         "next_action": (
@@ -623,7 +627,12 @@ class Handler(BaseHTTPRequestHandler):
         self._send_registration_file(
             filename,
             context=self.server.registration_context,
-            allowed={"fixed.nrrd", "moving.nrrd", "registered-moving.nrrd"},
+            allowed={
+                "fixed.nrrd",
+                "moving.nrrd",
+                "registered-moving-coverage.nrrd",
+                "registered-moving.nrrd",
+            },
         )
 
     def _send_instance_file(self, instance_id: str) -> None:
@@ -711,7 +720,11 @@ class Handler(BaseHTTPRequestHandler):
         self._send_registration_file(
             filename,
             context=self.server.reviewed_registration_context,
-            allowed={"fixed.nrrd", "registered-moving.nrrd"},
+            allowed={
+                "fixed.nrrd",
+                "registered-moving-coverage.nrrd",
+                "registered-moving.nrrd",
+            },
         )
 
     def _send_registration_file(
@@ -734,11 +747,11 @@ class Handler(BaseHTTPRequestHandler):
         descriptor = -1
         headers_sent = False
         try:
-            volume = next(
-                item
-                for item in context["volumes"].values()
-                if item["filename"] == filename
-            )
+            candidates = list(context["volumes"].values())
+            coverage_mask = context.get("coverage_mask")
+            if isinstance(coverage_mask, dict):
+                candidates.append(coverage_mask)
+            volume = next(item for item in candidates if item["filename"] == filename)
             source = self.server.registration_bundle / filename
             descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
             metadata = os.fstat(descriptor)

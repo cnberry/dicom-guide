@@ -1,16 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  fetchReviewedRegistrationCoverageMask,
   fetchReviewedRegistrationVolume,
   loadReviewedRegistrationContext,
   MAX_REVIEWED_REGISTRATION_ENCODED_VOLUME_BYTES,
   readReviewedRegistrationContext,
   REVIEWED_REGISTRATION_ALLOWED_MODES,
   REVIEWED_REGISTRATION_ALWAYS_LOCKED,
+  REVIEWED_REGISTRATION_COVERAGE_MASK_URL,
   REVIEWED_REGISTRATION_DISPLAY_ENDPOINT,
   REVIEWED_REGISTRATION_FIXED_URL,
   REVIEWED_REGISTRATION_LIMITATIONS,
   REVIEWED_REGISTRATION_MOVING_URL,
   type ReviewedRegistrationContext,
+  type ReviewedRegistrationCoverageMask,
   type ReviewedRegistrationVolume,
 } from './reviewedRegistrationService';
 
@@ -33,12 +36,13 @@ const hashes = {
   fixed: 'a'.repeat(64),
   transform: 'b'.repeat(64),
   moving: 'c'.repeat(64),
+  coverage: '5'.repeat(64),
   registered: 'd'.repeat(64),
   manifest: 'f'.repeat(64),
 };
 
 const context: ReviewedRegistrationContext = {
-  schema_version: '1.0.0',
+  schema_version: '2.0.0',
   artifact_type: 'reviewed_registration_display_context',
   sensitive: true,
   deidentified: false,
@@ -55,13 +59,14 @@ const context: ReviewedRegistrationContext = {
   },
   source: {
     manifest_sha256: hashes.manifest,
-    bundle_sha256: '2637dbb2361b8a4127a38c84391363ccda68a450824b32169203a2d96c7adfcf',
+    bundle_sha256: '7a136ea998fbab230fb416f5afb474876bd25220be31757e1bf0e43da27a18c8',
     transform_sha256: hashes.transform,
     bundle_files: [
       { name: 'engine-report.json', bytes: 10, sha256: hashes.engine },
       { name: 'fixed.nrrd', bytes: 3, sha256: hashes.fixed },
       { name: 'moving-to-fixed.tfm', bytes: 10, sha256: hashes.transform },
       { name: 'moving.nrrd', bytes: 10, sha256: hashes.moving },
+      { name: 'registered-moving-coverage.nrrd', bytes: 2, sha256: hashes.coverage },
       { name: 'registered-moving.nrrd', bytes: 4, sha256: hashes.registered },
       { name: 'registration.json', bytes: 10, sha256: hashes.manifest },
     ],
@@ -105,19 +110,34 @@ const context: ReviewedRegistrationContext = {
       geometry,
     },
   },
+  coverage_mask: {
+    role: 'registered_moving_sampling_support_in_fixed_geometry',
+    filename: 'registered-moving-coverage.nrrd',
+    url: REVIEWED_REGISTRATION_COVERAGE_MASK_URL,
+    bytes: 2,
+    sha256: hashes.coverage,
+    derived: true,
+    scalar_type: 'uint8',
+    binary_values: [0, 1],
+    semantics: 'technical_sampling_support_not_anatomy_or_segmentation',
+    geometry,
+  },
   display_policy: {
     allowed_modes: [...REVIEWED_REGISTRATION_ALLOWED_MODES],
     always_locked: [...REVIEWED_REGISTRATION_ALWAYS_LOCKED],
     native_moving_available: false,
     native_moving_withheld: true,
-    shared_coverage_enforcement: 'reviewer_visual_only_no_machine_mask',
+    sampling_support_enforcement: 'required_pixel_mask',
+    shared_anatomy_scope: 'reviewer_attested_visual_only',
+    mask_failure_behavior: 'lock_display',
+    mask_sampling: 'nearest_neighbor',
   },
   display_label: 'EXPLORATORY — SELF-ATTESTED REGISTRATION QA',
   limitations: [...REVIEWED_REGISTRATION_LIMITATIONS],
 };
 
 describe('reviewed registration display service', () => {
-  it('accepts only the exact hash-bound two-volume display contract', () => {
+  it('accepts only the exact hash-bound two-volume plus required mask contract', () => {
     expect(readReviewedRegistrationContext(context)).toEqual(context);
     expect(
       readReviewedRegistrationContext({ ...context, patient_name: 'must fail closed' }),
@@ -126,6 +146,27 @@ describe('reviewed registration display service', () => {
       readReviewedRegistrationContext({
         ...context,
         display_status: 'locked',
+      }),
+    ).toBeUndefined();
+    expect(
+      readReviewedRegistrationContext({ ...context, schema_version: '1.0.0' }),
+    ).toBeUndefined();
+    expect(
+      readReviewedRegistrationContext({
+        ...context,
+        coverage_mask: {
+          ...context.coverage_mask,
+          geometry: { ...geometry, space_origin: [1, 0, 0] },
+        },
+      }),
+    ).toBeUndefined();
+    const withoutMask = structuredClone(context) as unknown as Record<string, unknown>;
+    delete withoutMask.coverage_mask;
+    expect(readReviewedRegistrationContext(withoutMask)).toBeUndefined();
+    expect(
+      readReviewedRegistrationContext({
+        ...context,
+        coverage_mask: { ...context.coverage_mask, binary_values: [0, 255] },
       }),
     ).toBeUndefined();
     expect(
@@ -192,7 +233,7 @@ describe('reviewed registration display service', () => {
     aggregateOverCap.volumes.fixed.bytes = nearPerVolumeCap;
     aggregateOverCap.volumes.registered_moving.bytes = nearPerVolumeCap;
     aggregateOverCap.source.bundle_files[1].bytes = nearPerVolumeCap;
-    aggregateOverCap.source.bundle_files[4].bytes = nearPerVolumeCap;
+    aggregateOverCap.source.bundle_files[5].bytes = nearPerVolumeCap;
     expect(readReviewedRegistrationContext(aggregateOverCap)).toBeUndefined();
   });
 
@@ -265,7 +306,7 @@ describe('reviewed registration display service', () => {
     });
   });
 
-  it('verifies response length, optional server digest, and local SHA-256', async () => {
+  it('verifies required response length and digest headers plus local SHA-256', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4]);
     const digest = Array.from(
       new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
@@ -296,6 +337,37 @@ describe('reviewed registration display service', () => {
     );
   });
 
+  it('fetches the required mask only from its strict same-origin descriptor', async () => {
+    const bytes = new Uint8Array([0, 1]);
+    const digest = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+      (byte) => byte.toString(16).padStart(2, '0'),
+    ).join('');
+    const descriptor: ReviewedRegistrationCoverageMask = {
+      ...context.coverage_mask,
+      bytes: bytes.byteLength,
+      sha256: digest,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(bytes, {
+        headers: {
+          'Content-Type': 'application/vnd.nrrd',
+          'Content-Length': String(bytes.byteLength),
+          'X-Content-SHA256': digest,
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchReviewedRegistrationCoverageMask(descriptor)).resolves.toEqual(
+      bytes.buffer,
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      REVIEWED_REGISTRATION_COVERAGE_MASK_URL,
+      expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }),
+    );
+  });
+
   it('rejects changed volume headers and over-cap descriptors before retaining bytes', async () => {
     const descriptor = { ...context.volumes.fixed, bytes: 4 };
     vi.stubGlobal(
@@ -312,6 +384,69 @@ describe('reviewed registration display service', () => {
     );
     await expect(fetchReviewedRegistrationVolume(descriptor)).rejects.toThrow(
       /response digest changed/i,
+    );
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3, 4]), {
+          headers: {
+            'Content-Type': 'application/vnd.nrrd',
+            'Content-Length': '4',
+          },
+        }),
+      ),
+    );
+    await expect(fetchReviewedRegistrationVolume(descriptor)).rejects.toThrow(
+      /response digest changed/i,
+    );
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3, 4]), {
+          headers: {
+            'Content-Type': 'text/plain',
+            'Content-Length': '4',
+            'X-Content-SHA256': descriptor.sha256,
+          },
+        }),
+      ),
+    );
+    await expect(fetchReviewedRegistrationVolume(descriptor)).rejects.toThrow(
+      /unexpected media type/i,
+    );
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3, 4]), {
+          headers: {
+            'Content-Type': 'application/vnd.nrrd',
+            'Content-Length': '3',
+            'X-Content-SHA256': descriptor.sha256,
+          },
+        }),
+      ),
+    );
+    await expect(fetchReviewedRegistrationVolume(descriptor)).rejects.toThrow(
+      /response byte count changed/i,
+    );
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3, 4]), {
+          headers: {
+            'Content-Type': 'application/vnd.nrrd',
+            'Content-Length': '4',
+            'X-Content-SHA256': descriptor.sha256,
+          },
+        }),
+      ),
+    );
+    await expect(fetchReviewedRegistrationVolume(descriptor)).rejects.toThrow(
+      /SHA-256 changed/i,
     );
 
     const fetchMock = vi.fn();

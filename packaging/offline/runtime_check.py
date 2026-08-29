@@ -25,7 +25,7 @@ def main() -> None:
         raise SystemExit("installed ScanView UI is unavailable")
     schemas = list(files("scanview_agent").joinpath("schemas").iterdir())
     schema_count = len([path for path in schemas if path.name.endswith(".json")])
-    if schema_count != 17:
+    if schema_count != 20:
         raise SystemExit("installed ScanView schemas are incomplete")
     print(
         json.dumps(

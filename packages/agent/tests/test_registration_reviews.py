@@ -110,7 +110,7 @@ def review_request(
 ) -> dict:
     accepted = decision == ACCEPTED_DECISION
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "reviewer": {
             "name": "Synthetic Reviewer",
             "role": "clinician" if accepted else "patient_or_family",
@@ -121,7 +121,7 @@ def review_request(
         },
         "attest": True,
         "decision": decision,
-        "region_of_importance": "Exact shared coverage around the synthetic target region.",
+        "region_of_importance": "Reviewer-attested shared anatomy within moving-image sampling support.",
         "qualitative_checks": {
             key: accepted for key in QUALITATIVE_CHECKS
         },
@@ -149,7 +149,7 @@ def _schema() -> dict:
         (
             repository_root
             / "schemas"
-            / "scanview-registration-qa-review-v1.schema.json"
+            / "scanview-registration-qa-review-v2.schema.json"
         ).read_text()
     )
 
@@ -165,6 +165,36 @@ def test_registration_qa_context_is_human_only_and_source_anchored(tmp_path: Pat
     assert context["display_policy"]["accepted_unlocks"] == ["overlay", "swipe"]
     assert "subtraction" in context["display_policy"]["always_locked"]
     assert set(context["volumes"]) == {"fixed", "moving", "registered_moving"}
+    assert set(context["coverage_mask"]) == {
+        "role",
+        "filename",
+        "url",
+        "bytes",
+        "sha256",
+        "derived",
+        "scalar_type",
+        "binary_values",
+        "semantics",
+        "geometry",
+    }
+    assert context["coverage_mask"]["role"] == (
+        "registered_moving_sampling_support_in_fixed_geometry"
+    )
+    assert context["coverage_mask"]["filename"] == "registered-moving-coverage.nrrd"
+    assert context["coverage_mask"]["scalar_type"] == "uint8"
+    assert context["coverage_mask"]["binary_values"] == [0, 1]
+    assert context["coverage_mask"]["semantics"] == (
+        "technical_sampling_support_not_anatomy_or_segmentation"
+    )
+    assert context["coverage_mask"]["geometry"] == context["volumes"]["fixed"][
+        "geometry"
+    ]
+    assert context["display_policy"]["sampling_support_enforcement"] == (
+        "required_pixel_mask"
+    )
+    assert context["display_policy"]["shared_anatomy_scope"] == (
+        "reviewer_attested_visual_only"
+    )
     assert context["volumes"]["registered_moving"]["resampled"] is True
     assert context["volumes"]["fixed"]["geometry"]["sizes"] == [2, 2, 2]
     assert str(bundle) not in json.dumps(context)
@@ -202,6 +232,19 @@ def test_acceptance_is_hash_linked_schema_valid_and_requires_live_bundle(
     assert record["quantitative_assessment"]["maximum_residual_mm"] > 0.5
     assert record["integrity"]["unverified_previous_review_sha256"] is None
     assert record["integrity"]["event_sha256"]
+    source = record["source_registration"]
+    assert source["coverage_mask_sha256"] == next(
+        item["sha256"]
+        for item in source["bundle_files"]
+        if item["name"] == "registered-moving-coverage.nrrd"
+    )
+    assert source["coverage_mask_geometry"] == source["fixed_geometry"]
+    assert source["coverage_mask_geometry"] == source["registered_geometry"]
+    assert source["coverage_mask"]["semantics"] == (
+        "technical_sampling_support_not_anatomy_or_segmentation"
+    )
+    assert source["coverage_mask"]["total_voxel_count"] == 8
+    assert 0 < source["coverage_mask"]["foreground_voxel_count"] <= 8
     assert any("not a digital signature" in item for item in record["limitations"])
     assert registration_review_errors(record, registration_directory=bundle) == []
 
@@ -331,10 +374,22 @@ def test_acceptance_requires_full_inspection_evidence(
         build_registration_review(bundle, request)
 
 
+def test_acceptance_requires_explicit_coverage_boundary_attestation(
+    tmp_path: Path,
+) -> None:
+    bundle = registration_bundle(tmp_path)
+    request = review_request()
+    request["qualitative_checks"][
+        "coverage_mask_boundary_and_excluded_region_reviewed"
+    ] = False
+    with pytest.raises(ValueError, match="every qualitative check"):
+        build_registration_review(bundle, request)
+
+
 def test_strict_json_rejects_duplicates_nonfinite_and_controls(tmp_path: Path) -> None:
     bundle = registration_bundle(tmp_path)
     for payload in (
-        b'{"schema_version":"1.0.0","schema_version":"1.0.0"}',
+        b'{"schema_version":"2.0.0","schema_version":"2.0.0"}',
         b'{"schema_version":NaN}',
     ):
         with pytest.raises(ValueError, match="invalid JSON"):
@@ -370,7 +425,10 @@ def test_malformed_nested_collections_fail_closed_without_throwing(tmp_path: Pat
         assert registration_review_summary(json.dumps(malformed).encode())["display_unlocked"] is False
 
 
-@pytest.mark.parametrize("tamper", ["digest", "geometry", "date"])
+@pytest.mark.parametrize(
+    "tamper",
+    ["digest", "geometry", "date", "coverage_digest", "coverage_semantics", "coverage_count"],
+)
 def test_standalone_anchor_checks_internal_consistency(tmp_path: Path, tamper: str) -> None:
     bundle = registration_bundle(tmp_path)
     record = build_registration_review(bundle, review_request())
@@ -380,10 +438,27 @@ def test_standalone_anchor_checks_internal_consistency(tmp_path: Path, tamper: s
         source["transform_sha256"] = "0" * 64
     elif tamper == "geometry":
         source["registered_geometry"]["voxel_spacing_mm"][0] = 2.0
+    elif tamper == "coverage_digest":
+        source["coverage_mask_sha256"] = "0" * 64
+    elif tamper == "coverage_semantics":
+        source["coverage_mask"]["semantics"] = "anatomy"
+    elif tamper == "coverage_count":
+        source["coverage_mask"]["foreground_voxel_count"] = 0
     else:
         source["moving"]["acquisition_date"] = source["fixed"]["acquisition_date"]
     assert "source registration is invalid" in " ".join(registration_review_errors(altered))
     summary = registration_review_summary(json.dumps(altered).encode())
+    assert summary["valid"] is False
+    assert summary["display_unlocked"] is False
+
+
+def test_v1_review_record_fails_closed(tmp_path: Path) -> None:
+    bundle = registration_bundle(tmp_path)
+    record = build_registration_review(bundle, review_request())
+    record["schema_version"] = "1.0.0"
+    summary = registration_review_summary(
+        json.dumps(record).encode(), registration_directory=bundle
+    )
     assert summary["valid"] is False
     assert summary["display_unlocked"] is False
 
@@ -402,6 +477,13 @@ def test_schema_rejects_semantically_unsafe_accepted_record(tmp_path: Path) -> N
     incomplete["inspection_evidence"]["planes"]["axial"]["normalized_max"] = 0.5
     with pytest.raises(ValidationError):
         validator.validate(incomplete)
+
+    unsafe_coverage_claim = deepcopy(record)
+    unsafe_coverage_claim["source_registration"]["coverage_mask"][
+        "semantics"
+    ] = "anatomy"
+    with pytest.raises(ValidationError):
+        validator.validate(unsafe_coverage_claim)
 
 
 def test_registration_qa_rejects_tampering_and_writes_atomically(tmp_path: Path) -> None:

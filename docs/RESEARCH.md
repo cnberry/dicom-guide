@@ -48,10 +48,10 @@ required version-gated job.
 The launcher must match a caller-supplied expected SHA-256 before DICOM staging and
 again after execution. This protects against accidental substitution relative to an
 independently recorded digest, but the generic runtime check does not authenticate the
-distributor, code signature, SlicerApp-real process, BRAINSFit binary, or dependent
+distributor, code signature, SlicerApp-real process, BRAINSFit/BRAINSResample binaries, or dependent
 libraries. For this macOS host, the official 447,327,067-byte DMG's published SHA-512
 matched exactly; DMG integrity/stapled notarization, Gatekeeper assessment, deep strict
-app signature, Kitware team identity, launcher hash, and BRAINSFit hash were verified
+app signature, Kitware team identity, launcher hash, and BRAINSFit/BRAINSResample hashes were verified
 before installation. Exact evidence and its limitations are recorded in
 [`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). Linux package authentication is
 still pending. ScanView requires OS-enforced network isolation for
@@ -68,6 +68,16 @@ linear interpolation. Histogram matching is disabled: BRAINSFit's own guidance w
 that changing tumors or lesions can make histogram matching problematic. Generated
 results still require patient-specific visual and quantitative QA.
 
+The v2 engine also requires the bundled BRAINSResample module. It creates a constant-one
+uint8 image on the native moving grid and resamples that technical domain through the
+same BRAINSFit transform onto the fixed reference grid with nearest-neighbor sampling
+and outside value zero. The host then decodes the complete result, requires only `0`
+and `1`, rejects empty support, and records recomputed counts. This establishes where
+the pinned local resampler found moving-image sampling support; it does not establish
+shared anatomy, tumor extent, segmentation, registration quality, or clinical
+comparability. Browser reformatting keeps the mask nearest-neighbor and never expands
+its boundary through smoothing.
+
 The local QA design is adapted from [AAPM TG-132 registration QA
 concepts](https://www.aapm.org/pubs/reports/detail.asp?docid=164): verify the exact
 patient dataset both qualitatively and quantitatively, traverse the full shared
@@ -82,14 +92,18 @@ supplemental evidence. Any spatial authorization must be limited to the exact ha
 transform and shared coverage; it cannot establish lesion identity or response.
 
 The authenticated official macOS engine is installed locally and passed the no-data
-preflight plus a full synthetic same-modality MR registration through real
-Slicer/BRAINSFit under the mandatory deny-all-network sandbox. Source bytes remained
-unchanged, the expected synthetic translation was recovered, all derivative-use
-flags stayed locked, and the produced NRRDs rendered locally in all three planes and
-four QA modes without browser errors. No patient data was used, no QA decision was
-submitted, and the synthetic bundle was moved to recoverable Trash. Real
-same-modality patient QA and real Linux engine execution remain pending; neither has
-a cloud fallback.
+preflight plus real synthetic same-modality MR registrations through
+Slicer/BRAINSFit/BRAINSResample under the mandatory deny-all-network sandbox. Source
+bytes remained unchanged, the expected approximately -2 mm translation was recovered,
+and a mismatched-field-of-view case produced exactly 65,536 supported voxels out of
+69,632 fixed-grid voxels. The seven-file v2 bundle validated with all derivative-use
+flags locked; a separately synthetic accepted review then exercised local mask-gated
+opacity/swipe in all three planes with no browser errors or non-loopback requests. No
+patient data was used. Strawberry independently passed the offline Ubuntu 26.04 x86_64
+runtime, loopback UI/catalog, bubblewrap private namespaces, seccomp socket denial,
+and Linux atomic no-replace publication. Strawberry does not yet have Slicer 5.12.3,
+so authenticated real Linux engine execution and real same-modality patient QA remain
+pending; neither has a cloud fallback.
 
 ## Longitudinal comparison findings
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   composeQaSlice,
+  extractPatientSpaceBinaryMaskSlice,
   extractPatientSpaceSlice,
   landmarkResidual,
   lpsToPatientSlicePixel,
@@ -8,7 +9,9 @@ import {
   patientSlicePixelToLps,
   patientSpacePlaneLength,
   planeOrientationLabels,
+  validateBinaryCoverageVolume,
   type LpsPoint,
+  type NrrdBinaryMaskSlice,
   type NrrdPlane,
   type NrrdSlice,
   type NrrdVolume,
@@ -18,7 +21,9 @@ import {
 } from '../nrrd';
 import {
   downloadRegistrationReview,
+  fetchRegistrationQaCoverageMask,
   fetchRegistrationQaVolume,
+  MAX_REGISTRATION_QA_DECODED_TOTAL_BYTES,
   MAX_REGISTRATION_QA_ENCODED_TOTAL_BYTES,
   submitRegistrationReview,
   type LandmarkPairDraft,
@@ -31,7 +36,10 @@ type LoadedVolumes = {
   fixed: NrrdVolume;
   moving: NrrdVolume;
   registered: NrrdVolume;
+  coverage: NrrdVolume;
 };
+
+type RegistrationQaDisplayMode = QaCompositeMode | 'coverage_mask_boundary';
 
 type LandmarkPair = LandmarkPairDraft & {
   id: string;
@@ -40,6 +48,123 @@ type LandmarkPair = LandmarkPairDraft & {
 
 type Marker = { x: number; y: number; label: string; color: string };
 type ReviewPhase = 'pending' | 'submitting' | 'saved' | 'error';
+
+const REGISTRATION_QA_PATIENT_SPACE_OPTIONS = {
+  maxDimension: 2048,
+  maxPixels: 4 * 1024 * 1024,
+} as const;
+
+const assertMatchingSlice = (
+  slice: NrrdSlice,
+  coverage: NrrdBinaryMaskSlice | undefined,
+): NrrdBinaryMaskSlice => {
+  if (!coverage) {
+    throw new Error('Registration QA rendering requires its sampling-support mask.');
+  }
+  if (
+    slice.width !== coverage.width ||
+    slice.height !== coverage.height ||
+    coverage.pixels.length !== slice.pixels.length
+  ) {
+    throw new Error('Registration QA sampling-support slice does not match the image slice.');
+  }
+  if (coverage.pixels.some((value) => value !== 0 && value !== 1)) {
+    throw new Error('Registration QA sampling-support slice is non-binary.');
+  }
+  return coverage;
+};
+
+export const registrationQaRegisteredRgba = (
+  slice: NrrdSlice,
+  coverage: NrrdBinaryMaskSlice | undefined,
+): Uint8ClampedArray => {
+  const mask = assertMatchingSlice(slice, coverage);
+  const rgba = new Uint8ClampedArray(slice.pixels.length * 4);
+  slice.pixels.forEach((value, index) => {
+    const target = index * 4;
+    if (mask.pixels[index] === 1) {
+      rgba[target] = value;
+      rgba[target + 1] = value;
+      rgba[target + 2] = value;
+    } else {
+      rgba[target] = 9;
+      rgba[target + 1] = 18;
+      rgba[target + 2] = 16;
+    }
+    rgba[target + 3] = 255;
+  });
+  return rgba;
+};
+
+const isCoverageBoundary = (
+  mask: NrrdBinaryMaskSlice,
+  x: number,
+  y: number,
+): boolean => {
+  const index = y * mask.width + x;
+  if (mask.pixels[index] !== 1) return false;
+  return (
+    x === 0 ||
+    y === 0 ||
+    x === mask.width - 1 ||
+    y === mask.height - 1 ||
+    mask.pixels[index - 1] === 0 ||
+    mask.pixels[index + 1] === 0 ||
+    mask.pixels[index - mask.width] === 0 ||
+    mask.pixels[index + mask.width] === 0
+  );
+};
+
+export const registrationQaCoverageBoundaryRgba = (
+  fixed: NrrdSlice,
+  coverage: NrrdBinaryMaskSlice | undefined,
+): Uint8ClampedArray => {
+  const mask = assertMatchingSlice(fixed, coverage);
+  const rgba = new Uint8ClampedArray(fixed.pixels.length * 4);
+  fixed.pixels.forEach((value, index) => {
+    const target = index * 4;
+    const x = index % fixed.width;
+    const y = Math.floor(index / fixed.width);
+    if (isCoverageBoundary(mask, x, y)) {
+      rgba[target] = 255;
+      rgba[target + 1] = 176;
+      rgba[target + 2] = 32;
+    } else if (mask.pixels[index] === 0) {
+      const hatch = (x + y) % 6 < 3;
+      rgba[target] = hatch ? 58 : 40;
+      rgba[target + 1] = hatch ? 31 : 24;
+      rgba[target + 2] = hatch ? 7 : 10;
+    } else {
+      const dimmed = Math.round(value * 0.72);
+      rgba[target] = dimmed;
+      rgba[target + 1] = dimmed;
+      rgba[target + 2] = dimmed;
+    }
+    rgba[target + 3] = 255;
+  });
+  return rgba;
+};
+
+export const enforceRegistrationQaCompositeCoverage = (
+  data: Uint8ClampedArray,
+  fixed: NrrdSlice,
+  coverage: NrrdBinaryMaskSlice | undefined,
+): Uint8ClampedArray => {
+  const mask = assertMatchingSlice(fixed, coverage);
+  if (data.length !== fixed.pixels.length * 4) {
+    throw new Error('Registration QA composite does not match the fixed image slice.');
+  }
+  const result = new Uint8ClampedArray(data);
+  fixed.pixels.forEach((value, index) => {
+    if (mask.pixels[index] === 1) return;
+    const target = index * 4;
+    result[target] = value;
+    result[target + 1] = value;
+    result[target + 2] = value;
+    result[target + 3] = 255;
+  });
+  return result;
+};
 
 const formatDate = (value: string): string =>
   /^\d{8}$/.test(value)
@@ -107,6 +232,7 @@ const QaCanvas = ({
   onPoint,
   derived = false,
   orientation,
+  coverage,
 }: {
   title: string;
   slice?: NrrdSlice;
@@ -114,6 +240,7 @@ const QaCanvas = ({
   onPoint?: (horizontal: number, vertical: number) => void;
   derived?: boolean;
   orientation?: PlaneOrientationLabels;
+  coverage?: NrrdBinaryMaskSlice;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -123,16 +250,24 @@ const QaCanvas = ({
     canvas.height = slice.height;
     const context = canvas.getContext('2d');
     if (!context) return;
-    const rgba = new Uint8ClampedArray(slice.pixels.length * 4);
-    slice.pixels.forEach((value, index) => {
-      const target = index * 4;
-      rgba[target] = value;
-      rgba[target + 1] = value;
-      rgba[target + 2] = value;
-      rgba[target + 3] = 255;
-    });
-    context.putImageData(new ImageData(rgba, slice.width, slice.height), 0, 0);
-  }, [slice]);
+    const rgba = coverage
+      ? registrationQaRegisteredRgba(slice, coverage)
+      : new Uint8ClampedArray(slice.pixels.length * 4);
+    if (!coverage) {
+      slice.pixels.forEach((value, index) => {
+        const target = index * 4;
+        rgba[target] = value;
+        rgba[target + 1] = value;
+        rgba[target + 2] = value;
+        rgba[target + 3] = 255;
+      });
+    }
+    context.putImageData(
+      new ImageData(new Uint8ClampedArray(rgba), slice.width, slice.height),
+      0,
+      0,
+    );
+  }, [coverage, slice]);
 
   return (
     <section className="qa-image-card">
@@ -199,6 +334,7 @@ const QaCanvas = ({
 const CompositeCanvas = ({
   fixed,
   registered,
+  coverage,
   mode,
   opacity,
   checkerSize,
@@ -208,7 +344,8 @@ const CompositeCanvas = ({
 }: {
   fixed?: NrrdSlice;
   registered?: NrrdSlice;
-  mode: QaCompositeMode;
+  coverage?: NrrdBinaryMaskSlice;
+  mode: RegistrationQaDisplayMode;
   opacity: number;
   checkerSize: number;
   edgeThreshold: number;
@@ -218,32 +355,39 @@ const CompositeCanvas = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !fixed || !registered) return;
-    const composite = composeQaSlice(fixed, registered, mode, {
-      opacity,
-      checkerSize,
-      edgeThreshold,
-      swipePosition,
-    });
-    canvas.width = composite.width;
-    canvas.height = composite.height;
+    if (!canvas || !fixed || !registered || !coverage) return;
+    const data =
+      mode === 'coverage_mask_boundary'
+        ? registrationQaCoverageBoundaryRgba(fixed, coverage)
+        : enforceRegistrationQaCompositeCoverage(
+            composeQaSlice(fixed, registered, mode, {
+              opacity,
+              checkerSize,
+              edgeThreshold,
+              swipePosition,
+            }).data,
+            fixed,
+            coverage,
+          );
+    canvas.width = fixed.width;
+    canvas.height = fixed.height;
     canvas
       .getContext('2d')
       ?.putImageData(
-        new ImageData(
-          new Uint8ClampedArray(composite.data),
-          composite.width,
-          composite.height,
-        ),
+        new ImageData(new Uint8ClampedArray(data), fixed.width, fixed.height),
         0,
         0,
       );
-  }, [checkerSize, edgeThreshold, fixed, mode, opacity, registered, swipePosition]);
+  }, [checkerSize, coverage, edgeThreshold, fixed, mode, opacity, registered, swipePosition]);
   return (
     <section className="qa-image-card qa-composite-card">
       <header>
-        <strong>{mode.replace('_', ' ').toUpperCase()}</strong>
-        <span>QA PREVIEW ONLY · NEVER A NATIVE SOURCE</span>
+        <strong>{mode.replaceAll('_', ' ').toUpperCase()}</strong>
+        <span>
+          {mode === 'coverage_mask_boundary'
+            ? 'TECHNICAL SAMPLING SUPPORT · NOT ANATOMY OR SEGMENTATION'
+            : 'QA PREVIEW ONLY · NEVER A NATIVE SOURCE'}
+        </span>
       </header>
       <div className="qa-canvas-wrap">
         <div
@@ -268,6 +412,13 @@ const CompositeCanvas = ({
           )}
         </div>
       </div>
+      {mode === 'coverage_mask_boundary' && (
+        <p>
+          Amber line: sampling-support boundary. Hatched dark region: registered-moving pixels
+          excluded because the transformed moving image has no sampling support there. This
+          technical mask carries no anatomical or clinical meaning.
+        </p>
+      )}
     </section>
   );
 };
@@ -284,8 +435,11 @@ export const RegistrationQaWorkspace = ({
     Partial<Record<NrrdPlane, { normalized_min: number; normalized_max: number }>>
   >({});
   const [sliceIndex, setSliceIndex] = useState(0);
-  const [mode, setMode] = useState<QaCompositeMode>('opacity');
+  const [mode, setMode] = useState<RegistrationQaDisplayMode>('opacity');
   const [inspectedModes, setInspectedModes] = useState<Set<QaCompositeMode>>(new Set());
+  const [coverageBoundaryPlanes, setCoverageBoundaryPlanes] = useState<Set<NrrdPlane>>(
+    new Set(),
+  );
   const [fixedWindow, setFixedWindow] = useState<[number, number]>([1, 99]);
   const [movingWindow, setMovingWindow] = useState<[number, number]>([1, 99]);
   const [opacity, setOpacity] = useState(0.5);
@@ -330,63 +484,108 @@ export const RegistrationQaWorkspace = ({
 
   useEffect(() => {
     const controller = new AbortController();
+    setVolumes(undefined);
+    setLoadError(undefined);
     void (async () => {
-      const encodedTotal = Object.values(context.volumes).reduce(
-        (total, descriptor) => total + descriptor.bytes,
-        0,
-      );
+      const encodedTotal =
+        Object.values(context.volumes).reduce(
+          (total, descriptor) => total + descriptor.bytes,
+          0,
+        ) + context.coverage_mask.bytes;
       if (encodedTotal > MAX_REGISTRATION_QA_ENCODED_TOTAL_BYTES) {
-        throw new Error('Registration QA volumes exceed the aggregate browser safety limit.');
+        throw new Error(
+          'Registration QA volumes and sampling-support mask exceed the aggregate browser safety limit.',
+        );
       }
-      const fixedBytes = await fetchRegistrationQaVolume(
-        context.volumes.fixed,
-        controller.signal,
-      );
-      const fixed = parseNrrd(fixedBytes);
-      const registeredBytes = await fetchRegistrationQaVolume(
-        context.volumes.registered_moving,
-        controller.signal,
-      );
-      const registered = parseNrrd(registeredBytes);
-      const movingBytes = await fetchRegistrationQaVolume(
-        context.volumes.moving,
-        controller.signal,
-      );
-      const moving = parseNrrd(movingBytes);
-        const loaded = {
-          fixed,
-          moving,
-          registered,
-        };
-        if (
-          !volumeMatchesDescriptor(loaded.fixed, context.volumes.fixed.geometry) ||
-          !volumeMatchesDescriptor(loaded.moving, context.volumes.moving.geometry) ||
-          !volumeMatchesDescriptor(
-            loaded.registered,
-            context.volumes.registered_moving.geometry,
-          ) ||
-          !arraysClose(loaded.fixed.sizes, loaded.registered.sizes, 0) ||
-          loaded.fixed.space !== loaded.registered.space ||
-          !arraysClose(loaded.fixed.spaceDirections, loaded.registered.spaceDirections) ||
-          !arraysClose(loaded.fixed.spaceOrigin, loaded.registered.spaceOrigin)
-        ) {
-          throw new Error('Validated QA geometry disagrees with the loaded local volumes.');
+      let decodedBytes = 0;
+      const loadVolume = async (
+        descriptor: RegistrationQaContext['volumes']['fixed'],
+      ): Promise<NrrdVolume> => {
+        const remaining = MAX_REGISTRATION_QA_DECODED_TOTAL_BYTES - decodedBytes;
+        if (remaining <= 0) {
+          throw new Error('Registration QA artifacts exceed the decoded browser safety limit.');
         }
-        if (controller.signal.aborted) return;
-        setVolumes(loaded);
-        const axialCount = patientSpacePlaneLength(loaded.fixed, 'axial');
-        const initialSlice = Math.floor(axialCount / 2);
-        const normalized = axialCount <= 1 ? 0.5 : initialSlice / (axialCount - 1);
-        setSliceIndex(initialSlice);
-        setInspectedPlanes({
-          axial: { normalized_min: normalized, normalized_max: normalized },
-        });
-        setInspectedModes(new Set(['opacity']));
+        const volume = parseNrrd(
+          await fetchRegistrationQaVolume(descriptor, controller.signal),
+          { maxDecodedBytes: remaining },
+        );
+        decodedBytes += volume.payload.byteLength;
+        if (decodedBytes > MAX_REGISTRATION_QA_DECODED_TOTAL_BYTES) {
+          throw new Error('Registration QA artifacts exceed the decoded browser safety limit.');
+        }
+        return volume;
+      };
+
+      const fixed = await loadVolume(context.volumes.fixed);
+      if (!volumeMatchesDescriptor(fixed, context.volumes.fixed.geometry)) {
+        throw new Error('Fixed QA volume disagrees with its validated geometry.');
+      }
+      const moving = await loadVolume(context.volumes.moving);
+      if (!volumeMatchesDescriptor(moving, context.volumes.moving.geometry)) {
+        throw new Error('Moving QA volume disagrees with its validated geometry.');
+      }
+      const registered = await loadVolume(context.volumes.registered_moving);
+      if (
+        !volumeMatchesDescriptor(
+          registered,
+          context.volumes.registered_moving.geometry,
+        ) ||
+        !arraysClose(fixed.sizes, registered.sizes, 0) ||
+        fixed.space !== registered.space ||
+        !arraysClose(fixed.spaceDirections, registered.spaceDirections) ||
+        !arraysClose(fixed.spaceOrigin, registered.spaceOrigin)
+      ) {
+        throw new Error('Registered-moving QA volume disagrees with fixed geometry.');
+      }
+
+      const remainingMaskBytes = MAX_REGISTRATION_QA_DECODED_TOTAL_BYTES - decodedBytes;
+      if (remainingMaskBytes <= 0) {
+        throw new Error(
+          'Registration QA volumes leave no decoded browser budget for their required sampling-support mask.',
+        );
+      }
+      const coverage = parseNrrd(
+        await fetchRegistrationQaCoverageMask(context.coverage_mask, controller.signal),
+        { maxDecodedBytes: remainingMaskBytes },
+      );
+      validateBinaryCoverageVolume(coverage);
+      decodedBytes += coverage.payload.byteLength;
+      if (
+        decodedBytes > MAX_REGISTRATION_QA_DECODED_TOTAL_BYTES ||
+        !volumeMatchesDescriptor(coverage, context.coverage_mask.geometry) ||
+        !arraysClose(fixed.sizes, coverage.sizes, 0) ||
+        fixed.space !== coverage.space ||
+        !arraysClose(fixed.spaceDirections, coverage.spaceDirections) ||
+        !arraysClose(fixed.spaceOrigin, coverage.spaceOrigin)
+      ) {
+        throw new Error(
+          'Required moving sampling-support mask disagrees with fixed geometry.',
+        );
+      }
+
+      if (controller.signal.aborted) return;
+      const loaded = { fixed, moving, registered, coverage };
+      setVolumes(loaded);
+      const axialCount = patientSpacePlaneLength(
+        loaded.fixed,
+        'axial',
+        REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
+      );
+      const initialSlice = Math.floor(axialCount / 2);
+      const normalized = axialCount <= 1 ? 0.5 : initialSlice / (axialCount - 1);
+      setSliceIndex(initialSlice);
+      setInspectedPlanes({
+        axial: { normalized_min: normalized, normalized_max: normalized },
+      });
+      setInspectedModes(new Set(['opacity']));
+      setCoverageBoundaryPlanes(new Set());
     })()
       .catch((error) => {
         if (controller.signal.aborted) return;
         setLoadError(
-          error instanceof Error ? error.message : 'Local registration QA volumes could not load.',
+          error instanceof Error
+            ? error.message
+            : 'Local registration QA volumes and sampling-support mask could not load.',
         );
       });
     return () => controller.abort();
@@ -400,6 +599,7 @@ export const RegistrationQaWorkspace = ({
             plane,
             sliceIndex,
             windowFromPercent(volumes.fixed, fixedWindow[0], fixedWindow[1]),
+            REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
           )
         : undefined,
     [fixedWindow, plane, sliceIndex, volumes],
@@ -412,14 +612,23 @@ export const RegistrationQaWorkspace = ({
             plane,
             sliceIndex,
             windowFromPercent(volumes.registered, movingWindow[0], movingWindow[1]),
+            REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
           )
         : undefined,
     [movingWindow, plane, sliceIndex, volumes],
   );
   const movingReferenceSlice = useMemo(() => {
     if (!volumes) return undefined;
-    const fixedLength = patientSpacePlaneLength(volumes.fixed, plane);
-    const movingLength = patientSpacePlaneLength(volumes.moving, plane);
+    const fixedLength = patientSpacePlaneLength(
+      volumes.fixed,
+      plane,
+      REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
+    );
+    const movingLength = patientSpacePlaneLength(
+      volumes.moving,
+      plane,
+      REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
+    );
     const proportional =
       fixedLength <= 1 ? 0 : Math.round((sliceIndex / (fixedLength - 1)) * (movingLength - 1));
     return extractPatientSpaceSlice(
@@ -427,8 +636,21 @@ export const RegistrationQaWorkspace = ({
       plane,
       proportional,
       windowFromPercent(volumes.moving, movingWindow[0], movingWindow[1]),
+      REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
     );
   }, [movingWindow, plane, sliceIndex, volumes]);
+  const coverageSlice = useMemo(
+    () =>
+      volumes
+        ? extractPatientSpaceBinaryMaskSlice(
+            volumes.coverage,
+            plane,
+            sliceIndex,
+            REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
+          )
+        : undefined,
+    [plane, sliceIndex, volumes],
+  );
 
   const fixedMarkers = useMemo(
     () =>
@@ -476,16 +698,28 @@ export const RegistrationQaWorkspace = ({
   const choosePlane = (next: NrrdPlane) => {
     setPlane(next);
     if (volumes) {
-      const count = patientSpacePlaneLength(volumes.fixed, next);
+      const count = patientSpacePlaneLength(
+        volumes.fixed,
+        next,
+        REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
+      );
       const center = Math.floor(count / 2);
       setSliceIndex(center);
       recordSliceVisit(next, center, count);
+      if (mode === 'coverage_mask_boundary') {
+        setCoverageBoundaryPlanes((current) => new Set([...current, next]));
+      }
     }
   };
 
-  const chooseMode = (next: QaCompositeMode) => {
+  const chooseMode = (next: RegistrationQaDisplayMode) => {
     setMode(next);
-    if (volumes) setInspectedModes((current) => new Set([...current, next]));
+    if (!volumes) return;
+    if (next === 'coverage_mask_boundary') {
+      setCoverageBoundaryPlanes((current) => new Set([...current, plane]));
+    } else {
+      setInspectedModes((current) => new Set([...current, next]));
+    }
   };
 
   const selectFixedLandmark = (horizontal: number, vertical: number) => {
@@ -498,8 +732,16 @@ export const RegistrationQaWorkspace = ({
   };
 
   const selectRegisteredLandmark = (horizontal: number, vertical: number) => {
-    if (!registeredSlice || !pendingFixed) {
+    if (!registeredSlice || !coverageSlice || !pendingFixed) {
       setLandmarkMessage('Select the fixed landmark first.');
+      return;
+    }
+    const x = Math.max(0, Math.min(coverageSlice.width - 1, Math.round(horizontal)));
+    const y = Math.max(0, Math.min(coverageSlice.height - 1, Math.round(vertical)));
+    if (coverageSlice.pixels[y * coverageSlice.width + x] !== 1) {
+      setLandmarkMessage(
+        'That registered-moving point is outside technical sampling support and cannot be recorded.',
+      );
       return;
     }
     const physical = patientSlicePixelToLps(
@@ -552,7 +794,9 @@ export const RegistrationQaWorkspace = ({
       return Boolean(
         coverage && coverage.normalized_min <= 0.05 && coverage.normalized_max >= 0.95,
       );
-    }) && inspectedModes.size === 4;
+    }) &&
+    inspectedModes.size === 4 &&
+    coverageBoundaryPlanes.size === 3;
   const qualifiedReviewer =
     trainingStatus === 'self_attested_trained' &&
     (reviewerRole === 'clinician' || reviewerRole === 'medical_physicist');
@@ -583,7 +827,7 @@ export const RegistrationQaWorkspace = ({
   const submitReview = async () => {
     if (!decisionReady) return;
     const request: RegistrationReviewRequest = {
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       reviewer: {
         name: reviewerName.trim(),
         role: reviewerRole,
@@ -645,7 +889,13 @@ export const RegistrationQaWorkspace = ({
     }
   };
 
-  const sliceCount = volumes ? patientSpacePlaneLength(volumes.fixed, plane) : 1;
+  const sliceCount = volumes
+    ? patientSpacePlaneLength(
+        volumes.fixed,
+        plane,
+        REGISTRATION_QA_PATIENT_SPACE_OPTIONS,
+      )
+    : 1;
   if (loadError) {
     return (
       <main className="qa-workspace qa-error-state">
@@ -673,10 +923,13 @@ export const RegistrationQaWorkspace = ({
       </header>
 
       <section className="qa-safety-strip">
-        <strong>Investigational preview.</strong> All three displayed NRRDs are local derived
-        scalar-volume representations; registered moving is additionally interpolated. Native
-        DICOM remains authoritative. No measurement, screenshot export, agent-state publishing,
-        subtraction, segmentation, mask propagation, or response conclusion is available here.
+        <strong>Investigational preview.</strong> The three intensity NRRDs and required binary
+        sampling-support mask are local derived representations; registered moving is additionally
+        interpolated. Mask-zero pixels are excluded from every registered-moving display. The mask
+        shows technical transformed-image sampling support only—not anatomy, tumor, segmentation,
+        registration quality, or clinical comparability. Native DICOM remains authoritative. No
+        measurement, screenshot export, agent-state publishing, subtraction, segmentation, mask
+        propagation, or response conclusion is available here.
       </section>
 
       <section className="qa-controls" aria-label="Registration QA display controls">
@@ -714,7 +967,15 @@ export const RegistrationQaWorkspace = ({
         </label>
         <div className="qa-control-group">
           <span>QA mode</span>
-          {(['opacity', 'swipe', 'checkerboard', 'edges'] as const).map((item) => (
+          {(
+            [
+              'opacity',
+              'swipe',
+              'checkerboard',
+              'edges',
+              'coverage_mask_boundary',
+            ] as const
+          ).map((item) => (
             <button
               aria-pressed={mode === item}
               className={mode === item ? 'active' : ''}
@@ -723,14 +984,17 @@ export const RegistrationQaWorkspace = ({
               onClick={() => chooseMode(item)}
               type="button"
             >
-              {item}
+              {item === 'coverage_mask_boundary' ? 'coverage mask boundary' : item}
             </button>
           ))}
         </div>
       </section>
 
       {!volumes ? (
-        <section className="qa-loading">Verifying hashes and decoding local NRRD volumes…</section>
+        <section className="qa-loading">
+          Verifying hashes and decoding three local volumes plus the mandatory sampling-support
+          mask…
+        </section>
       ) : (
         <>
           <section className="qa-native-grid">
@@ -745,6 +1009,7 @@ export const RegistrationQaWorkspace = ({
               slice={movingReferenceSlice}
             />
             <QaCanvas
+              coverage={coverageSlice}
               derived
               markers={registeredMarkers}
               onPoint={selectRegisteredLandmark}
@@ -763,6 +1028,7 @@ export const RegistrationQaWorkspace = ({
             />
             <CompositeCanvas
               checkerSize={checkerSize}
+              coverage={coverageSlice}
               edgeThreshold={edgeThreshold}
               fixed={fixedSlice}
               mode={mode}
@@ -944,14 +1210,27 @@ export const RegistrationQaWorkspace = ({
               .join(', ') || 'none'}{' '}
             · modes:{' '}
             {[...inspectedModes].join(', ')}
+            {' · coverage boundary: '}
+            {coverageBoundaryPlanes.size === 0
+              ? 'not yet viewed'
+              : [...coverageBoundaryPlanes].join(', ')}
           </p>
         </div>
 
         <div className="qa-checklist">
+          <p>
+            The sampling-support attestation unlocks only after the technical boundary mode has
+            been opened in axial, coronal, and sagittal planes. It remains a manual attestation,
+            not an automated anatomical or registration-quality finding.
+          </p>
           {context.qualitative_checks.map((item) => (
             <label key={item.id}>
               <input
                 checked={checks[item.id] ?? false}
+                disabled={
+                  item.id === 'coverage_mask_boundary_and_excluded_region_reviewed' &&
+                  coverageBoundaryPlanes.size !== 3
+                }
                 onChange={(event) =>
                   setChecks((current) => ({ ...current, [item.id]: event.target.checked }))
                 }

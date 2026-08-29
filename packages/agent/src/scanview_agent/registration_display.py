@@ -10,6 +10,8 @@ from .registration import registration_bundle_summary
 from .registration_reviews import (
     ACCEPTED_DECISION,
     ACCEPTED_SCOPE,
+    COVERAGE_MASK_FILENAME,
+    COVERAGE_MASK_ROLE,
     INTENDED_USE,
     MAX_RECORD_BYTES,
     _strict_json_loads,
@@ -17,7 +19,7 @@ from .registration_reviews import (
 )
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 ARTIFACT_TYPE = "reviewed_registration_display_context"
 SUMMARY_ARTIFACT_TYPE = "reviewed_registration_display_summary"
 AUTHORIZED_STATUS = "authorized"
@@ -29,17 +31,22 @@ ALWAYS_LOCKED = [
     "resampled_image_measurements",
     "response_conclusions",
 ]
-SHARED_COVERAGE_ENFORCEMENT = "reviewer_visual_only_no_machine_mask"
+SAMPLING_SUPPORT_ENFORCEMENT = "required_pixel_mask"
+SHARED_ANATOMY_SCOPE = "reviewer_attested_visual_only"
+MASK_FAILURE_BEHAVIOR = "lock_display"
+MASK_SAMPLING = "nearest_neighbor"
 MAX_REVIEWED_ENCODED_VOLUME_BYTES = 256 * 1024 * 1024
+MAX_REVIEWED_ENCODED_MASK_BYTES = 256 * 1024 * 1024
 MAX_REVIEWED_ENCODED_TOTAL_BYTES = 384 * 1024 * 1024
 LIMITATIONS = [
-    "Authorization applies only where both derived volumes contain anatomy; display outside their shared anatomical coverage is unauthorized.",
-    "The bundle contains no pixel-level transformed moving-coverage mask; shared coverage is enforced only by reviewer visual inspection.",
+    "Registered-moving display is authorized only where the required sampling-support mask is one and shared anatomy was visually reviewed.",
+    "The coverage mask identifies transformed moving-image sampling support only; it is not anatomy, tumor, segmentation, registration quality, or clinical comparability.",
+    "The sampling-support mask excludes default-filled registered-moving pixels but does not establish shared anatomy.",
     "Reviewer identity, role, training, and organization are self asserted and unauthenticated.",
     "The fixed volume is a derived local scalar-volume representation that preserves fixed geometry; it is not native DICOM.",
     "The registered-moving volume is derived and interpolated into fixed geometry; it is not native DICOM.",
     "Subtraction, mask propagation, segmentation, resampled-image measurements, and response conclusions remain prohibited.",
-    "This authorization is bound to the exact saved review and live six-file registration bundle hashes and geometry.",
+    "This authorization is bound to the exact saved review and live seven-file registration bundle hashes, geometry, and coverage-mask semantics and counts.",
     "This exploratory display is not a diagnosis, treatment-response conclusion, or authorization for treatment planning.",
     "The review event SHA-256 and saved-review SHA-256 provide tamper evidence, not a digital signature or reviewer authentication.",
 ]
@@ -269,25 +276,31 @@ def _assessment(
         }
         fixed_bytes = file_entries["fixed.nrrd"]["bytes"]
         registered_bytes = file_entries["registered-moving.nrrd"]["bytes"]
+        coverage_bytes = file_entries[COVERAGE_MASK_FILENAME]["bytes"]
     except (KeyError, TypeError):
-        fixed_bytes = registered_bytes = 0
+        fixed_bytes = registered_bytes = coverage_bytes = 0
     if (
         not isinstance(fixed_bytes, int)
         or isinstance(fixed_bytes, bool)
         or not isinstance(registered_bytes, int)
         or isinstance(registered_bytes, bool)
+        or not isinstance(coverage_bytes, int)
+        or isinstance(coverage_bytes, bool)
         or fixed_bytes <= 0
         or registered_bytes <= 0
+        or coverage_bytes <= 0
         or fixed_bytes > MAX_REVIEWED_ENCODED_VOLUME_BYTES
         or registered_bytes > MAX_REVIEWED_ENCODED_VOLUME_BYTES
-        or fixed_bytes + registered_bytes > MAX_REVIEWED_ENCODED_TOTAL_BYTES
+        or coverage_bytes > MAX_REVIEWED_ENCODED_MASK_BYTES
+        or fixed_bytes + registered_bytes + coverage_bytes
+        > MAX_REVIEWED_ENCODED_TOTAL_BYTES
     ):
         return (
             _summary(
                 available=False,
                 display_status="invalid",
                 review_status="invalid",
-                errors=["reviewed registration volumes exceed the display safety limit"],
+                errors=["reviewed registration artifacts exceed the display safety limit"],
             ),
             None,
             None,
@@ -336,6 +349,21 @@ def reviewed_registration_display_context(
             "geometry": geometry,
         }
 
+    coverage_entry = file_entries[COVERAGE_MASK_FILENAME]
+    coverage = source["coverage_mask"]
+    coverage_mask = {
+        "role": COVERAGE_MASK_ROLE,
+        "filename": COVERAGE_MASK_FILENAME,
+        "url": f"/v1/reviewed-registration/files/{COVERAGE_MASK_FILENAME}",
+        "bytes": coverage_entry["bytes"],
+        "sha256": coverage_entry["sha256"],
+        "derived": True,
+        "scalar_type": coverage["scalar_type"],
+        "binary_values": coverage["binary_values"],
+        "semantics": coverage["semantics"],
+        "geometry": source["coverage_mask_geometry"],
+    }
+
     return {
         "schema_version": SCHEMA_VERSION,
         "artifact_type": ARTIFACT_TYPE,
@@ -383,12 +411,16 @@ def reviewed_registration_display_context(
                 geometry=source["registered_geometry"],
             ),
         },
+        "coverage_mask": coverage_mask,
         "display_policy": {
             "allowed_modes": list(ALLOWED_DISPLAY_MODES),
             "always_locked": list(ALWAYS_LOCKED),
             "native_moving_available": False,
             "native_moving_withheld": True,
-            "shared_coverage_enforcement": SHARED_COVERAGE_ENFORCEMENT,
+            "sampling_support_enforcement": SAMPLING_SUPPORT_ENFORCEMENT,
+            "shared_anatomy_scope": SHARED_ANATOMY_SCOPE,
+            "mask_failure_behavior": MASK_FAILURE_BEHAVIOR,
+            "mask_sampling": MASK_SAMPLING,
         },
         "display_label": record["display_label"],
         "limitations": list(LIMITATIONS),

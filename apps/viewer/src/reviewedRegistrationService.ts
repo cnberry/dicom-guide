@@ -4,7 +4,10 @@ export const REVIEWED_REGISTRATION_FIXED_URL =
   '/v1/reviewed-registration/files/fixed.nrrd';
 export const REVIEWED_REGISTRATION_MOVING_URL =
   '/v1/reviewed-registration/files/registered-moving.nrrd';
+export const REVIEWED_REGISTRATION_COVERAGE_MASK_URL =
+  '/v1/reviewed-registration/files/registered-moving-coverage.nrrd';
 export const MAX_REVIEWED_REGISTRATION_ENCODED_VOLUME_BYTES = 256 * 1024 * 1024;
+export const MAX_REVIEWED_REGISTRATION_ENCODED_MASK_BYTES = 256 * 1024 * 1024;
 export const MAX_REVIEWED_REGISTRATION_ENCODED_TOTAL_BYTES = 384 * 1024 * 1024;
 export const MAX_REVIEWED_REGISTRATION_DECODED_TOTAL_BYTES = 256 * 1024 * 1024;
 
@@ -17,13 +20,14 @@ export const REVIEWED_REGISTRATION_ALWAYS_LOCKED = [
   'response_conclusions',
 ] as const;
 export const REVIEWED_REGISTRATION_LIMITATIONS = [
-  'Authorization applies only where both derived volumes contain anatomy; display outside their shared anatomical coverage is unauthorized.',
-  'The bundle contains no pixel-level transformed moving-coverage mask; shared coverage is enforced only by reviewer visual inspection.',
+  'Registered-moving display is authorized only where the required sampling-support mask is one and shared anatomy was visually reviewed.',
+  'The coverage mask identifies transformed moving-image sampling support only; it is not anatomy, tumor, segmentation, registration quality, or clinical comparability.',
+  'The sampling-support mask excludes default-filled registered-moving pixels but does not establish shared anatomy.',
   'Reviewer identity, role, training, and organization are self asserted and unauthenticated.',
   'The fixed volume is a derived local scalar-volume representation that preserves fixed geometry; it is not native DICOM.',
   'The registered-moving volume is derived and interpolated into fixed geometry; it is not native DICOM.',
   'Subtraction, mask propagation, segmentation, resampled-image measurements, and response conclusions remain prohibited.',
-  'This authorization is bound to the exact saved review and live six-file registration bundle hashes and geometry.',
+  'This authorization is bound to the exact saved review and live seven-file registration bundle hashes, geometry, and coverage-mask semantics and counts.',
   'This exploratory display is not a diagnosis, treatment-response conclusion, or authorization for treatment planning.',
   'The review event SHA-256 and saved-review SHA-256 provide tamper evidence, not a digital signature or reviewer authentication.',
 ] as const;
@@ -56,8 +60,21 @@ export type ReviewedRegistrationVolume = {
   geometry: ReviewedRegistrationGeometry;
 };
 
+export type ReviewedRegistrationCoverageMask = {
+  role: 'registered_moving_sampling_support_in_fixed_geometry';
+  filename: 'registered-moving-coverage.nrrd';
+  url: typeof REVIEWED_REGISTRATION_COVERAGE_MASK_URL;
+  bytes: number;
+  sha256: string;
+  derived: true;
+  scalar_type: 'uint8';
+  binary_values: [0, 1];
+  semantics: 'technical_sampling_support_not_anatomy_or_segmentation';
+  geometry: ReviewedRegistrationGeometry;
+};
+
 export type ReviewedRegistrationContext = {
-  schema_version: '1.0.0';
+  schema_version: '2.0.0';
   artifact_type: 'reviewed_registration_display_context';
   sensitive: true;
   deidentified: false;
@@ -83,6 +100,7 @@ export type ReviewedRegistrationContext = {
         | 'fixed.nrrd'
         | 'moving-to-fixed.tfm'
         | 'moving.nrrd'
+        | 'registered-moving-coverage.nrrd'
         | 'registered-moving.nrrd'
         | 'registration.json';
       bytes: number;
@@ -110,12 +128,16 @@ export type ReviewedRegistrationContext = {
     fixed: ReviewedRegistrationVolume;
     registered_moving: ReviewedRegistrationVolume;
   };
+  coverage_mask: ReviewedRegistrationCoverageMask;
   display_policy: {
     allowed_modes: [...typeof REVIEWED_REGISTRATION_ALLOWED_MODES];
     always_locked: [...typeof REVIEWED_REGISTRATION_ALWAYS_LOCKED];
     native_moving_available: false;
     native_moving_withheld: true;
-    shared_coverage_enforcement: 'reviewer_visual_only_no_machine_mask';
+    sampling_support_enforcement: 'required_pixel_mask';
+    shared_anatomy_scope: 'reviewer_attested_visual_only';
+    mask_failure_behavior: 'lock_display';
+    mask_sampling: 'nearest_neighbor';
   };
   limitations: [...typeof REVIEWED_REGISTRATION_LIMITATIONS];
 };
@@ -130,6 +152,7 @@ const BUNDLE_FILE_NAMES = [
   'fixed.nrrd',
   'moving-to-fixed.tfm',
   'moving.nrrd',
+  'registered-moving-coverage.nrrd',
   'registered-moving.nrrd',
   'registration.json',
 ] as const;
@@ -265,6 +288,44 @@ const readVolume = (
   return geometry ? ({ ...value, geometry } as ReviewedRegistrationVolume) : undefined;
 };
 
+const readCoverageMask = (
+  value: unknown,
+): ReviewedRegistrationCoverageMask | undefined => {
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, [
+      'role',
+      'filename',
+      'url',
+      'bytes',
+      'sha256',
+      'derived',
+      'scalar_type',
+      'binary_values',
+      'semantics',
+      'geometry',
+    ]) ||
+    value.role !== 'registered_moving_sampling_support_in_fixed_geometry' ||
+    value.filename !== 'registered-moving-coverage.nrrd' ||
+    value.url !== REVIEWED_REGISTRATION_COVERAGE_MASK_URL ||
+    typeof value.bytes !== 'number' ||
+    !Number.isSafeInteger(value.bytes) ||
+    value.bytes <= 0 ||
+    value.bytes > MAX_REVIEWED_REGISTRATION_ENCODED_MASK_BYTES ||
+    !isSha256(value.sha256) ||
+    value.derived !== true ||
+    value.scalar_type !== 'uint8' ||
+    !arraysEqual(value.binary_values, [0, 1]) ||
+    value.semantics !== 'technical_sampling_support_not_anatomy_or_segmentation'
+  ) {
+    return undefined;
+  }
+  const geometry = readGeometry(value.geometry);
+  return geometry
+    ? ({ ...value, geometry } as ReviewedRegistrationCoverageMask)
+    : undefined;
+};
+
 const isAcquisitionDate = (value: unknown): value is string => {
   if (typeof value !== 'string' || !/^\d{8}$/.test(value)) return false;
   const year = Number(value.slice(0, 4));
@@ -330,10 +391,11 @@ export const readReviewedRegistrationContext = (
       'source',
       'reviewer',
       'volumes',
+      'coverage_mask',
       'display_policy',
       'limitations',
     ]) ||
-    value.schema_version !== '1.0.0' ||
+    value.schema_version !== '2.0.0' ||
     value.artifact_type !== 'reviewed_registration_display_context' ||
     value.sensitive !== true ||
     value.deidentified !== false ||
@@ -345,6 +407,7 @@ export const readReviewedRegistrationContext = (
     !isRecord(value.source) ||
     !isRecord(value.reviewer) ||
     !isRecord(value.volumes) ||
+    !isRecord(value.coverage_mask) ||
     !isRecord(value.display_policy) ||
     !Array.isArray(value.limitations)
   ) {
@@ -428,7 +491,10 @@ export const readReviewedRegistrationContext = (
       'always_locked',
       'native_moving_available',
       'native_moving_withheld',
-      'shared_coverage_enforcement',
+      'sampling_support_enforcement',
+      'shared_anatomy_scope',
+      'mask_failure_behavior',
+      'mask_sampling',
     ]) ||
     !sameStringSequence(
       value.display_policy.allowed_modes,
@@ -440,8 +506,10 @@ export const readReviewedRegistrationContext = (
     ) ||
     value.display_policy.native_moving_available !== false ||
     value.display_policy.native_moving_withheld !== true ||
-    value.display_policy.shared_coverage_enforcement !==
-      'reviewer_visual_only_no_machine_mask' ||
+    value.display_policy.sampling_support_enforcement !== 'required_pixel_mask' ||
+    value.display_policy.shared_anatomy_scope !== 'reviewer_attested_visual_only' ||
+    value.display_policy.mask_failure_behavior !== 'lock_display' ||
+    value.display_policy.mask_sampling !== 'nearest_neighbor' ||
     !sameStringSequence(value.limitations, REVIEWED_REGISTRATION_LIMITATIONS)
   ) {
     return undefined;
@@ -459,15 +527,22 @@ export const readReviewedRegistrationContext = (
     url: REVIEWED_REGISTRATION_MOVING_URL,
     resampled: true,
   });
+  const coverageMask = readCoverageMask(value.coverage_mask);
   if (
     !fixed ||
     !registered ||
-    fixed.bytes + registered.bytes > MAX_REVIEWED_REGISTRATION_ENCODED_TOTAL_BYTES ||
+    !coverageMask ||
+    fixed.bytes + registered.bytes + coverageMask.bytes >
+      MAX_REVIEWED_REGISTRATION_ENCODED_TOTAL_BYTES ||
     fixed.sha256 !== bundleFile('fixed.nrrd')?.sha256 ||
     registered.sha256 !== bundleFile('registered-moving.nrrd')?.sha256 ||
+    coverageMask.sha256 !==
+      bundleFile('registered-moving-coverage.nrrd')?.sha256 ||
     fixed.bytes !== bundleFile('fixed.nrrd')?.bytes ||
     registered.bytes !== bundleFile('registered-moving.nrrd')?.bytes ||
-    !geometriesEqual(fixed.geometry, registered.geometry)
+    coverageMask.bytes !== bundleFile('registered-moving-coverage.nrrd')?.bytes ||
+    !geometriesEqual(fixed.geometry, registered.geometry) ||
+    !geometriesEqual(fixed.geometry, coverageMask.geometry)
   ) {
     return undefined;
   }
@@ -540,58 +615,77 @@ async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
   ).join('');
 }
 
-export const fetchReviewedRegistrationVolume = async (
-  volume: ReviewedRegistrationVolume,
+const fetchReviewedRegistrationFile = async (
+  descriptor: ReviewedRegistrationVolume | ReviewedRegistrationCoverageMask,
   signal?: AbortSignal,
 ): Promise<ArrayBuffer> => {
-  if (volume.bytes > MAX_REVIEWED_REGISTRATION_ENCODED_VOLUME_BYTES) {
-    throw new Error('Accepted exploratory volume exceeds the browser safety limit.');
+  const isMask = descriptor.filename === 'registered-moving-coverage.nrrd';
+  const label = isMask ? 'sampling-support mask' : 'volume';
+  const byteLimit = isMask
+    ? MAX_REVIEWED_REGISTRATION_ENCODED_MASK_BYTES
+    : MAX_REVIEWED_REGISTRATION_ENCODED_VOLUME_BYTES;
+  if (descriptor.bytes > byteLimit) {
+    throw new Error(`Accepted exploratory ${label} exceeds the browser safety limit.`);
   }
-  const validatedVolume =
-    volume.filename === 'fixed.nrrd'
-      ? readVolume(volume, {
+  const validatedDescriptor =
+    descriptor.filename === 'fixed.nrrd'
+      ? readVolume(descriptor, {
           role: 'fixed_earlier_reference',
           filename: 'fixed.nrrd',
           url: REVIEWED_REGISTRATION_FIXED_URL,
           resampled: false,
         })
-      : volume.filename === 'registered-moving.nrrd'
-        ? readVolume(volume, {
+      : descriptor.filename === 'registered-moving.nrrd'
+        ? readVolume(descriptor, {
             role: 'moving_later_registered_to_fixed',
             filename: 'registered-moving.nrrd',
             url: REVIEWED_REGISTRATION_MOVING_URL,
             resampled: true,
           })
-        : undefined;
-  if (!validatedVolume) {
-    throw new Error('Accepted exploratory volume descriptor failed strict validation.');
+        : descriptor.filename === 'registered-moving-coverage.nrrd'
+          ? readCoverageMask(descriptor)
+          : undefined;
+  if (!validatedDescriptor) {
+    throw new Error(
+      `Accepted exploratory ${label} descriptor failed strict validation.`,
+    );
   }
-  const response = await fetch(validatedVolume.url, {
+  const response = await fetch(validatedDescriptor.url, {
     cache: 'no-store',
     credentials: 'same-origin',
     headers: { Accept: 'application/vnd.nrrd' },
     signal,
   });
   if (!response.ok) {
-    throw new Error('Accepted exploratory volume could not be loaded.');
+    throw new Error(`Accepted exploratory ${label} could not be loaded.`);
   }
   if (response.headers.get('Content-Type')?.split(';', 1)[0] !== 'application/vnd.nrrd') {
-    throw new Error('Accepted exploratory volume has an unexpected media type.');
+    throw new Error(`Accepted exploratory ${label} has an unexpected media type.`);
   }
   const declaredLength = Number(response.headers.get('Content-Length'));
-  if (!Number.isSafeInteger(declaredLength) || declaredLength !== validatedVolume.bytes) {
-    throw new Error('Accepted exploratory volume response byte count changed.');
+  if (!Number.isSafeInteger(declaredLength) || declaredLength !== validatedDescriptor.bytes) {
+    throw new Error(`Accepted exploratory ${label} response byte count changed.`);
   }
   const responseDigest = response.headers.get('X-Content-SHA256');
-  if (responseDigest !== null && responseDigest !== validatedVolume.sha256) {
-    throw new Error('Accepted exploratory volume response digest changed.');
+  if (responseDigest !== validatedDescriptor.sha256) {
+    throw new Error(`Accepted exploratory ${label} response digest changed.`);
   }
   const buffer = await response.arrayBuffer();
-  if (buffer.byteLength !== validatedVolume.bytes) {
-    throw new Error('Accepted exploratory volume byte count changed.');
+  if (buffer.byteLength !== validatedDescriptor.bytes) {
+    throw new Error(`Accepted exploratory ${label} byte count changed.`);
   }
-  if ((await sha256Hex(buffer)) !== validatedVolume.sha256) {
-    throw new Error('Accepted exploratory volume SHA-256 changed.');
+  if ((await sha256Hex(buffer)) !== validatedDescriptor.sha256) {
+    throw new Error(`Accepted exploratory ${label} SHA-256 changed.`);
   }
   return buffer;
 };
+
+export const fetchReviewedRegistrationVolume = async (
+  volume: ReviewedRegistrationVolume,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> => fetchReviewedRegistrationFile(volume, signal);
+
+export const fetchReviewedRegistrationCoverageMask = async (
+  mask: ReviewedRegistrationCoverageMask,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> => fetchReviewedRegistrationFile(mask, signal);

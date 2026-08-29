@@ -304,6 +304,15 @@ def test_registration_qa_preview_is_browser_only_and_review_is_idempotent(
         assert volume_headers["Content-Type"] == "application/vnd.nrrd"
         assert volume_headers["Cache-Control"] == "no-store"
         assert volume == (bundle / "fixed.nrrd").read_bytes()
+        status, mask_headers, mask = request(
+            port,
+            "/v1/registration-qa/files/registered-moving-coverage.nrrd",
+            headers=browser,
+        )
+        assert status == HTTPStatus.OK
+        assert mask_headers["Content-Type"] == "application/vnd.nrrd"
+        assert mask_headers["X-Content-SHA256"] == preview["coverage_mask"]["sha256"]
+        assert mask == (bundle / "registered-moving-coverage.nrrd").read_bytes()
         assert context_calls == 1
 
         payload = json.dumps(review_request(decision="rejected")).encode()
@@ -503,6 +512,12 @@ def test_accepted_reviewed_registration_is_cached_and_browser_only(
             "authorized_for_exploratory_shared_coverage_overlay_swipe"
         )
         assert set(context["volumes"]) == {"fixed", "registered_moving"}
+        assert context["coverage_mask"]["filename"] == (
+            "registered-moving-coverage.nrrd"
+        )
+        assert context["display_policy"]["sampling_support_enforcement"] == (
+            "required_pixel_mask"
+        )
         assert str(bundle) not in body.decode()
         assert str(review) not in body.decode()
 
@@ -522,6 +537,14 @@ def test_accepted_reviewed_registration_is_cached_and_browser_only(
         )
         assert status == HTTPStatus.OK
         assert volume == (bundle / "registered-moving.nrrd").read_bytes()
+        status, mask_headers, mask = request(
+            port,
+            "/v1/reviewed-registration/files/registered-moving-coverage.nrrd",
+            headers=browser,
+        )
+        assert status == HTTPStatus.OK
+        assert mask_headers["X-Content-SHA256"] == context["coverage_mask"]["sha256"]
+        assert mask == (bundle / "registered-moving-coverage.nrrd").read_bytes()
         status, _, body = request(
             port,
             "/v1/reviewed-registration/files/moving.nrrd",
@@ -646,10 +669,12 @@ def test_rejected_or_tampered_review_keeps_dicom_but_all_registration_pixels_loc
 
             for path in (
                 "/v1/reviewed-registration/files/fixed.nrrd",
+                "/v1/reviewed-registration/files/registered-moving-coverage.nrrd",
                 "/v1/reviewed-registration/files/registered-moving.nrrd",
                 "/v1/registration-qa/preview",
                 "/v1/registration-qa/files/fixed.nrrd",
                 "/v1/registration-qa/files/moving.nrrd",
+                "/v1/registration-qa/files/registered-moving-coverage.nrrd",
                 "/v1/registration-qa/files/registered-moving.nrrd",
             ):
                 status, _, body = request(port, path, headers=browser)
@@ -661,8 +686,13 @@ def test_rejected_or_tampered_review_keeps_dicom_but_all_registration_pixels_loc
         thread.join(timeout=5)
 
 
+@pytest.mark.parametrize(
+    "changed_filename",
+    ["engine-report.json", "registered-moving-coverage.nrrd"],
+)
 def test_reviewed_registration_relocks_when_any_live_evidence_changes(
     tmp_path: Path,
+    changed_filename: str,
 ) -> None:
     bundle = registration_bundle(tmp_path)
     review_input = tmp_path / "accepted-review-input.json"
@@ -686,8 +716,8 @@ def test_reviewed_registration_relocks_when_any_live_evidence_changes(
         )
         assert status == HTTPStatus.SEE_OTHER
         browser = {"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
-        engine_report = bundle / "engine-report.json"
-        engine_report.write_bytes(engine_report.read_bytes() + b" ")
+        changed = bundle / changed_filename
+        changed.write_bytes(changed.read_bytes() + b" ")
 
         status, _, body = request(
             server.server_port,

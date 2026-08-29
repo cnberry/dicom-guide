@@ -21,7 +21,7 @@ from .registration import (
 )
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 REVIEW_ID = re.compile(r"^registration_review_[0-9a-f]{20}$")
 JOB_ID = re.compile(r"^registration_[0-9a-f]{20}$")
 STUDY_ID = re.compile(r"^study_[0-9a-f]{20}$")
@@ -31,6 +31,9 @@ MAX_REQUEST_BYTES = 2 * 1024 * 1024
 MAX_RECORD_BYTES = 4 * 1024 * 1024
 MAX_LANDMARK_PAIRS = 32
 MAX_LANDMARK_OBSERVATIONS = 32
+COVERAGE_MASK_FILENAME = "registered-moving-coverage.nrrd"
+COVERAGE_MASK_ROLE = "registered_moving_sampling_support_in_fixed_geometry"
+COVERAGE_MASK_SEMANTICS = "technical_sampling_support_not_anatomy_or_segmentation"
 ACCEPTED_DECISION = "accepted_for_shared_coverage_overlay_swipe"
 INTENDED_USE = "shared_coverage_exploratory_overlay_swipe"
 ACCEPTED_SCOPE = "shared_coverage"
@@ -77,6 +80,10 @@ QUALITATIVE_CHECKS = {
     "swipe_or_flicker_reviewed": "Swipe or flicker comparison reviewed.",
     "checkerboard_reviewed": "Checkerboard comparison reviewed.",
     "edge_alignment_reviewed": "Fixed and registered-moving edge agreement reviewed.",
+    "coverage_mask_boundary_and_excluded_region_reviewed": (
+        "Moving-image sampling-support mask boundary and excluded regions reviewed; "
+        "the mask was not interpreted as anatomy, tumor, segmentation, or registration quality."
+    ),
     "region_of_importance_reviewed": "Region of greatest importance reviewed.",
     "distant_anatomy_reviewed": "Distant stable anatomy reviewed for global error.",
     "artifacts_coverage_and_anatomical_change_reviewed": (
@@ -96,7 +103,9 @@ SELF_ATTESTATION = (
     "or authenticated clinical approval."
 )
 LIMITATIONS = [
-    "Acceptance means only spatially acceptable within exact shared coverage for exploratory overlay and swipe.",
+    "Acceptance means only spatially acceptable for exploratory overlay and swipe where the required sampling-support mask is one and shared anatomy was visually reviewed.",
+    "The coverage mask identifies transformed moving-image sampling support only; it is not anatomy, tumor, segmentation, registration quality, or clinical comparability.",
+    "The sampling-support mask excludes default-filled registered-moving pixels but does not establish shared anatomy.",
     "Reviewer identity, role, training, and organization are self asserted and unauthenticated.",
     "Registration QA does not establish patient identity, clinical baseline, lesion identity, tumor boundary, or response.",
     "Registered-moving pixels are resampled and must remain distinguishable from native DICOM.",
@@ -257,6 +266,22 @@ def registration_qa_context(directory: Path) -> dict[str, Any]:
             "geometry": _volume_geometry(directory / filename),
         }
 
+    coverage = manifest["coverage_mask"]
+    coverage_filename = coverage["filename"]
+    coverage_entry = file_entries[coverage_filename]
+    coverage_mask = {
+        "role": COVERAGE_MASK_ROLE,
+        "filename": coverage_filename,
+        "url": f"/v1/registration-qa/files/{coverage_filename}",
+        "bytes": coverage_entry["bytes"],
+        "sha256": coverage_entry["sha256"],
+        "derived": True,
+        "scalar_type": coverage["scalar_type"],
+        "binary_values": coverage["binary_values"],
+        "semantics": coverage["semantics"],
+        "geometry": _volume_geometry(directory / coverage_filename),
+    }
+
     return {
         "schema_version": SCHEMA_VERSION,
         "artifact_type": "registration_qa_context",
@@ -292,6 +317,7 @@ def registration_qa_context(directory: Path) -> dict[str, Any]:
                 resampled=True,
             ),
         },
+        "coverage_mask": coverage_mask,
         "transform": {
             "filename": "moving-to-fixed.tfm",
             "sha256": file_entries["moving-to-fixed.tfm"]["sha256"],
@@ -313,6 +339,7 @@ def registration_qa_context(directory: Path) -> dict[str, Any]:
                 "swipe_or_flicker",
                 "checkerboard",
                 "edge_overlay",
+                "coverage_mask_boundary",
                 "landmark_residuals",
             ],
             "accepted_unlocks": ["overlay", "swipe"],
@@ -323,6 +350,10 @@ def registration_qa_context(directory: Path) -> dict[str, Any]:
                 "resampled_image_measurements",
                 "response_conclusions",
             ],
+            "sampling_support_enforcement": "required_pixel_mask",
+            "shared_anatomy_scope": "reviewer_attested_visual_only",
+            "mask_failure_behavior": "lock_display",
+            "mask_sampling": "nearest_neighbor",
         },
         "limitations": LIMITATIONS,
     }
@@ -378,6 +409,8 @@ def _source_registration(directory: Path, manifest: dict[str, Any]) -> dict[str,
     ]
     fixed_geometry = _volume_geometry(directory / "fixed.nrrd")
     registered_geometry = _volume_geometry(directory / "registered-moving.nrrd")
+    coverage_geometry = _volume_geometry(directory / COVERAGE_MASK_FILENAME)
+    coverage_mask = deepcopy(manifest["coverage_mask"])
     return {
         "job_id": manifest["job_id"],
         "manifest_sha256": hash_file(directory / "registration.json"),
@@ -385,6 +418,7 @@ def _source_registration(directory: Path, manifest: dict[str, Any]) -> dict[str,
         "fixed_volume_sha256": files["fixed.nrrd"]["sha256"],
         "moving_volume_sha256": files["moving.nrrd"]["sha256"],
         "registered_moving_volume_sha256": files["registered-moving.nrrd"]["sha256"],
+        "coverage_mask_sha256": files[COVERAGE_MASK_FILENAME]["sha256"],
         "bundle_files": bundle_files,
         "bundle_sha256": _sha256(_canonical(bundle_files)),
         "transform_direction": manifest["source"]["transform_direction"],
@@ -401,6 +435,8 @@ def _source_registration(directory: Path, manifest: dict[str, Any]) -> dict[str,
         },
         "fixed_geometry": fixed_geometry,
         "registered_geometry": registered_geometry,
+        "coverage_mask_geometry": coverage_geometry,
+        "coverage_mask": coverage_mask,
     }
 
 
@@ -1164,6 +1200,68 @@ def _valid_acquisition_date(value: Any) -> datetime | None:
         return None
 
 
+def _coverage_mask_shape_valid(value: Any, geometry: Any) -> bool:
+    expected_keys = {
+        "filename",
+        "semantics",
+        "source_volume",
+        "reference_volume",
+        "transform",
+        "transform_direction",
+        "source_basis",
+        "resampler",
+        "registered_volume_interpolation",
+        "mask_interpolation",
+        "scalar_type",
+        "binary_values",
+        "outside_value",
+        "total_voxel_count",
+        "foreground_voxel_count",
+        "foreground_fraction",
+    }
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        return False
+    total = value.get("total_voxel_count")
+    foreground = value.get("foreground_voxel_count")
+    fraction = value.get("foreground_fraction")
+    if (
+        value.get("filename") != COVERAGE_MASK_FILENAME
+        or value.get("semantics") != COVERAGE_MASK_SEMANTICS
+        or value.get("source_volume") != "moving.nrrd"
+        or value.get("reference_volume") != "fixed.nrrd"
+        or value.get("transform") != "moving-to-fixed.tfm"
+        or value.get("transform_direction") != "moving_later_to_fixed_earlier"
+        or value.get("source_basis") != "constant_one_moving_grid"
+        or value.get("resampler") != "BRAINSResample"
+        or value.get("registered_volume_interpolation") != "Linear"
+        or value.get("mask_interpolation") != "NearestNeighbor"
+        or value.get("scalar_type") != "uint8"
+        or value.get("binary_values") != [0, 1]
+        or value.get("outside_value") != 0
+        or not isinstance(total, int)
+        or isinstance(total, bool)
+        or not isinstance(foreground, int)
+        or isinstance(foreground, bool)
+        or not isinstance(fraction, (int, float))
+        or isinstance(fraction, bool)
+        or not math.isfinite(float(fraction))
+        or not _geometry_shape_valid(geometry)
+    ):
+        return False
+    expected_total = math.prod(geometry["sizes"])
+    return bool(
+        total == expected_total
+        and 0 < foreground <= total
+        and 0 < float(fraction) <= 1
+        and math.isclose(
+            float(fraction),
+            foreground / total,
+            rel_tol=0,
+            abs_tol=1e-12,
+        )
+    )
+
+
 def _source_registration_shape_valid(value: Any) -> bool:
     if not isinstance(value, dict) or set(value) != {
         "job_id",
@@ -1172,6 +1270,7 @@ def _source_registration_shape_valid(value: Any) -> bool:
         "fixed_volume_sha256",
         "moving_volume_sha256",
         "registered_moving_volume_sha256",
+        "coverage_mask_sha256",
         "bundle_files",
         "bundle_sha256",
         "transform_direction",
@@ -1180,6 +1279,8 @@ def _source_registration_shape_valid(value: Any) -> bool:
         "moving",
         "fixed_geometry",
         "registered_geometry",
+        "coverage_mask_geometry",
+        "coverage_mask",
     }:
         return False
     if (
@@ -1195,11 +1296,16 @@ def _source_registration_shape_valid(value: Any) -> bool:
                 "fixed_volume_sha256",
                 "moving_volume_sha256",
                 "registered_moving_volume_sha256",
+                "coverage_mask_sha256",
                 "bundle_sha256",
             )
         )
         or not _geometry_shape_valid(value.get("fixed_geometry"))
         or not _geometry_shape_valid(value.get("registered_geometry"))
+        or not _geometry_shape_valid(value.get("coverage_mask_geometry"))
+        or not _coverage_mask_shape_valid(
+            value.get("coverage_mask"), value.get("coverage_mask_geometry")
+        )
     ):
         return False
     bundle_files = value.get("bundle_files")
@@ -1209,13 +1315,14 @@ def _source_registration_shape_valid(value: Any) -> bool:
             "fixed.nrrd",
             "moving-to-fixed.tfm",
             "moving.nrrd",
+            COVERAGE_MASK_FILENAME,
             "registered-moving.nrrd",
             "registration.json",
         ]
     )
     if (
         not isinstance(bundle_files, list)
-        or len(bundle_files) != 6
+        or len(bundle_files) != 7
         or [item.get("name") for item in bundle_files if isinstance(item, dict)]
         != expected_names
         or any(
@@ -1239,7 +1346,10 @@ def _source_registration_shape_valid(value: Any) -> bool:
         or value["moving_volume_sha256"] != file_entries["moving.nrrd"]["sha256"]
         or value["registered_moving_volume_sha256"]
         != file_entries["registered-moving.nrrd"]["sha256"]
+        or value["coverage_mask_sha256"]
+        != file_entries[COVERAGE_MASK_FILENAME]["sha256"]
         or value["fixed_geometry"] != value["registered_geometry"]
+        or value["fixed_geometry"] != value["coverage_mask_geometry"]
     ):
         return False
     source_dates: dict[str, datetime] = {}

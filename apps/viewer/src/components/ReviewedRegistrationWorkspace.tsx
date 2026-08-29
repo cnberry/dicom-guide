@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  composeQaSlice,
+  composeCoveredRegistrationSlice,
+  extractPatientSpaceBinaryMaskSlice,
   extractPatientSpaceSlice,
   parseNrrd,
   patientSpacePlaneLength,
   planeOrientationLabels,
+  validateBinaryCoverageVolume,
+  type NrrdBinaryMaskSlice,
   type NrrdPlane,
   type NrrdSlice,
   type NrrdVolume,
   type PlaneOrientationLabels,
 } from '../nrrd';
 import {
+  fetchReviewedRegistrationCoverageMask,
   fetchReviewedRegistrationVolume,
   MAX_REVIEWED_REGISTRATION_DECODED_TOTAL_BYTES,
   MAX_REVIEWED_REGISTRATION_ENCODED_TOTAL_BYTES,
@@ -22,6 +26,7 @@ import {
 type LoadedVolumes = {
   fixed: NrrdVolume;
   registered: NrrdVolume;
+  coverage: NrrdVolume;
 };
 
 const REVIEWED_PATIENT_SPACE_OPTIONS = {
@@ -60,6 +65,19 @@ const loadReviewedVolume = async (
   parseNrrd(await fetchReviewedRegistrationVolume(descriptor, signal), {
     maxDecodedBytes,
   });
+
+const loadReviewedCoverageMask = async (
+  descriptor: ReviewedRegistrationContext['coverage_mask'],
+  signal: AbortSignal,
+  maxDecodedBytes: number,
+): Promise<NrrdVolume> => {
+  const mask = parseNrrd(
+    await fetchReviewedRegistrationCoverageMask(descriptor, signal),
+    { maxDecodedBytes },
+  );
+  validateBinaryCoverageVolume(mask);
+  return mask;
+};
 
 const formatDate = (value: string): string =>
   /^\d{8}$/.test(value)
@@ -125,10 +143,49 @@ const Orientation = ({ labels }: { labels?: PlaneOrientationLabels }) =>
     </div>
   ) : null;
 
+export const reviewedSliceRgba = (
+  slice: NrrdSlice,
+  coverage?: NrrdBinaryMaskSlice,
+  coverageRequired = false,
+): Uint8ClampedArray => {
+  if (coverageRequired && !coverage) {
+    throw new Error('Registered display requires its verified sampling-support mask.');
+  }
+  if (
+    coverage &&
+    (coverage.width !== slice.width ||
+      coverage.height !== slice.height ||
+      coverage.pixels.length !== slice.pixels.length)
+  ) {
+    throw new Error('Registered display mask does not match its rendered slice.');
+  }
+  const rgba = new Uint8ClampedArray(slice.pixels.length * 4);
+  slice.pixels.forEach((value, index) => {
+    const target = index * 4;
+    const maskValue = coverage?.pixels[index];
+    if (maskValue !== undefined && maskValue !== 0 && maskValue !== 1) {
+      throw new Error('Registered display mask contains a non-binary pixel.');
+    }
+    if (maskValue === 0) {
+      rgba[target] = 9;
+      rgba[target + 1] = 18;
+      rgba[target + 2] = 16;
+    } else {
+      rgba[target] = value;
+      rgba[target + 1] = value;
+      rgba[target + 2] = value;
+    }
+    rgba[target + 3] = 255;
+  });
+  return rgba;
+};
+
 const SliceCanvas = ({
   title,
   description,
   slice,
+  coverage,
+  coverageRequired = false,
   orientation,
   viewContext,
   onRenderError,
@@ -136,6 +193,8 @@ const SliceCanvas = ({
   title: string;
   description: string;
   slice?: NrrdSlice;
+  coverage?: NrrdBinaryMaskSlice;
+  coverageRequired?: boolean;
   orientation?: PlaneOrientationLabels;
   viewContext: string;
   onRenderError: (message: string) => void;
@@ -147,25 +206,22 @@ const SliceCanvas = ({
     try {
       canvas.width = slice.width;
       canvas.height = slice.height;
-      const rgba = new Uint8ClampedArray(slice.pixels.length * 4);
-      slice.pixels.forEach((value, index) => {
-        const target = index * 4;
-        rgba[target] = value;
-        rgba[target + 1] = value;
-        rgba[target + 2] = value;
-        rgba[target + 3] = 255;
-      });
+      const rgba = reviewedSliceRgba(slice, coverage, coverageRequired);
       const renderingContext = canvas.getContext('2d');
       if (!renderingContext) throw new Error('Browser canvas rendering is unavailable.');
       renderingContext.putImageData(
-        new ImageData(rgba, slice.width, slice.height),
+        new ImageData(
+          rgba as Uint8ClampedArray<ArrayBuffer>,
+          slice.width,
+          slice.height,
+        ),
         0,
         0,
       );
     } catch (error) {
       onRenderError(errorMessage(error, 'Reviewed reference canvas could not render.'));
     }
-  }, [onRenderError, slice]);
+  }, [coverage, coverageRequired, onRenderError, slice]);
 
   const accessibleDescription = `${title}. ${description}. ${viewContext}. ${orientationDescription(orientation)}`;
 
@@ -200,6 +256,7 @@ const SliceCanvas = ({
 const ComparisonCanvas = ({
   fixed,
   registered,
+  coverage,
   mode,
   opacity,
   swipePosition,
@@ -209,6 +266,7 @@ const ComparisonCanvas = ({
 }: {
   fixed?: NrrdSlice;
   registered?: NrrdSlice;
+  coverage?: NrrdBinaryMaskSlice;
   mode: ReviewedRegistrationMode;
   opacity: number;
   swipePosition: number;
@@ -220,13 +278,21 @@ const ComparisonCanvas = ({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !fixed || !registered) return;
+    if (!coverage) {
+      onRenderError('Reviewed comparison requires its verified sampling-support mask.');
+      return;
+    }
     try {
-      const composite = composeQaSlice(fixed, registered, mode, {
-        opacity,
-        swipePosition,
-        checkerSize: 2,
-        edgeThreshold: 255,
-      });
+      const composite = composeCoveredRegistrationSlice(
+        fixed,
+        registered,
+        coverage,
+        mode,
+        {
+          opacity,
+          swipePosition,
+        },
+      );
       canvas.width = composite.width;
       canvas.height = composite.height;
       const renderingContext = canvas.getContext('2d');
@@ -243,12 +309,12 @@ const ComparisonCanvas = ({
     } catch (error) {
       onRenderError(errorMessage(error, 'Reviewed comparison canvas could not render.'));
     }
-  }, [fixed, mode, onRenderError, opacity, registered, swipePosition]);
+  }, [coverage, fixed, mode, onRenderError, opacity, registered, swipePosition]);
 
   const accessibleDescription =
     mode === 'swipe'
-      ? `Swipe comparison. Fixed earlier reference is left of the ${Math.round(swipePosition * 100)} percent boundary; registered moving derived resampled volume is right. ${viewContext}. ${orientationDescription(orientation)}`
-      : `Opacity overlay of fixed earlier reference and registered moving derived resampled volume at ${Math.round(opacity * 100)} percent registered opacity. ${viewContext}. ${orientationDescription(orientation)}`;
+      ? `Swipe comparison. Fixed earlier reference is left of the ${Math.round(swipePosition * 100)} percent boundary; the right side uses registered moving only where the verified sampling-support mask equals one and otherwise remains fixed. ${viewContext}. ${orientationDescription(orientation)}`
+      : `Opacity overlay of fixed earlier reference and registered moving derived resampled volume at ${Math.round(opacity * 100)} percent registered opacity. Registered moving is suppressed pixel by pixel wherever the verified sampling-support mask equals zero. ${viewContext}. ${orientationDescription(orientation)}`;
 
   return (
     <section className="qa-image-card qa-composite-card reviewed-image-card">
@@ -258,7 +324,7 @@ const ComparisonCanvas = ({
             ? 'OPACITY OVERLAY'
             : 'SWIPE · FIXED LEFT / REGISTERED MOVING RIGHT'}
         </strong>
-        <span>FIXED REFERENCE + REGISTERED MOVING · DERIVED DISPLAY</span>
+        <span>REGISTERED MOVING GATED BY VERIFIED SAMPLING-SUPPORT MASK</span>
       </header>
       <div className="qa-canvas-wrap">
         <div
@@ -282,7 +348,7 @@ const ComparisonCanvas = ({
                 FIXED REFERENCE
               </span>
               <span className="reviewed-swipe-legend reviewed-swipe-registered" aria-hidden="true">
-                REGISTERED MOVING · RESAMPLED
+                REGISTERED WHERE MASK=1 · FIXED OTHERWISE
               </span>
               <span
                 className="reviewed-swipe-line"
@@ -326,7 +392,9 @@ export const ReviewedRegistrationWorkspace = ({
     setRenderError(undefined);
     void (async () => {
       const totalBytes =
-        context.volumes.fixed.bytes + context.volumes.registered_moving.bytes;
+        context.volumes.fixed.bytes +
+        context.volumes.registered_moving.bytes +
+        context.coverage_mask.bytes;
       if (totalBytes > MAX_REVIEWED_REGISTRATION_ENCODED_TOTAL_BYTES) {
         throw new Error('Accepted exploratory volumes exceed the aggregate browser safety limit.');
       }
@@ -373,12 +441,49 @@ export const ReviewedRegistrationWorkspace = ({
       ) {
         throw new Error('Accepted exploratory volumes exceed the decoded browser safety limit.');
       }
+
+      setLoadStage('Loading and verifying moving sampling-support mask…');
+      const remainingMaskDecodedBytes =
+        MAX_REVIEWED_REGISTRATION_DECODED_TOTAL_BYTES -
+        fixed.payload.byteLength -
+        registered.payload.byteLength;
+      if (remainingMaskDecodedBytes <= 0) {
+        throw new Error(
+          'Accepted exploratory volumes leave no decoded browser budget for their required mask.',
+        );
+      }
+      const coverage = await loadReviewedCoverageMask(
+        context.coverage_mask,
+        controller.signal,
+        remainingMaskDecodedBytes,
+      );
+      if (
+        !volumeMatchesDescriptor(coverage, context.coverage_mask.geometry) ||
+        !arraysClose(fixed.sizes, coverage.sizes, 0) ||
+        fixed.space !== coverage.space ||
+        !arraysClose(fixed.spaceDirections, coverage.spaceDirections) ||
+        !arraysClose(fixed.spaceOrigin, coverage.spaceOrigin)
+      ) {
+        throw new Error(
+          'Moving sampling-support mask disagrees with reviewed fixed geometry.',
+        );
+      }
+      if (
+        fixed.payload.byteLength +
+          registered.payload.byteLength +
+          coverage.payload.byteLength >
+        MAX_REVIEWED_REGISTRATION_DECODED_TOTAL_BYTES
+      ) {
+        throw new Error(
+          'Accepted exploratory volumes and mask exceed the decoded browser safety limit.',
+        );
+      }
       if (controller.signal.aborted) return;
       const initialSlice = Math.floor(
         patientSpacePlaneLength(fixed, 'axial', REVIEWED_PATIENT_SPACE_OPTIONS) / 2,
       );
       setSliceIndex(initialSlice);
-      setVolumes({ fixed, registered });
+      setVolumes({ fixed, registered, coverage });
       setLoadStage('Ready');
     })().catch((error) => {
       if (controller.signal.aborted) return;
@@ -420,6 +525,12 @@ export const ReviewedRegistrationWorkspace = ({
           ),
           REVIEWED_PATIENT_SPACE_OPTIONS,
         ),
+        coverageSlice: extractPatientSpaceBinaryMaskSlice(
+          volumes.coverage,
+          plane,
+          sliceIndex,
+          REVIEWED_PATIENT_SPACE_OPTIONS,
+        ),
         orientation: planeOrientationLabels(volumes.fixed, plane),
       };
     } catch (error) {
@@ -429,7 +540,8 @@ export const ReviewedRegistrationWorkspace = ({
       };
     }
   }, [fixedWindow, plane, registeredWindow, sliceIndex, volumes]);
-  const { fixedSlice, orientation, registeredSlice, sliceCount } = renderedSlices;
+  const { coverageSlice, fixedSlice, orientation, registeredSlice, sliceCount } =
+    renderedSlices;
   const displayError = loadError ?? renderError ?? renderedSlices.error;
   const displayReady = Boolean(volumes && !displayError);
 
@@ -476,9 +588,10 @@ export const ReviewedRegistrationWorkspace = ({
         <span>NOT FOR DIAGNOSIS OR TREATMENT PLANNING</span>
       </section>
       <section className="reviewed-coverage-warning" role="note">
-        <strong>Shared coverage is visual-only.</strong> Authorization applies only where both
-        derived volumes contain anatomy. This UI has no machine-generated overlap mask and does
-        not enforce exact shared coverage pixel by pixel.
+        <strong>Machine-enforced moving sampling support.</strong> A locally hash-verified binary
+        mask suppresses registered-moving pixels outside valid transformed sampling support in
+        every plane. It does not identify shared anatomy, tumor, lesion, or segmentation, and it
+        does not prove that registration is correct.
       </section>
 
       <section className="qa-controls" aria-label="Accepted exploratory display controls">
@@ -552,8 +665,10 @@ export const ReviewedRegistrationWorkspace = ({
             />
             <SliceCanvas
               title="REGISTERED MOVING"
-              description="DERIVED · RESAMPLED INTO FIXED REFERENCE GEOMETRY"
+              description="DERIVED · RESAMPLED · MASK=0 DISPLAYED AS NEUTRAL MATTE"
               slice={registeredSlice}
+              coverage={coverageSlice}
+              coverageRequired
               orientation={orientation}
               viewContext={`${plane} patient-space slice ${sliceIndex + 1} of ${sliceCount}`}
               onRenderError={failRender}
@@ -561,6 +676,7 @@ export const ReviewedRegistrationWorkspace = ({
             <ComparisonCanvas
               fixed={fixedSlice}
               registered={registeredSlice}
+              coverage={coverageSlice}
               mode={mode}
               opacity={opacity}
               swipePosition={swipePosition}

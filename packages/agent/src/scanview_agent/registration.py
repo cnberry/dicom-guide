@@ -24,7 +24,7 @@ from .catalog import hash_file
 from .comparison import score_pair
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 SUPPORTED_SLICER_VERSION = "5.12.3"
 # The public release table calls 34627 the computed revision. The running app
 # exposes the Git revision through slicer.app.repositoryRevision instead.
@@ -46,12 +46,28 @@ ENGINE_OUTPUTS = {
     "fixed_volume": "fixed.nrrd",
     "moving_volume": "moving.nrrd",
     "registered_moving_volume": "registered-moving.nrrd",
+    "registered_moving_coverage": "registered-moving-coverage.nrrd",
     "moving_to_fixed_transform": "moving-to-fixed.tfm",
 }
 BUNDLE_FILES = {
     *ENGINE_OUTPUTS.values(),
     "engine-report.json",
     "registration.json",
+}
+COVERAGE_MASK_CONTRACT = {
+    "filename": "registered-moving-coverage.nrrd",
+    "semantics": "technical_sampling_support_not_anatomy_or_segmentation",
+    "source_volume": "moving.nrrd",
+    "reference_volume": "fixed.nrrd",
+    "transform": "moving-to-fixed.tfm",
+    "transform_direction": "moving_later_to_fixed_earlier",
+    "source_basis": "constant_one_moving_grid",
+    "resampler": "BRAINSResample",
+    "registered_volume_interpolation": "Linear",
+    "mask_interpolation": "NearestNeighbor",
+    "scalar_type": "uint8",
+    "binary_values": [0, 1],
+    "outside_value": 0,
 }
 SERIES_ID = re.compile(r"^series_[0-9a-f]{20}$")
 STUDY_ID = re.compile(r"^study_[0-9a-f]{20}$")
@@ -508,8 +524,8 @@ def registration_doctor(slicer_executable: Path | None = None) -> dict[str, Any]
         )
     else:
         note = (
-            "The exact Slicer version and BRAINSFit completion are checked during "
-            "OS-enforced no-network execution."
+            "The exact Slicer version plus BRAINSFit and BRAINSResample availability "
+            "and completion are checked during OS-enforced no-network execution."
         )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -525,6 +541,7 @@ def registration_doctor(slicer_executable: Path | None = None) -> dict[str, Any]
                 SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION
             ),
             "module": "BRAINSFit",
+            "coverage_module": "BRAINSResample",
         },
         "executable_found": executable is not None,
         "executable_sha256": hash_file(executable) if executable else None,
@@ -860,6 +877,7 @@ def _read_engine_report(
             "application_version",
             "repository_revision",
             "module",
+            "coverage_module",
             "platform",
             "parameters",
             "outputs",
@@ -874,6 +892,7 @@ def _read_engine_report(
         or str(report["repository_revision"])
         != SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION
         or report["module"] != "BRAINSFit"
+        or report["coverage_module"] != "BRAINSResample"
         or not isinstance(report["platform"], str)
         or not 1 <= len(report["platform"]) <= 80
         or report["parameters"] != REGISTRATION_PARAMETERS
@@ -1005,6 +1024,64 @@ def _read_nrrd(path: Path) -> dict[str, Any]:
         "space": space,
         "scalar_type": scalar_type,
         "encoding": encoding,
+        "payload_offset": payload_offset,
+        "expected_payload_bytes": expected_bytes,
+    }
+
+
+def _same_nrrd_geometry(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return bool(
+        left["sizes"] == right["sizes"]
+        and left["space"] == right["space"]
+        and all(
+            abs(left_value - right_value) <= 1e-5
+            for left_row, right_row in zip(
+                left["space_directions"], right["space_directions"]
+            )
+            for left_value, right_value in zip(left_row, right_row)
+        )
+        and all(
+            abs(left_value - right_value) <= 1e-5
+            for left_value, right_value in zip(
+                left["space_origin"], right["space_origin"]
+            )
+        )
+    )
+
+
+def _coverage_mask_statistics(path: Path, nrrd: dict[str, Any]) -> dict[str, Any]:
+    if nrrd["scalar_type"] not in {"uchar", "unsigned char", "uint8", "uint8_t"}:
+        raise ValueError("registered moving coverage mask must use an unsigned 8-bit scalar type")
+    total_voxel_count = math.prod(nrrd["sizes"])
+    foreground_voxel_count = 0
+    decoded_bytes = 0
+
+    def inspect(stream: Any) -> None:
+        nonlocal decoded_bytes, foreground_voxel_count
+        while chunk := stream.read(1024 * 1024):
+            decoded_bytes += len(chunk)
+            if decoded_bytes > total_voxel_count or not set(chunk).issubset({0, 1}):
+                raise ValueError("registered moving coverage mask must contain only 0 and 1")
+            foreground_voxel_count += chunk.count(1)
+
+    try:
+        with path.open("rb") as raw_stream:
+            raw_stream.seek(nrrd["payload_offset"])
+            if nrrd["encoding"] == "raw":
+                inspect(raw_stream)
+            else:
+                with gzip.GzipFile(fileobj=raw_stream) as payload_stream:
+                    inspect(payload_stream)
+    except (OSError, EOFError) as error:
+        raise ValueError("registered moving coverage mask payload is invalid") from error
+    if decoded_bytes != total_voxel_count:
+        raise ValueError("registered moving coverage mask payload size is invalid")
+    if foreground_voxel_count == 0:
+        raise ValueError("registered moving coverage mask has no sampling support")
+    return {
+        "total_voxel_count": total_voxel_count,
+        "foreground_voxel_count": foreground_voxel_count,
+        "foreground_fraction": foreground_voxel_count / total_voxel_count,
     }
 
 
@@ -1059,7 +1136,7 @@ def _read_rigid_transform(path: Path) -> tuple[float, ...]:
     return parameters
 
 
-def _check_engine_outputs(work: Path) -> None:
+def _check_engine_outputs(work: Path) -> dict[str, Any]:
     for name in ENGINE_OUTPUTS.values():
         path = work / name
         if not path.is_file() or path.is_symlink():
@@ -1070,26 +1147,16 @@ def _check_engine_outputs(work: Path) -> None:
     fixed_geometry = _read_nrrd(work / "fixed.nrrd")
     _read_nrrd(work / "moving.nrrd")
     registered_geometry = _read_nrrd(work / "registered-moving.nrrd")
-    if (
-        fixed_geometry["sizes"] != registered_geometry["sizes"]
-        or fixed_geometry["space"] != registered_geometry["space"]
-        or any(
-            abs(left - right) > 1e-5
-            for left_row, right_row in zip(
-                fixed_geometry["space_directions"],
-                registered_geometry["space_directions"],
-            )
-            for left, right in zip(left_row, right_row)
-        )
-        or any(
-            abs(left - right) > 1e-5
-            for left, right in zip(
-                fixed_geometry["space_origin"], registered_geometry["space_origin"]
-            )
-        )
-    ):
+    coverage_geometry = _read_nrrd(work / "registered-moving-coverage.nrrd")
+    if not _same_nrrd_geometry(fixed_geometry, registered_geometry):
         raise ValueError("registered moving volume does not use the fixed volume geometry")
+    if not _same_nrrd_geometry(fixed_geometry, coverage_geometry):
+        raise ValueError("registered moving coverage mask does not use the fixed volume geometry")
+    coverage_statistics = _coverage_mask_statistics(
+        work / "registered-moving-coverage.nrrd", coverage_geometry
+    )
     _read_rigid_transform(work / "moving-to-fixed.tfm")
+    return coverage_statistics
 
 
 def _manifest(
@@ -1102,6 +1169,7 @@ def _manifest(
     engine_report: dict[str, Any],
     network_isolation_mechanism: str,
     staged_output: Path,
+    coverage_statistics: dict[str, Any],
     created_at: str,
 ) -> dict[str, Any]:
     files = []
@@ -1144,6 +1212,7 @@ def _manifest(
             "application_version": engine_report["application_version"],
             "repository_revision": str(engine_report["repository_revision"]),
             "module": engine_report["module"],
+            "coverage_module": engine_report["coverage_module"],
             "platform": engine_report["platform"],
             "parameters": REGISTRATION_PARAMETERS,
             "transform_coordinate_system": "DICOM patient LPS",
@@ -1161,6 +1230,10 @@ def _manifest(
                 "host_network": "isolated",
                 "unsandboxed_fallback": False,
             },
+        },
+        "coverage_mask": {
+            **COVERAGE_MASK_CONTRACT,
+            **coverage_statistics,
         },
         "files": files,
         "qa": {
@@ -1297,7 +1370,7 @@ def run_rigid_registration(
         if hash_file(executable) != executable_sha256:
             raise ValueError("the local Slicer executable changed during registration")
         engine_report = _read_engine_report(report_path)
-        _check_engine_outputs(work)
+        coverage_statistics = _check_engine_outputs(work)
 
         staging = Path(
             tempfile.mkdtemp(prefix=f".{output.name}.pending-", dir=output.parent)
@@ -1320,6 +1393,7 @@ def run_rigid_registration(
                 engine_report=engine_report,
                 network_isolation_mechanism=execution_network_isolation,
                 staged_output=staging,
+                coverage_statistics=coverage_statistics,
                 created_at=created_at,
             )
             manifest_path = staging / "registration.json"
@@ -1445,6 +1519,7 @@ def registration_bundle_errors(directory: Path) -> list[str]:
         "source",
         "pairing",
         "algorithm",
+        "coverage_mask",
         "files",
         "qa",
         "computed_results",
@@ -1577,6 +1652,7 @@ def registration_bundle_errors(directory: Path) -> list[str]:
             "application_version",
             "repository_revision",
             "module",
+            "coverage_module",
             "platform",
             "parameters",
             "transform_coordinate_system",
@@ -1591,6 +1667,7 @@ def registration_bundle_errors(directory: Path) -> list[str]:
         or algorithm.get("repository_revision")
         != SUPPORTED_SLICER_RUNTIME_REPOSITORY_REVISION
         or algorithm.get("module") != "BRAINSFit"
+        or algorithm.get("coverage_module") != "BRAINSResample"
         or not isinstance(algorithm.get("platform"), str)
         or not 1 <= len(algorithm["platform"]) <= 80
         or algorithm.get("parameters") != REGISTRATION_PARAMETERS
@@ -1649,7 +1726,12 @@ def registration_bundle_errors(directory: Path) -> list[str]:
             if path.stat().st_size != item["bytes"] or hash_file(path) != item["sha256"]:
                 errors.append("registration file integrity check failed")
     try:
-        _check_engine_outputs(directory)
+        coverage_statistics = _check_engine_outputs(directory)
+        if manifest.get("coverage_mask") != {
+            **COVERAGE_MASK_CONTRACT,
+            **coverage_statistics,
+        }:
+            errors.append("registration coverage mask contract is invalid")
         engine_report = _read_engine_report(directory / "engine-report.json")
         if isinstance(algorithm, dict) and algorithm.get("platform") != engine_report["platform"]:
             errors.append("registration engine platform provenance is inconsistent")

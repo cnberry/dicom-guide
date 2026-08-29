@@ -72,7 +72,9 @@ result into a medical conclusion.
 - Deterministic macOS/Linux offline runtime bundle with the embedded UI/contracts,
   pinned pure-Python DICOM dependency, exact payload manifest, hash-locked no-index
   installer, and per-launch runtime checks. Python 3.11+ is an explicit prerequisite;
-  Linux execution and publisher signing remain pending.
+  the packaged runtime and mandatory engine sandbox boundary pass on Strawberry
+  Ubuntu x86_64, while publisher signing and real Linux Slicer execution remain
+  pending.
 
 ### Phase 2 — robust local archive and tools
 
@@ -83,19 +85,21 @@ result into a medical conclusion.
 
 ### Phase 3 — reviewed derivatives
 
-- Version-gated local Slicer/BRAINSFit rigid-registration execution and source-hashed,
-  generated-pending-QA bundles (implemented; an authenticated official macOS engine
-  passed a synthetic same-modality run, while real-patient and Linux execution remain
-  pending).
+- Version-gated local Slicer/BRAINSFit/BRAINSResample rigid-registration execution and
+  source-hashed, generated-pending-QA seven-file v2 bundles with an explicit binary
+  moving-image sampling-support mask (implemented; an authenticated official macOS
+  engine passed equal- and partial-field synthetic same-modality runs, while a real
+  patient pair and real Linux Slicer execution remain pending).
 - Isolated local registration QA with derived reference/registered views, all three planes,
   opacity, swipe, checkerboard, edges, qualitative landmarks, quantitative 3-D
   residuals mandatory for acceptance, and a separate hash-linked accept/reject record
   (implemented; real-case review pending).
 - Live-bundle-validated accepted-record consumption in the ordinary viewer, exposing
-  only derived fixed/registered volumes and exploratory opacity/swipe (implemented;
-  real-case review pending). Shared coverage is visibly reviewer-identified rather
-  than falsely represented as a machine mask. All other derived operations remain
-  locked.
+  only derived fixed/registered volumes plus the technical sampling-support mask and
+  exploratory opacity/swipe (implemented; real-case review pending). Registered
+  pixels are machine-gated to mask value one, with fixed pixels forced elsewhere.
+  The mask is not shared anatomy, tumor, segmentation, registration quality, or
+  clinical comparability. All other derived operations remain locked.
 - DICOM SEG/SR import/export and separate derivative store.
 - Manual/semi-automatic component-specific tumor segmentation.
 

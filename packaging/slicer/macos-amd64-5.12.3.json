@@ -7,7 +7,8 @@
     "computed_revision": "34627",
     "git_commit": "9034c71a8fce68ab312458b3d7d16f610562263d",
     "runtime_repository_revision": "9034c71",
-    "module": "BRAINSFit"
+    "module": "BRAINSFit",
+    "coverage_module": "BRAINSResample"
   },
   "official_package": {
     "download_page": "https://download.slicer.org/",
@@ -41,6 +42,10 @@
     "brainsfit": {
       "path_within_app": "Contents/lib/Slicer-5.12/cli-modules/BRAINSFit",
       "sha256": "75d173916e0d2d48f6d9ba9b0cd093349661953538748809d7ea2ad93c85da93"
+    },
+    "brainsresample": {
+      "path_within_app": "Contents/lib/Slicer-5.12/cli-modules/BRAINSResample",
+      "sha256": "bd1e042194ff56673c01955782f9415a3e8706be75c7131ea93fbdcd310f207b"
     }
   },
   "verification": {
@@ -50,6 +55,8 @@
     "installed_copy_gatekeeper_assessment": "accepted; Notarized Developer ID",
     "scanview_no_data_preflight": "passed",
     "scanview_real_engine_synthetic_registration": "passed",
+    "scanview_real_engine_v2_sampling_support_mask": "passed; 65536 of 65536 voxels for equal fields and 65536 of 69632 voxels for a deliberately wider fixed field",
+    "scanview_real_engine_partial_field_transform_x_mm": -1.9981585838559544,
     "scanview_network_isolation": "macos_sandbox_exec_deny_all_network",
     "external_api_required": false
   },

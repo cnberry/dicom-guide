@@ -35,6 +35,12 @@ export type NrrdSlice = {
   pixels: Uint8ClampedArray;
 };
 
+export type NrrdBinaryMaskSlice = {
+  width: number;
+  height: number;
+  pixels: Uint8Array;
+};
+
 export type LpsPoint = [number, number, number];
 
 export type PatientSpaceSliceMapping = {
@@ -76,6 +82,7 @@ export type QaCompositeSlice = {
 };
 
 export type QaCompositeMode = 'opacity' | 'checkerboard' | 'edges' | 'swipe';
+export type CoveredRegistrationMode = 'opacity' | 'swipe';
 export type PlaneOrientationLabels = {
   left: string;
   right: string;
@@ -403,6 +410,22 @@ export const parseNrrd = (
     bytesPerVoxel: scalar.bytes,
   };
   return { ...partial, ...sampledWindow(partial) };
+};
+
+export const validateBinaryCoverageVolume = (volume: NrrdVolume): void => {
+  if (volume.scalarType !== 'uint8' || volume.bytesPerVoxel !== 1) {
+    throw new Error('Sampling-support mask must use uint8 scalar values.');
+  }
+  let foregroundVoxels = 0;
+  for (const value of volume.payload) {
+    if (value !== 0 && value !== 1) {
+      throw new Error('Sampling-support mask must contain only binary 0 and 1 values.');
+    }
+    if (value === 1) foregroundVoxels += 1;
+  }
+  if (foregroundVoxels === 0) {
+    throw new Error('Sampling-support mask contains no covered moving voxels.');
+  }
 };
 
 export const planeLength = (volume: NrrdVolume, plane: NrrdPlane): number =>
@@ -796,6 +819,72 @@ export const extractPatientSpaceSlice = (
   return { width: layout.width, height: layout.height, pixels, mapping };
 };
 
+const sampleBinaryMaskAtVoxelNearest = (
+  volume: NrrdVolume,
+  requestedVoxel: LpsPoint,
+): 0 | 1 => {
+  if (
+    requestedVoxel.some(
+      (coordinate, axis) => coordinate < 0 || coordinate > volume.sizes[axis] - 1,
+    )
+  ) {
+    return 0;
+  }
+  const voxel = requestedVoxel.map(Math.round) as LpsPoint;
+  const linear =
+    voxel[0] + volume.sizes[0] * (voxel[1] + volume.sizes[1] * voxel[2]);
+  const value = volume.payload[linear];
+  if (value !== 0 && value !== 1) {
+    throw new Error('Sampling-support mask contains a non-binary voxel.');
+  }
+  return value;
+};
+
+export const extractPatientSpaceBinaryMaskSlice = (
+  volume: NrrdVolume,
+  plane: NrrdPlane,
+  requestedIndex: number,
+  options: PatientSpaceReformatOptions = {},
+): NrrdBinaryMaskSlice => {
+  if (volume.scalarType !== 'uint8' || volume.bytesPerVoxel !== 1) {
+    throw new Error('Sampling-support mask must use uint8 scalar values.');
+  }
+  const layout = patientPlaneLayout(volume, plane, options);
+  const mapping = patientSpaceSliceMapping(volume, plane, requestedIndex, options);
+  const pixels = new Uint8Array(layout.width * layout.height);
+  const originVoxel = lpsToVoxel(volume, mapping.originLps);
+  const horizontalVoxelStep = applyMatrix(
+    normalizedLpsGeometry(volume).inverse,
+    mapping.horizontalDirectionLps.map(
+      (value) => value * mapping.pixelSpacingMm[0],
+    ) as LpsPoint,
+  );
+  const verticalVoxelStep = applyMatrix(
+    normalizedLpsGeometry(volume).inverse,
+    mapping.verticalDirectionLps.map(
+      (value) => value * mapping.pixelSpacingMm[1],
+    ) as LpsPoint,
+  );
+  for (let vertical = 0; vertical < layout.height; vertical += 1) {
+    const rowStart: LpsPoint = [
+      originVoxel[0] + verticalVoxelStep[0] * vertical,
+      originVoxel[1] + verticalVoxelStep[1] * vertical,
+      originVoxel[2] + verticalVoxelStep[2] * vertical,
+    ];
+    for (let horizontal = 0; horizontal < layout.width; horizontal += 1) {
+      pixels[horizontal + layout.width * vertical] = sampleBinaryMaskAtVoxelNearest(
+        volume,
+        [
+          rowStart[0] + horizontalVoxelStep[0] * horizontal,
+          rowStart[1] + horizontalVoxelStep[1] * horizontal,
+          rowStart[2] + horizontalVoxelStep[2] * horizontal,
+        ],
+      );
+    }
+  }
+  return { width: layout.width, height: layout.height, pixels };
+};
+
 const sliceDimensions = (
   volume: NrrdVolume,
   plane: NrrdPlane,
@@ -898,6 +987,63 @@ export const composeQaSlice = (
     rgba[target] = red;
     rgba[target + 1] = green;
     rgba[target + 2] = blue;
+    rgba[target + 3] = 255;
+  }
+  return { data: rgba, width: fixed.width, height: fixed.height };
+};
+
+export const composeCoveredRegistrationSlice = (
+  fixed: NrrdSlice,
+  registered: NrrdSlice,
+  coverage: NrrdBinaryMaskSlice,
+  mode: CoveredRegistrationMode,
+  options: { opacity: number; swipePosition: number },
+): QaCompositeSlice => {
+  if (
+    fixed.width !== registered.width ||
+    fixed.height !== registered.height ||
+    fixed.width !== coverage.width ||
+    fixed.height !== coverage.height ||
+    fixed.pixels.length !== registered.pixels.length ||
+    fixed.pixels.length !== coverage.pixels.length
+  ) {
+    throw new Error('Covered registration composite requires matched slice dimensions.');
+  }
+  if (mode !== 'opacity' && mode !== 'swipe') {
+    throw new Error('Covered registration composite permits only opacity or swipe.');
+  }
+  const rgba = new Uint8ClampedArray(fixed.pixels.length * 4);
+  const opacity = Math.max(0, Math.min(1, options.opacity));
+  const swipe = Math.max(0, Math.min(1, options.swipePosition));
+  for (let pixelIndex = 0; pixelIndex < fixed.pixels.length; pixelIndex += 1) {
+    const maskValue = coverage.pixels[pixelIndex];
+    if (maskValue !== 0 && maskValue !== 1) {
+      throw new Error('Covered registration composite received a non-binary mask pixel.');
+    }
+    const fixedValue = fixed.pixels[pixelIndex];
+    const movingValue = registered.pixels[pixelIndex];
+    const x = pixelIndex % fixed.width;
+    const useMovingForSwipe =
+      maskValue === 1 &&
+      x / Math.max(1, fixed.width - 1) >= swipe;
+    const coveredOpacity = maskValue === 1 ? opacity : 0;
+    const target = pixelIndex * 4;
+    if (mode === 'swipe') {
+      const value = useMovingForSwipe ? movingValue : fixedValue;
+      rgba[target] = value;
+      rgba[target + 1] = value;
+      rgba[target + 2] = value;
+    } else {
+      rgba[target] = Math.round(
+        fixedValue * (1 - coveredOpacity) + movingValue * coveredOpacity * 0.9,
+      );
+      rgba[target + 1] = Math.round(
+        fixedValue * (1 - coveredOpacity) + movingValue * coveredOpacity,
+      );
+      rgba[target + 2] = Math.round(
+        fixedValue * (1 - coveredOpacity) + movingValue * coveredOpacity,
+      );
+    }
     rgba[target + 3] = 255;
   }
   return { data: rgba, width: fixed.width, height: fixed.height };

@@ -3,6 +3,11 @@ import {
   REGISTRATION_REVIEW_ENDPOINT,
   REGISTRATION_REVIEW_INPUT_MEDIA_TYPE,
   REGISTRATION_REVIEW_MEDIA_TYPE,
+  REGISTRATION_QA_ALWAYS_LOCKED,
+  REGISTRATION_QA_LIMITATIONS,
+  REGISTRATION_QA_PREVIEW_MODES,
+  REGISTRATION_QA_QUALITATIVE_CHECKS,
+  fetchRegistrationQaCoverageMask,
   fetchRegistrationQaVolume,
   loadRegistrationQaContext,
   readRegistrationQaContext,
@@ -40,7 +45,7 @@ const volume = (
 });
 
 const context: RegistrationQaContext = {
-  schema_version: '1.0.0',
+  schema_version: '2.0.0',
   artifact_type: 'registration_qa_context',
   mode: 'human_qa_preview',
   qa_preview_only: true,
@@ -74,40 +79,58 @@ const context: RegistrationQaContext = {
       true,
     ),
   },
+  coverage_mask: {
+    role: 'registered_moving_sampling_support_in_fixed_geometry',
+    filename: 'registered-moving-coverage.nrrd',
+    url: '/v1/registration-qa/files/registered-moving-coverage.nrrd',
+    bytes: 200,
+    sha256: 'd'.repeat(64),
+    derived: true,
+    scalar_type: 'uint8',
+    binary_values: [0, 1],
+    semantics: 'technical_sampling_support_not_anatomy_or_segmentation',
+    geometry,
+  },
   transform: {
     filename: 'moving-to-fixed.tfm',
     sha256: 'c'.repeat(64),
     coordinate_system: 'DICOM patient LPS',
   },
   intended_use: 'shared_coverage_exploratory_overlay_swipe',
-  qualitative_checks: [{ id: 'full_volume', label: 'Review the full volume.' }],
-  landmark_options: ['brainstem', 'ventricles', 'clivus'],
-  landmark_statuses: ['aligned', 'uncertain', 'misaligned', 'not_visible'],
+  qualitative_checks: REGISTRATION_QA_QUALITATIVE_CHECKS.map(([id, label]) => ({
+    id,
+    label,
+  })),
+  landmark_options: [
+    'brainstem',
+    'clivus',
+    'external_auditory_canals',
+    'nose',
+    'optic_nerves',
+    'orbits',
+    'other_stable_landmark',
+    'outer_brain_or_skull_boundary',
+    'region_of_importance',
+    'sagittal_suture',
+    'sella_turcica',
+    'ventricles',
+  ],
+  landmark_statuses: ['aligned', 'misaligned', 'not_visible', 'uncertain'],
   allowed_decisions: ['accepted_for_shared_coverage_overlay_swipe', 'rejected'],
   display_policy: {
-    qa_preview_allowed_while_pending: [
-      'reference_volume_side_by_side',
-      'registered_side_by_side',
-      'opacity_overlay',
-      'swipe_or_flicker',
-      'checkerboard',
-      'edge_overlay',
-      'landmark_residuals',
-    ],
+    qa_preview_allowed_while_pending: [...REGISTRATION_QA_PREVIEW_MODES],
     accepted_unlocks: ['overlay', 'swipe'],
-    always_locked: [
-      'subtraction',
-      'mask_propagation',
-      'segmentation',
-      'resampled_image_measurements',
-      'response_conclusions',
-    ],
+    always_locked: [...REGISTRATION_QA_ALWAYS_LOCKED],
+    sampling_support_enforcement: 'required_pixel_mask',
+    shared_anatomy_scope: 'reviewer_attested_visual_only',
+    mask_failure_behavior: 'lock_display',
+    mask_sampling: 'nearest_neighbor',
   },
-  limitations: ['Synthetic test limitation.'],
+  limitations: [...REGISTRATION_QA_LIMITATIONS],
 };
 
 const review: RegistrationReviewRequest = {
-  schema_version: '1.0.0',
+  schema_version: '2.0.0',
   reviewer: {
     name: 'Reviewer',
     role: 'patient_or_family',
@@ -117,7 +140,9 @@ const review: RegistrationReviewRequest = {
   attest: true,
   decision: 'rejected',
   region_of_importance: 'Whole brain',
-  qualitative_checks: { full_volume: false },
+  qualitative_checks: Object.fromEntries(
+    REGISTRATION_QA_QUALITATIVE_CHECKS.map(([id]) => [id, false]),
+  ),
   inspection_evidence: { planes: {}, modes: [] },
   landmark_observations: [],
   quantitative_assessment: {
@@ -175,14 +200,58 @@ describe('registration QA local service', () => {
         },
       }),
     ).toBeUndefined();
+    expect(
+      readRegistrationQaContext({
+        ...context,
+        coverage_mask: {
+          ...context.coverage_mask,
+          semantics: 'anatomy_or_segmentation',
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      readRegistrationQaContext({
+        ...context,
+        coverage_mask: {
+          ...context.coverage_mask,
+          geometry: { ...context.coverage_mask.geometry, space_origin: [1, 0, 0] },
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      readRegistrationQaContext({
+        ...context,
+        display_policy: {
+          ...context.display_policy,
+          qa_preview_allowed_while_pending:
+            context.display_policy.qa_preview_allowed_while_pending.filter(
+              (mode) => mode !== 'coverage_mask_boundary',
+            ),
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      readRegistrationQaContext({
+        ...context,
+        qualitative_checks: context.qualitative_checks.filter(
+          (item) => item.id !== 'coverage_mask_boundary_and_excluded_region_reviewed',
+        ),
+      }),
+    ).toBeUndefined();
   });
 
   it('distinguishes no QA launch from probe failures', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response('{}', { status: 404 }))
-      .mockResolvedValueOnce(new Response('{}', { status: 409 }))
-      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response('{}', { status: 409, headers: { 'Content-Type': 'application/json' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(loadRegistrationQaContext()).resolves.toEqual({ status: 'none' });
@@ -212,6 +281,34 @@ describe('registration QA local service', () => {
 
     await expect(fetchRegistrationQaVolume(descriptor)).rejects.toThrow(
       /response byte count changed/i,
+    );
+  });
+
+  it('requires transport digest and local hash for the binary sampling-support mask', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const sha256 = '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a';
+    const descriptor = { ...context.coverage_mask, bytes: bytes.byteLength, sha256 };
+    const response = (digest: string | undefined) =>
+      new Response(bytes, {
+        headers: {
+          'Content-Type': 'application/vnd.nrrd',
+          'Content-Length': String(bytes.byteLength),
+          ...(digest ? { 'X-Content-SHA256': digest } : {}),
+        },
+      });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(response(undefined))
+        .mockResolvedValueOnce(response(sha256)),
+    );
+
+    await expect(fetchRegistrationQaCoverageMask(descriptor)).rejects.toThrow(
+      /response digest changed/i,
+    );
+    await expect(fetchRegistrationQaCoverageMask(descriptor)).resolves.toEqual(
+      bytes.buffer,
     );
   });
 

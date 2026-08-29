@@ -12,7 +12,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 from scanview_agent import registration_display as registration_display_module
 from scanview_agent.registration_display import (
     ALWAYS_LOCKED,
-    SHARED_COVERAGE_ENFORCEMENT,
+    MASK_FAILURE_BEHAVIOR,
+    MASK_SAMPLING,
+    SAMPLING_SUPPORT_ENFORCEMENT,
+    SHARED_ANATOMY_SCOPE,
     reviewed_registration_display_context,
     reviewed_registration_display_errors,
     reviewed_registration_display_summary,
@@ -31,7 +34,7 @@ def _schema() -> dict:
         (
             repository_root
             / "schemas"
-            / "scanview-reviewed-registration-display-v1.schema.json"
+            / "scanview-reviewed-registration-display-v2.schema.json"
         ).read_text()
     )
 
@@ -118,14 +121,44 @@ def test_accepted_live_review_produces_exact_hash_bound_context(tmp_path: Path) 
     assert fixed["geometry"] == registered["geometry"]
     assert fixed["geometry"] == record["source_registration"]["fixed_geometry"]
 
+    coverage = context["coverage_mask"]
+    assert set(coverage) == {
+        "role",
+        "filename",
+        "url",
+        "bytes",
+        "sha256",
+        "derived",
+        "scalar_type",
+        "binary_values",
+        "semantics",
+        "geometry",
+    }
+    assert coverage["role"] == "registered_moving_sampling_support_in_fixed_geometry"
+    assert coverage["filename"] == "registered-moving-coverage.nrrd"
+    assert coverage["url"] == (
+        "/v1/reviewed-registration/files/registered-moving-coverage.nrrd"
+    )
+    assert coverage["sha256"] == record["source_registration"]["coverage_mask_sha256"]
+    assert coverage["derived"] is True
+    assert coverage["scalar_type"] == "uint8"
+    assert coverage["binary_values"] == [0, 1]
+    assert coverage["semantics"] == (
+        "technical_sampling_support_not_anatomy_or_segmentation"
+    )
+    assert coverage["geometry"] == fixed["geometry"]
+
     policy = context["display_policy"]
     assert policy["allowed_modes"] == ["opacity", "swipe"]
     assert policy["always_locked"] == ALWAYS_LOCKED
     assert policy["native_moving_available"] is False
     assert policy["native_moving_withheld"] is True
-    assert policy["shared_coverage_enforcement"] == SHARED_COVERAGE_ENFORCEMENT
-    assert any("outside their shared anatomical coverage" in item for item in context["limitations"])
-    assert any("no pixel-level" in item for item in context["limitations"])
+    assert policy["sampling_support_enforcement"] == SAMPLING_SUPPORT_ENFORCEMENT
+    assert policy["shared_anatomy_scope"] == SHARED_ANATOMY_SCOPE
+    assert policy["mask_failure_behavior"] == MASK_FAILURE_BEHAVIOR
+    assert policy["mask_sampling"] == MASK_SAMPLING
+    assert any("sampling-support mask is one" in item for item in context["limitations"])
+    assert any("not anatomy, tumor, segmentation" in item for item in context["limitations"])
     assert any("self asserted and unauthenticated" in item for item in context["limitations"])
     assert set(context["reviewer"]) == {
         "role",
@@ -145,7 +178,7 @@ def test_accepted_live_summary_is_small_privacy_safe_and_authorized(
     review_path = _saved_review(tmp_path, bundle)
     summary = reviewed_registration_display_summary(bundle, review_path)
     assert summary == {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "artifact_type": "reviewed_registration_display_summary",
         "available": True,
         "display_status": "authorized",
@@ -167,6 +200,15 @@ def test_accepted_live_summary_is_small_privacy_safe_and_authorized(
     assert reviewed_registration_display_errors(bundle, review_path) == []
 
 
+def test_display_schema_rejects_unsafe_coverage_mask_claim(tmp_path: Path) -> None:
+    bundle = registration_bundle(tmp_path)
+    review_path = _saved_review(tmp_path, bundle)
+    context = reviewed_registration_display_context(bundle, review_path)
+    context["coverage_mask"]["semantics"] = "anatomy"
+    validator = Draft202012Validator(_schema(), format_checker=FormatChecker())
+    assert list(validator.iter_errors(context))
+
+
 def test_accepted_review_exceeding_display_byte_caps_remains_locked(
     tmp_path: Path,
     monkeypatch,
@@ -184,7 +226,33 @@ def test_accepted_review_exceeding_display_byte_caps_remains_locked(
     assert summary["display_authorized"] is False
     assert summary["allowed_display_modes"] == []
     assert summary["errors"] == [
-        "reviewed registration volumes exceed the display safety limit"
+        "reviewed registration artifacts exceed the display safety limit"
+    ]
+
+
+def test_accepted_review_counts_coverage_mask_in_display_byte_caps(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    bundle = registration_bundle(tmp_path)
+    review_path = _saved_review(tmp_path, bundle)
+    record = json.loads(review_path.read_text())
+    entries = {
+        item["name"]: item for item in record["source_registration"]["bundle_files"]
+    }
+    image_bytes = entries["fixed.nrrd"]["bytes"] + entries["registered-moving.nrrd"][
+        "bytes"
+    ]
+    mask_bytes = entries["registered-moving-coverage.nrrd"]["bytes"]
+    monkeypatch.setattr(
+        registration_display_module,
+        "MAX_REVIEWED_ENCODED_TOTAL_BYTES",
+        image_bytes + mask_bytes - 1,
+    )
+    summary = reviewed_registration_display_summary(bundle, review_path)
+    assert summary["display_authorized"] is False
+    assert summary["errors"] == [
+        "reviewed registration artifacts exceed the display safety limit"
     ]
 
 
@@ -216,6 +284,19 @@ def test_standalone_review_bytes_never_authorize_display(tmp_path: Path) -> None
     assert "standalone" in " ".join(summary["errors"])
     with pytest.raises(ValueError, match="not authorized"):
         reviewed_registration_display_context(bundle, payload)
+
+
+def test_v1_saved_review_never_authorizes_v2_display(tmp_path: Path) -> None:
+    bundle = registration_bundle(tmp_path)
+    review_path = _saved_review(tmp_path, bundle)
+    record = json.loads(review_path.read_text())
+    record["schema_version"] = "1.0.0"
+    review_path.write_text(json.dumps(record))
+    review_path.chmod(0o600)
+    summary = reviewed_registration_display_summary(bundle, review_path)
+    assert summary["display_status"] == "invalid"
+    assert summary["display_authorized"] is False
+    assert summary["allowed_display_modes"] == []
 
 
 def test_missing_inputs_are_unavailable_and_locked(tmp_path: Path) -> None:

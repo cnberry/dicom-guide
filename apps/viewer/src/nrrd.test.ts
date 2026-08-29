@@ -1,7 +1,9 @@
 import { gzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import {
+  composeCoveredRegistrationSlice,
   composeQaSlice,
+  extractPatientSpaceBinaryMaskSlice,
   extractNrrdSlice,
   extractPatientSpaceSlice,
   landmarkResidual,
@@ -15,6 +17,7 @@ import {
   patientSpaceSliceIndexForLps,
   sampleNrrdAtLps,
   slicePointToVoxel,
+  validateBinaryCoverageVolume,
   voxelToPhysical,
 } from './nrrd';
 
@@ -25,6 +28,7 @@ type NrrdOptions = {
   directions?: [[number, number, number], [number, number, number], [number, number, number]];
   origin?: [number, number, number];
   values?: number[];
+  scalarType?: 'short' | 'uint8';
 };
 
 const nrrd = ({
@@ -38,24 +42,31 @@ const nrrd = ({
   ],
   origin = [10, 20, 30],
   values,
+  scalarType = 'short',
 }: NrrdOptions = {}): ArrayBuffer => {
   const voxelCount = sizes[0] * sizes[1] * sizes[2];
-  const payload = new Uint8Array(voxelCount * 2);
-  const view = new DataView(payload.buffer);
-  for (let index = 0; index < voxelCount; index += 1) {
-    view.setInt16(index * 2, values?.[index] ?? index, true);
+  const payload = new Uint8Array(voxelCount * (scalarType === 'short' ? 2 : 1));
+  if (scalarType === 'short') {
+    const view = new DataView(payload.buffer);
+    for (let index = 0; index < voxelCount; index += 1) {
+      view.setInt16(index * 2, values?.[index] ?? index, true);
+    }
+  } else {
+    for (let index = 0; index < voxelCount; index += 1) {
+      payload[index] = values?.[index] ?? index % 2;
+    }
   }
   const encoded = encoding === 'gzip' ? gzipSync(payload) : payload;
   const vector = (value: [number, number, number]) => `(${value.join(',')})`;
   const header = new TextEncoder().encode(
     `NRRD0005\n` +
-      `type: short\n` +
+      `type: ${scalarType}\n` +
       `dimension: 3\n` +
       `sizes: ${sizes.join(' ')}\n` +
       `space: ${space}\n` +
       `space directions: ${directions.map(vector).join(' ')}\n` +
       `space origin: ${vector(origin)}\n` +
-      `endian: little\n` +
+      (scalarType === 'short' ? `endian: little\n` : '') +
       `encoding: ${encoding}\n\n`,
   );
   const result = new Uint8Array(header.byteLength + encoded.byteLength);
@@ -86,6 +97,69 @@ describe('local NRRD QA parsing and rendering', () => {
       top: 'A',
       bottom: 'P',
     });
+  });
+
+  it.each(['raw', 'gzip'] as const)(
+    'validates and reformats binary uint8 sampling-support masks with nearest-neighbor %s data',
+    (encoding) => {
+      const mask = parseNrrd(
+        nrrd({
+          encoding,
+          scalarType: 'uint8',
+          origin: [0, 0, 0],
+          directions: [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+          ],
+          values: [1, 0, 0, 1, 0, 1, 1, 0],
+        }),
+      );
+      expect(() => validateBinaryCoverageVolume(mask)).not.toThrow();
+      for (const plane of ['axial', 'coronal', 'sagittal'] as const) {
+        const slice = extractPatientSpaceBinaryMaskSlice(mask, plane, 0);
+        expect([slice.width, slice.height]).toEqual([2, 2]);
+        expect(slice.pixels.every((value) => value === 0 || value === 1)).toBe(true);
+      }
+      expect(
+        Array.from(extractPatientSpaceBinaryMaskSlice(mask, 'axial', 0).pixels),
+      ).toEqual([1, 0, 0, 1]);
+    },
+  );
+
+  it('rejects non-binary, empty, and non-uint8 sampling-support masks', () => {
+    const invalidBinary = parseNrrd(
+      nrrd({ scalarType: 'uint8', values: [1, 0, 2, 0, 0, 0, 0, 0] }),
+    );
+    expect(() => validateBinaryCoverageVolume(invalidBinary)).toThrow(/only binary/i);
+    const empty = parseNrrd(
+      nrrd({ scalarType: 'uint8', values: Array.from({ length: 8 }, () => 0) }),
+    );
+    expect(() => validateBinaryCoverageVolume(empty)).toThrow(/no covered/i);
+    expect(() => validateBinaryCoverageVolume(parseNrrd(nrrd()))).toThrow(/uint8/i);
+  });
+
+  it('uses zero outside the binary mask volume during oblique patient-space reformatting', () => {
+    const cosine = Math.SQRT1_2;
+    const mask = parseNrrd(
+      nrrd({
+        scalarType: 'uint8',
+        sizes: [3, 3, 3],
+        origin: [0, 0, 0],
+        directions: [
+          [cosine, cosine, 0],
+          [-cosine, cosine, 0],
+          [0, 0, 1],
+        ],
+        values: Array.from({ length: 27 }, () => 1),
+      }),
+    );
+    validateBinaryCoverageVolume(mask);
+    const slice = extractPatientSpaceBinaryMaskSlice(mask, 'axial', 1, {
+      targetSpacingMm: 1,
+    });
+    expect(Array.from(slice.pixels)).toContain(0);
+    expect(Array.from(slice.pixels)).toContain(1);
   });
 
   it('refuses detached, truncated, and unsupported patient-space volumes', () => {
@@ -321,5 +395,67 @@ describe('local NRRD QA parsing and rendering', () => {
     expect([checker.width, checker.height, checker.data.length]).toEqual([2, 2, 16]);
     expect(Array.from(checker.data.slice(0, 4))).toEqual([0, 0, 0, 255]);
     expect(landmarkResidual([0, 0, 0], [3, 4, 0])).toBe(5);
+  });
+
+  it('never emits registered pixels where the required coverage mask is zero', () => {
+    const fixed = {
+      width: 2,
+      height: 2,
+      pixels: new Uint8ClampedArray([10, 20, 30, 40]),
+    };
+    const registered = {
+      width: 2,
+      height: 2,
+      pixels: new Uint8ClampedArray([100, 110, 120, 130]),
+    };
+    const coverage = {
+      width: 2,
+      height: 2,
+      pixels: new Uint8Array([1, 0, 1, 0]),
+    };
+    const opacity = composeCoveredRegistrationSlice(
+      fixed,
+      registered,
+      coverage,
+      'opacity',
+      { opacity: 1, swipePosition: 0.5 },
+    );
+    expect(Array.from(opacity.data.slice(0, 8))).toEqual([
+      90, 100, 100, 255,
+      20, 20, 20, 255,
+    ]);
+    expect(Array.from(opacity.data.slice(12, 16))).toEqual([40, 40, 40, 255]);
+
+    const swipe = composeCoveredRegistrationSlice(
+      fixed,
+      registered,
+      coverage,
+      'swipe',
+      { opacity: 0.5, swipePosition: 0 },
+    );
+    expect(Array.from(swipe.data)).toEqual([
+      100, 100, 100, 255,
+      20, 20, 20, 255,
+      120, 120, 120, 255,
+      40, 40, 40, 255,
+    ]);
+    expect(() =>
+      composeCoveredRegistrationSlice(
+        fixed,
+        registered,
+        { ...coverage, width: 1 },
+        'opacity',
+        { opacity: 0.5, swipePosition: 0.5 },
+      ),
+    ).toThrow(/matched slice dimensions/i);
+    expect(() =>
+      composeCoveredRegistrationSlice(
+        fixed,
+        registered,
+        coverage,
+        'checkerboard' as 'opacity',
+        { opacity: 0.5, swipePosition: 0.5 },
+      ),
+    ).toThrow(/only opacity or swipe/i);
   });
 });

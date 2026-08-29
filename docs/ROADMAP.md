@@ -203,7 +203,7 @@
 2. Added pre/post-staging source SHA-256 checks, generic private DICOM staging,
    bounded headless execution, non-persisted diagnostics, a source-read-only
    application boundary, and non-overwriting output publication.
-3. Added an owner-only six-file derivative bundle with exact source/output hashes,
+3. Added an owner-only six-file v1 derivative bundle with exact source/output hashes,
    parsed NRRD/fixed-space geometry, a finite proper-rigid text ITK transform,
    transform direction, binary/runner provenance, exact parameters, limitations,
    empty computation/interpretation arrays, and no external API requested by ScanView.
@@ -227,8 +227,8 @@
    coverage, at least three aligned qualitative landmarks, no material defect, and at
    least three spatially distributed 3-D landmark pairs within the fixed
    geometry-derived tolerance.
-4. Added a non-overwriting, self-attested JSON review record that anchors all six live
-   registration files and their geometry. Only exploratory shared-coverage overlay/swipe
+4. Added a non-overwriting, self-attested v1 JSON review record that anchors all six
+   live registration files and their geometry. Only exploratory shared-coverage overlay/swipe
    can be authorized; subtraction, masks, segmentation, resampled measurements, and
    response conclusions remain locked.
 5. Added CLI/server/schema validation, cookie-versus-bearer authorization tests,
@@ -238,7 +238,7 @@
 
 ## Completed in the seventeenth milestone
 
-1. Added a strict reviewed-registration display contract that requires one accepted,
+1. Added a strict v1 reviewed-registration display contract that requires one accepted,
    owner-only, unlinked review and its exact live six-file bundle. It binds review,
    event, bundle, manifest, transform, file, and geometry hashes while omitting reviewer
    name and organization.
@@ -250,9 +250,10 @@
    exact fixed/registered geometry checks, capped sequential loading, and only opacity
    and swipe. It identifies both NRRDs as derived, registered moving as resampled, and
    native DICOM as authoritative.
-4. Made the shared-coverage limit explicit: the six-file bundle has no transformed
-   pixel coverage mask, so authorization is reviewer-visual only and pixels outside
-   visible overlap remain unauthorized.
+4. Made the then-current v1 shared-coverage limit explicit: the six-file bundle had no
+   transformed pixel coverage mask, so authorization was reviewer-visual only and
+   pixels outside visible overlap remained unauthorized. The v2 contract added in the
+   twenty-second milestone now fails v1 closed and enforces sampling support per pixel.
 5. Added mandatory OS-enforced network denial for Slicer execution: macOS uses a
    deny-all-network sandbox; supported 64-bit Linux requires `bwrap` private namespaces
    plus seccomp denial of socket creation, socket pairs, and io_uring. Weaker
@@ -314,7 +315,7 @@
 4. Ran the normal ScanView registration command on two private synthetic 16-slice MR
    studies through the real official Slicer/BRAINSFit process under mandatory macOS
    deny-all-network isolation. All 32 source hashes remained identical, the known
-   synthetic translation was recovered, and the validated six-file bundle stayed
+   synthetic translation was recovered, and the validated historical v1 six-file bundle stayed
    `generated_pending_qa`/`unreviewed` with every display unlock false.
 5. Loaded those real-engine NRRDs in the isolated local QA viewer. Axial, coronal,
    sagittal, opacity, swipe, checkerboard, and edge views rendered without browser
@@ -343,9 +344,40 @@
    loopback. Synthetic sources and output were moved to recoverable Trash.
 6. Promoted “no external DICOM-processing API and no cloud fallback” to a release
    invariant. The rebuilt deterministic offline bundle now verifies the consultation-
-   board contract, all 17 schemas, embedded UI, pinned local dependency, and explicit
+   board contract, all 17 then-current schemas, embedded UI, pinned local dependency, and explicit
    `runtime_network_required: false` and
    `external_dicom_processing_api_required: false` assertions before cataloging.
+
+## Completed in the twenty-second milestone
+
+1. Upgraded registration generation to a strict seven-file v2 bundle. The authenticated
+   local Slicer process now uses the pinned BRAINSFit transform to resample a constant-one
+   moving-grid label map through BRAINSResample with nearest-neighbor interpolation,
+   producing a uint8 binary sampling-support NRRD in exact fixed geometry.
+2. Added full-payload host validation for raw or gzip NRRD masks, `{0,1}` values,
+   nonempty support, exact geometry, recomputed voxel counts, provenance, hashes, and
+   owner-only publication. V1 generation/review/display contracts remain historical
+   and fail closed rather than silently acquiring v2 authority.
+3. Bound the mask into the qualified QA checklist, accepted review, local server, and
+   browser display contract. Opacity and swipe now use nearest-neighbor patient-space
+   mask sampling, force fixed pixels wherever support is zero, and matte the standalone
+   registered pane; no unmasked fallback exists.
+4. Kept the evidence meaning narrow: the mask proves only where the pinned resampler had
+   moving-image sampling support. It does not prove shared anatomy, tumor, segmentation,
+   registration quality, clinical comparability, or treatment response, all of which
+   remain outside machine authority or require qualified human review.
+5. Re-ran the official authenticated macOS Slicer engine on private synthetic equal- and
+   partial-field MR pairs. Both v2 bundles validated, the known translation was recovered,
+   and the partial-field mask produced a nontrivial 65,536/69,632 support boundary. The
+   pending-QA browser loaded four allowlisted local NRRDs and exercised the technical
+   boundary in three planes plus four mask-gated comparison modes; the reviewed browser
+   loaded its three allowlisted NRRDs for mask-gated opacity/swipe. Both had empty
+   browser diagnostics and loopback-only page resources.
+6. Verified the patient-free offline runtime on Strawberry Ubuntu 26.04 x86_64/Python
+   3.14.4: no-index installation, embedded UI, all 20 schemas, local DICOM catalog/server,
+   bubblewrap network namespaces plus seccomp socket denial, and atomic no-replace
+   publication passed. Strawberry does not yet have the pinned Slicer engine, so real
+   Linux engine authentication/execution remains open.
 
 ## Immediate
 
@@ -357,29 +389,28 @@
    and complete qualified visual/quantitative QA.
 3. Protect the authenticated local Slicer installation and keep using the recorded
    launcher hash; reauthenticate any replacement before a future patient-specific job.
-4. Repeat engine, production packaging, and real-codec smoke tests on Linux without
-   exposing metadata or screenshots.
+4. Authenticate the pinned Slicer engine on Strawberry and repeat the real synthetic
+   seven-file v2 engine run inside the already verified Linux namespace/seccomp boundary.
 5. Produce signed/notarized macOS/Linux release artifacts around the verified offline
    bundle, and evaluate whether to include a separately authenticated interpreter.
 6. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
 7. Design an append-only, privacy-minimized local audit for bearer access to live
    viewer state without recording patient content or putting tokens in logs.
-8. Add an explicit transformed moving-coverage mask to a future registration bundle so
-   reviewed display can enforce shared coverage pixel by pixel rather than visually.
+8. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
+   on a clinically appropriate same-modality case before any patient-specific reliance.
 
 ## Next milestone
 
-1. Add Orthanc as an optional DICOMweb archive and pin/test its local configuration.
-2. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-3. Add explicit compatibility/QA badges to the local clinician visit packet and
-   comparison-review page.
-4. Extend append-only audit records from review decisions to local evidence access.
-5. Smoke-test the same offline artifact on Linux x86_64, then add platform signing and
-   notarization without weakening local-only runtime behavior.
-6. Prototype a source-bound 2–8 image consultation evidence board with explicit
-   clinician-selected labels, while retaining the no-comparison/no-interpretation
-   default and exact DICOM provenance.
+1. Authenticate and run the pinned Slicer engine on Strawberry Linux x86_64 without
+   weakening the verified network or atomic-publication boundary.
+2. Import a future same-modality Mila follow-up and complete the explicit pairing and
+   qualified review workflow before enabling reviewed comparison.
+3. Add platform signing and notarization without weakening local-only runtime behavior.
+4. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
+   configuration.
+5. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
+6. Extend append-only audit records from review decisions to local evidence access.
 
 ## Registration milestone
 
@@ -389,7 +420,7 @@
 2. Perform the implemented QA workflow on a valid real same-modality pair with a
    qualified reviewer and a predeclared clinically appropriate landmark tolerance.
 3. Verify the implemented accepted-record display on a real reviewed bundle; never
-   overwrite originals and never unlock subtraction or masks.
+   overwrite originals and never unlock subtraction, segmentation, or mask propagation.
 
 ## Decisions needed with clinicians
 

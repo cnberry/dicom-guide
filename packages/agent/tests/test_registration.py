@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import gzip
 import hashlib
 import json
 import os
@@ -155,15 +156,17 @@ outputs = {
     'fixed_volume': 'fixed.nrrd',
     'moving_volume': 'moving.nrrd',
     'registered_moving_volume': 'registered-moving.nrrd',
+    'registered_moving_coverage': 'registered-moving-coverage.nrrd',
     'moving_to_fixed_transform': 'moving-to-fixed.tfm',
 }
 report = {
-    'schema_version': '1.0.0',
+    'schema_version': '2.0.0',
     'status': 'preflight_completed' if request.get('mode') == 'preflight' else 'completed',
     'engine': '3D Slicer',
     'application_version': '5.12.3',
     'repository_revision': '9034c71',
     'module': 'BRAINSFit',
+    'coverage_module': 'BRAINSResample',
     'platform': 'Synthetic-test',
     'parameters': request['parameters'],
     'outputs': outputs,
@@ -190,6 +193,17 @@ for name in ('fixed.nrrd', 'moving.nrrd', 'registered-moving.nrrd'):
         b'encoding: raw\\n\\n'
     )
     (work / name).write_bytes(header + struct.pack('<8h', *values[name]))
+coverage_header = (
+    b'NRRD0005\\n'
+    b'type: unsigned char\\n'
+    b'dimension: 3\\n'
+    b'sizes: 2 2 2\\n'
+    b'space: left-posterior-superior\\n'
+    b'space directions: (1,0,0) (0,1,0) (0,0,1)\\n'
+    b'space origin: (0,0,0)\\n'
+    b'encoding: raw\\n\\n'
+)
+(work / 'registered-moving-coverage.nrrd').write_bytes(coverage_header + bytes([1] * 8))
 (work / 'moving-to-fixed.tfm').write_text(
     '#Insight Transform File V1.0\\n'
     '#Transform 0\\n'
@@ -202,6 +216,39 @@ Path(request['report_path']).write_text(json.dumps(report) + '\\n')
     path.write_text(source)
     path.chmod(0o700)
     return path
+
+
+def _coverage_nrrd(
+    values: bytes,
+    *,
+    sizes: tuple[int, int, int] = (2, 2, 2),
+    scalar_type: str = "unsigned char",
+    encoding: str = "raw",
+) -> bytes:
+    header = (
+        "NRRD0005\n"
+        f"type: {scalar_type}\n"
+        "dimension: 3\n"
+        f"sizes: {' '.join(str(value) for value in sizes)}\n"
+        "space: left-posterior-superior\n"
+        "space directions: (1,0,0) (0,1,0) (0,0,1)\n"
+        "space origin: (0,0,0)\n"
+        f"encoding: {encoding}\n\n"
+    ).encode()
+    return header + (gzip.compress(values) if encoding == "gzip" else values)
+
+
+def _replace_manifest_payload(bundle: Path, filename: str, payload: bytes) -> None:
+    path = bundle / filename
+    path.write_bytes(payload)
+    path.chmod(0o600)
+    manifest_path = bundle / "registration.json"
+    manifest = json.loads(manifest_path.read_text())
+    entry = next(item for item in manifest["files"] if item["name"] == filename)
+    entry["bytes"] = len(payload)
+    entry["sha256"] = _sha256(payload)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_path.chmod(0o600)
 
 
 def test_registration_source_selection_enforces_hard_longitudinal_gates(
@@ -374,6 +421,8 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
     assert manifest["qa"]["status"] == "pending"
     assert not any(manifest["qa"]["display_unlocks"].values())
     assert manifest["algorithm"]["parameters"] == REGISTRATION_PARAMETERS
+    assert manifest["algorithm"]["module"] == "BRAINSFit"
+    assert manifest["algorithm"]["coverage_module"] == "BRAINSResample"
     assert manifest["algorithm"]["external_api_requested_by_scanview"] is False
     network_isolation = manifest["algorithm"]["network_isolation"]
     assert network_isolation["status"] == "os_enforced"
@@ -384,6 +433,24 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
     assert network_isolation["external_network"] == "denied"
     assert network_isolation["host_network"] == "isolated"
     assert network_isolation["unsandboxed_fallback"] is False
+    assert manifest["coverage_mask"] == {
+        "filename": "registered-moving-coverage.nrrd",
+        "semantics": "technical_sampling_support_not_anatomy_or_segmentation",
+        "source_volume": "moving.nrrd",
+        "reference_volume": "fixed.nrrd",
+        "transform": "moving-to-fixed.tfm",
+        "transform_direction": "moving_later_to_fixed_earlier",
+        "source_basis": "constant_one_moving_grid",
+        "resampler": "BRAINSResample",
+        "registered_volume_interpolation": "Linear",
+        "mask_interpolation": "NearestNeighbor",
+        "scalar_type": "uint8",
+        "binary_values": [0, 1],
+        "outside_value": 0,
+        "total_voxel_count": 8,
+        "foreground_voxel_count": 8,
+        "foreground_fraction": 1.0,
+    }
     assert manifest["pairing"]["patient_identity_status"] == "opaque_context_match_unverified"
     assert manifest["pairing"]["clinical_baseline_status"] == "not_assessed"
     assert manifest["computed_results"] == []
@@ -397,7 +464,7 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
     summary = registration_bundle_summary(output)
     assert summary == {
         "valid": True,
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "artifact_type": "rigid_registration",
         "artifact_state": "generated_pending_qa",
         "review_status": "unreviewed",
@@ -406,12 +473,12 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
         "external_api_requested_by_scanview": False,
         "errors": [],
         "modality": "MR",
-        "file_count": 6,
+        "file_count": 7,
         "source_instance_count": 10,
     }
     repository_root = Path(__file__).parents[3]
     schema = json.loads(
-        (repository_root / "schemas" / "scanview-rigid-registration-v1.schema.json").read_text()
+        (repository_root / "schemas" / "scanview-rigid-registration-v2.schema.json").read_text()
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(manifest)
@@ -448,6 +515,123 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
     stored_manifest["qa"]["display_unlocks"]["overlay"] = True
     (output / "registration.json").write_text(json.dumps(stored_manifest))
     assert registration_bundle_summary(output)["valid"] is False
+
+
+def test_registration_coverage_mask_validation_is_fail_closed(tmp_path: Path) -> None:
+    source_root = tmp_path / "dicom"
+    catalog, registry, _ = registration_catalog(source_root)
+    executable = fake_slicer(tmp_path / "Slicer")
+    output = tmp_path / "registration-output"
+    run_rigid_registration(
+        catalog,
+        registry,
+        source_root=source_root,
+        fixed_series_id=FIXED_SERIES,
+        moving_series_id=MOVING_SERIES,
+        output=output,
+        slicer_executable=executable,
+        expected_slicer_sha256=_sha256(executable.read_bytes()),
+        attest_series_selection=True,
+        timeout_seconds=60,
+    )
+    mask_path = output / "registered-moving-coverage.nrrd"
+    original_mask = mask_path.read_bytes()
+    manifest_path = output / "registration.json"
+    original_manifest = manifest_path.read_bytes()
+    report_path = output / "engine-report.json"
+    original_report = report_path.read_bytes()
+
+    def restore() -> None:
+        mask_path.write_bytes(original_mask)
+        mask_path.chmod(0o600)
+        manifest_path.write_bytes(original_manifest)
+        manifest_path.chmod(0o600)
+        report_path.write_bytes(original_report)
+        report_path.chmod(0o600)
+
+    mask_path.unlink()
+    assert "missing, extra" in " ".join(registration_bundle_summary(output)["errors"])
+    restore()
+
+    extra = output / "unexpected.nrrd"
+    extra.write_bytes(original_mask)
+    extra.chmod(0o600)
+    assert "missing, extra" in " ".join(registration_bundle_summary(output)["errors"])
+    extra.unlink()
+
+    mask_path.write_bytes(original_mask[:-1] + b"\x00")
+    assert "integrity" in " ".join(registration_bundle_summary(output)["errors"])
+    restore()
+
+    _replace_manifest_payload(
+        output,
+        mask_path.name,
+        _coverage_nrrd(bytes([1] * 4), sizes=(1, 2, 2)),
+    )
+    assert "does not use the fixed volume geometry" in " ".join(
+        registration_bundle_summary(output)["errors"]
+    )
+    restore()
+
+    _replace_manifest_payload(
+        output,
+        mask_path.name,
+        _coverage_nrrd(bytes([1] * 8), scalar_type="signed char"),
+    )
+    assert "unsigned 8-bit" in " ".join(registration_bundle_summary(output)["errors"])
+    restore()
+
+    _replace_manifest_payload(
+        output,
+        mask_path.name,
+        _coverage_nrrd(bytes([1, 1, 1, 2, 1, 1, 1, 1])),
+    )
+    assert "only 0 and 1" in " ".join(registration_bundle_summary(output)["errors"])
+    restore()
+
+    _replace_manifest_payload(
+        output,
+        mask_path.name,
+        _coverage_nrrd(bytes(8)),
+    )
+    assert "no sampling support" in " ".join(registration_bundle_summary(output)["errors"])
+    restore()
+
+    _replace_manifest_payload(
+        output,
+        mask_path.name,
+        _coverage_nrrd(bytes([1] * 8), encoding="gzip"),
+    )
+    assert registration_bundle_summary(output)["valid"] is True
+    restore()
+
+    manifest = json.loads(manifest_path.read_text())
+    manifest["coverage_mask"]["foreground_voxel_count"] = 7
+    manifest["coverage_mask"]["foreground_fraction"] = 0.875
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_path.chmod(0o600)
+    assert "coverage mask contract" in " ".join(
+        registration_bundle_summary(output)["errors"]
+    )
+    restore()
+
+    manifest = json.loads(manifest_path.read_text())
+    manifest["schema_version"] = "1.0.0"
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_path.chmod(0o600)
+    assert registration_bundle_summary(output)["valid"] is False
+    restore()
+
+    report = json.loads(report_path.read_text())
+    report["schema_version"] = "1.0.0"
+    _replace_manifest_payload(
+        output,
+        report_path.name,
+        (json.dumps(report, separators=(",", ":")) + "\n").encode(),
+    )
+    assert "engine report disagrees" in " ".join(
+        registration_bundle_summary(output)["errors"]
+    )
 
 
 def test_registration_failure_or_source_change_creates_no_partial_output(
@@ -532,6 +716,7 @@ def test_registration_failure_or_source_change_creates_no_partial_output(
         "computed_revision": "34627",
         "runtime_repository_revision": "9034c71",
         "module": "BRAINSFit",
+        "coverage_module": "BRAINSResample",
     }
     assert doctor["executable_found"] is True
     assert doctor["network_isolation"]["required"] is True

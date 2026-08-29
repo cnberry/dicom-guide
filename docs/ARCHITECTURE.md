@@ -61,7 +61,7 @@ Later: DICOM --> Orthanc/DICOMweb --> OHIF longitudinal UI
                                 --> additional Slicer segmentation jobs
                                 --> DICOM SEG/SR + provenance sidecars
 
-explicit same-modality pair --> local Slicer/BRAINSFit rigid job
+explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid job
                                       (OS-enforced no-network execution)
                                       |
                                       +--> hashed derivative bundle (pending QA only)
@@ -69,12 +69,12 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
                                                    +--> browser-capability QA preview
                                                                |
                                                                +--> separate review JSON
-                                                                    (six-file hash anchor)
+                                                                    (seven-file hash anchor)
                                                                             |
                                       exact accepted review + live bundle ---+
                                                                             |
                                                                             +--> reviewed browser display
-                                                                                 (opacity/swipe only)
+                                                                                 (mask-gated opacity/swipe only)
 ```
 
 ## Trust boundaries
@@ -130,20 +130,20 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    authenticated local GET with `no-store`. Publisher revocation closes opt-out races;
    the in-memory TTL is a fallback, not a consent substitute.
    Registration QA is a separately mounted mode: a bearer-authorized agent receives
-   only a minimized status, while preview context, the three allowlisted NRRDs, and
+   only a minimized status, while preview context, the four allowlisted NRRDs, and
    decision submission require the distinct HttpOnly browser session; the POST also
    requires exact Origin. This separates bearer-agent authority but does not prove a person is present.
    The server returns one validated decision JSON in memory and does not persist it.
    A launch that also supplies a saved review enters a distinct reviewed-display mode.
    The server validates the owner-only, unlinked review against the exact live bundle,
    rechecks every evidence-file identity and metadata on access, suppresses pending-QA
-   authority, and exposes only fixed-reference and registered-moving NRRDs to the
-   browser session. Rejected or invalid review input falls back to
+   authority, and exposes only fixed-reference, registered-moving, and the separate
+   technical sampling-support NRRD to the browser session. Rejected or invalid review input falls back to
    ordinary DICOM with every registered route locked. Bearer access gets only a
    privacy-minimized authorization summary.
 5. **Derivatives:** rigid transforms and resampled volumes now go to a separate,
    owner-only, atomic no-replace directory with exact source hashes, version-gated
-   local Slicer/BRAINSFit provenance, and every display use locked pending QA. Future masks,
+   local Slicer/BRAINSFit/BRAINSResample provenance, and every display use locked pending QA. Future lesion masks,
    additional measurements, and reports follow the same boundary. Manual
    length/bidirectional/elliptical ROI drafts use versioned
    local JSON; key-image ZIPs bind a watermarked display PNG to its exact source and
@@ -175,22 +175,25 @@ explicit same-modality pair --> local Slicer/BRAINSFit rigid job
    paths through a private environment request rather than command arguments, captures
    diagnostics only in the deleted private job directory, terminates the process group
    on timeout, and accepts only the required version/runtime repository revision
-   report, expected launcher hash, parsed scalar-volume geometry, and finite
-   proper-rigid transform. The engine
+   report, expected launcher hash, parsed scalar-volume geometry, complete binary
+   sampling-support payload/counts, and finite proper-rigid transform. The engine
    runs inside a mandatory macOS deny-network sandbox or, on supported 64-bit Linux,
    `bwrap` private namespaces plus a no-socket/io_uring seccomp filter; no weaker
    `unshare`-only or unsandboxed fallback exists. The hash
    match does not authenticate the software distributor. A generated transform is not
    display-approved. Registration review does not mutate that bundle: a separate JSON
-   event anchors the exact six filenames, byte counts, hashes, manifest, transform,
-   fixed/registered geometry, and any prior-record digest. Event hashing detects edits
+   event anchors the exact seven filenames, byte counts, hashes, manifest, transform,
+   fixed/registered/mask geometry, mask semantics/counts, and any prior-record digest.
+   Event hashing detects edits
    but does not authenticate the reviewer. Acceptance expresses only an authorization
-   input for exploratory shared-coverage overlay/swipe; subtraction, masks, segmentation,
+   input for exploratory shared-coverage overlay/swipe; subtraction, mask propagation, segmentation,
    resampled-image measurements, and response conclusions remain locked. The ordinary
    viewer consumes that input only through the separate live-bundle-validated reviewed
-   surface. It implements opacity/swipe only, identifies both NRRDs as derived, labels
-   registered moving as resampled, and states that shared coverage is reviewer-visual
-   because no pixel-level overlap mask exists.
+   surface. It implements opacity/swipe only, identifies both image NRRDs as derived,
+   labels registered moving as resampled, independently verifies the binary support
+   mask before render, and forces the fixed pixel wherever mask support is zero. The
+   mask represents transformed moving-image sampling support only; shared anatomy and
+   registration acceptability remain reviewer judgments.
 
 External APIs are outside the architecture: no DICOM pixel/header, measurement,
 registration, segmentation, or interpretation pipeline may require a network

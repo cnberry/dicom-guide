@@ -82,8 +82,8 @@ quality-system, and regulatory review.
   runner, parameters, and output hashes. The caller-supplied expected launcher hash
   must match before DICOM staging and after execution; this is substitution
   protection, not distributor/signature authentication. A no-data preflight verifies
-  self-reported version/runtime repository revision and BRAINSFit availability before
-  source staging.
+  self-reported version/runtime repository revision and BRAINSFit/BRAINSResample
+  availability before source staging.
   The generated bundle is always pending QA, with overlay, swipe, subtraction, and
   mask propagation locked. User settings, `.slicerrc.py`, and user-site Python
   packages are disabled, and Slicer temporary/cache paths are redirected into the
@@ -104,7 +104,8 @@ quality-system, and regulatory review.
   and SHA-256 before parsing it locally; the review request contains observations and
   physical landmark points, never volume bytes or filesystem paths.
 - A registration-QA decision is a separate sensitive JSON derivative. It never changes
-  the pending bundle, anchors all six live files, and must be revalidated against that
+  the pending bundle, anchors all seven live files plus exact support-mask semantics and
+  counts, and must be revalidated against that
   bundle before its display flags are trusted. Reviewer name, role, organization, and
   training are self asserted. Its event hash is tamper evidence, not identity proof or
   a digital signature. Qualified self-attested acceptance is limited to exploratory
@@ -116,18 +117,24 @@ quality-system, and regulatory review.
   bundle and creates one non-overwriting `0600`, single-link copy; only that protected
   copy is eligible for reviewed launch.
 - Reviewed registration display requires the exact saved owner-only, unlinked accepted
-  record and its live six-file bundle at server startup. It rechecks the review, bundle
-  directory, and all six evidence-file identities and metadata before each reviewed
-  response. The browser session can fetch
-  only fixed reference and registered-moving NRRDs; bearer agents receive only a
+  record and its live seven-file v2 bundle at server startup. It rechecks the review,
+  bundle directory, and all seven evidence-file identities and metadata before each
+  reviewed response. The browser session can fetch
+  only fixed reference, registered-moving, and the separate technical sampling-support
+  NRRDs; bearer agents receive only a
   minimized authorization summary. Rejected, invalid, linked, missing, mismatched, or
   tampered inputs leave registered pixels inaccessible while ordinary DICOM remains
   usable. Supplying a review suppresses the pending-QA routes.
-- The reviewed surface provides opacity and swipe only. Both displayed NRRDs are
+- The reviewed surface provides opacity and swipe only. Both displayed image NRRDs are
   derived; registered moving is resampled; native DICOM remains authoritative. The
-  bundle has no pixel-level transformed coverage mask, so shared coverage is identified
-  by reviewer inspection and is not machine-enforced. Subtraction, masks, segmentation,
-  resampled measurements, exports, and response conclusions are absent.
+  browser must hash and validate the fixed-grid uint8 binary support mask before it
+  creates render state, samples it with nearest-neighbor semantics, mattes the standalone
+  registered pane at zero, and uses the fixed pixel at zero in every composite. Missing,
+  changed, non-binary, empty, or geometry-mismatched masks lock the surface with no
+  unmasked fallback. This mask is moving-image sampling support, not anatomy, tumor,
+  lesion segmentation, registration quality, or clinical comparability. Subtraction,
+  lesion-mask propagation, segmentation, resampled measurements, exports, and response
+  conclusions are absent.
 - A key-image ZIP remains sensitive medical data. Its PNG can contain burned-in
   identifiers or recognizable anatomy inherited from the displayed pixels, so it
   requires the same sharing safeguards as the original DICOM even though its JSON

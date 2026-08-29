@@ -427,7 +427,7 @@ an atomic no-replace publication. The required local 3D Slicer 5.12.3 computed
 revision 34627/runtime repository revision `9034c71`
 launcher must match a caller-supplied SHA-256 before data staging and after execution.
 Before staging, a no-data process checks the self-reported version/runtime repository
-revision and BRAINSFit availability. Those checks are provenance—not distributor or code-signature
+revision and BRAINSFit/BRAINSResample availability. Those checks are provenance—not distributor or code-signature
 authentication. This host's separately authenticated official package is documented
 in [`SLICER-ENGINE-TRUST.md`](SLICER-ENGINE-TRUST.md). Neither ScanView command calls
 an external API. Slicer
@@ -439,20 +439,23 @@ plus seccomp denial of socket creation, socket pairs, and io_uring. A weaker
 `unshare`-only setup is refused. Missing isolation fails closed and there is no
 unsandboxed fallback.
 
-The v1 bundle contains exactly six owner-only files: fixed, moving, and
-registered-moving NRRDs; a moving-to-fixed text ITK transform in DICOM patient LPS;
-an engine report; and
-`registration.json`. The manifest binds every source instance and output by hash,
+The v2 bundle contains exactly seven owner-only files: fixed, moving, and
+registered-moving NRRDs; a binary registered-moving sampling-support NRRD in fixed
+geometry; a moving-to-fixed text ITK transform in DICOM patient LPS; an engine report;
+and `registration.json`. The manifest binds every source instance and output by hash,
 the executable and runner hashes, exact rigid parameters, transform direction,
-privacy state, limitations, and QA checklist. Validation summaries omit source IDs,
+privacy state, support-mask derivation/counts, limitations, and QA checklist. Validation summaries omit source IDs,
 dates, paths, and engine diagnostics. The Python validator—not JSON Schema alone—also
-enforces cross-field semantics, parses the NRRD payloads and transform, requires fixed
-and registered geometry to match, and rejects non-owner-only or linked files.
+enforces cross-field semantics, parses the NRRD payloads and transform, requires fixed,
+registered, and mask geometry to match, decodes the full uint8 binary mask, rejects
+empty support, and rejects non-owner-only or linked files. Six-file v1 evidence is
+historical and cannot authorize the v2 mask-gated display.
 
 Generation is not acceptance. The registration bundle remains
 `generated_pending_qa`/`unreviewed` forever; review never mutates it.
 `review-registration` mounts a visibly watermarked browser-capability human preview
-with derived fixed/moving reference and registered views, three-plane traversal, four
+with derived fixed/moving reference, registered, and technical sampling-support
+boundary views, three-plane traversal, four
 comparison modes, landmarks, and physical-point residual tools. A bearer token can read only
 `GET /v1/registration-qa`, a privacy-minimized status. Preview context, allowlisted
 NRRD bytes, and decision POST
@@ -460,15 +463,18 @@ require the distinct HttpOnly browser session; the bearer agent interface cannot
 approve registration. Possession of the separate browser capability is not proof a
 person is present.
 
-The downloaded v1 review JSON anchors all six live bundle members, the source manifest
-and transform, fixed/registered geometry, reviewer-entered checks, landmark
+The downloaded v2 review JSON anchors all seven live bundle members, the source manifest
+and transform, fixed/registered/mask geometry, exact mask semantics and counts,
+reviewer-entered checks, landmark
 observations, quantitative residuals when recorded, and an event hash. Reviewer
 identity/training are self asserted and the hash is not a signature. Acceptance
 requires a self-attested trained clinician or medical physicist, every checklist item,
 full three-plane/four-mode coverage, at least three aligned qualitative landmarks, no
-material defect, and at least three spatially distributed 3-D landmark pairs within
+material defect, explicit review of the technical support boundary/excluded region,
+and at least three spatially distributed 3-D landmark pairs within
 the fixed geometry-derived tolerance. That acceptance can set only `overlay` and
-`swipe` true for exploratory display within the exact shared coverage.
+`swipe` true for exploratory display where the technical sampling-support mask is one
+and shared anatomy was reviewer-attested.
 Subtraction, mask propagation, segmentation, resampled-image measurements, and
 response conclusions remain false. If quantitative QA is unavailable, only a
 non-accepting record can be created and it carries a permanent
@@ -494,16 +500,19 @@ scanview-agent launch '/safe/local/DICOM/root' \
 ```
 
 The server creates one strict `reviewed_registration_display_context` only after full
-bundle/review validation, then rechecks review, bundle-directory, and all six evidence-
-file identities and metadata before every reviewed response. The browser session can fetch exactly `fixed.nrrd` and
-`registered-moving.nrrd`; the bearer interface receives only a privacy-minimized
+bundle/review validation, then rechecks review, bundle-directory, and all seven evidence-
+file identities and metadata before every reviewed response. The browser session can fetch exactly `fixed.nrrd`,
+`registered-moving.nrrd`, and `registered-moving-coverage.nrrd`; the bearer interface receives only a privacy-minimized
 authorization summary. The context binds review/event/bundle/manifest/transform/file
 hashes, source roles/dates, identical geometry, and self-attested reviewer role/training
 without name or organization. Only opacity and swipe are implemented. Native moving,
-subtraction, masks, segmentation, resampled-image measurements, exports, and response
+subtraction, lesion-mask propagation, segmentation, resampled-image measurements, exports, and response
 conclusions are unavailable. The fixed NRRD is a derived reference representation and
-registered moving is resampled; neither replaces native DICOM. Shared coverage is
-reviewer-identified because no pixel-level transformed coverage mask exists.
+registered moving is resampled; neither replaces native DICOM. The separate technical
+mask is independently hash/geometry/binary validated before render, sampled with
+nearest-neighbor semantics, and forces the fixed pixel wherever support is zero. It
+does not identify anatomy, tumor, segmentation, registration quality, or clinical
+comparability; shared anatomy remains reviewer-attested.
 
 Rejected, tampered, linked, mismatched, missing, malformed, or non-owner-only review
 inputs keep registered context and pixels unavailable while ordinary DICOM remains
@@ -533,9 +542,9 @@ GET /v1/viewer-state
 GET /v1/comparison-candidates
 GET /v1/registration-qa
 GET /v1/registration-qa/preview
-GET /v1/registration-qa/files/{fixed.nrrd|moving.nrrd|registered-moving.nrrd}
+GET /v1/registration-qa/files/{fixed.nrrd|moving.nrrd|registered-moving.nrrd|registered-moving-coverage.nrrd}
 GET /v1/reviewed-registration/display
-GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd}
+GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd|registered-moving-coverage.nrrd}
 GET /v1/instances/{opaque_id}
 POST /v1/viewer-state
 POST /v1/visit-packets
@@ -555,7 +564,7 @@ input adds only `comparison.json`. All return
 agent requests require `Authorization: Bearer <token>`. QA preview and reviewed-display
 files plus QA review submission reject bearer-only authorization and require the human
 browser cookie. Reviewed routes exist only for one startup-validated accepted review;
-the server rechecks the review, bundle directory, and all six evidence-file identities
+the server rechecks the review, bundle directory, and all seven evidence-file identities
 and metadata before each reviewed context or file response.
 The browser receives a
 SameSite, HttpOnly session cookie after a one-time loopback redirect; the token is

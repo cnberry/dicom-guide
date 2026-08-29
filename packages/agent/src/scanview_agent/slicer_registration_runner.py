@@ -28,6 +28,7 @@ OUTPUTS = {
     "fixed_volume": "fixed.nrrd",
     "moving_volume": "moving.nrrd",
     "registered_moving_volume": "registered-moving.nrrd",
+    "registered_moving_coverage": "registered-moving-coverage.nrrd",
     "moving_to_fixed_transform": "moving-to-fixed.tfm",
 }
 
@@ -71,6 +72,25 @@ def _save(node, path: Path, label: str) -> None:
         raise RuntimeError(f"failed to save {label}")
 
 
+def _constant_one_moving_grid(moving):
+    moving_image = moving.GetImageData()
+    if moving_image is None or moving_image.GetNumberOfPoints() <= 0:
+        raise RuntimeError("moving volume has no image grid")
+    image = vtk.vtkImageData()
+    image.CopyStructure(moving_image)
+    image.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
+    scalars = image.GetPointData().GetScalars()
+    scalars.FillComponent(0, 1)
+    support = slicer.mrmlScene.AddNewNodeByClass(
+        "vtkMRMLLabelMapVolumeNode", "ScanView moving sampling support"
+    )
+    support.SetAndObserveImageData(image)
+    ijk_to_ras = vtk.vtkMatrix4x4()
+    moving.GetIJKToRASMatrix(ijk_to_ras)
+    support.SetIJKToRASMatrix(ijk_to_ras)
+    return support
+
+
 def _write_lps_affine_transform(node, path: Path) -> None:
     matrix = vtk.vtkMatrix4x4()
     if not node.GetMatrixTransformToParent(matrix):
@@ -99,12 +119,13 @@ def _write_report(
     path: Path, status: str, application_version: str, revision: str, parameters
 ) -> None:
     report = {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "status": status,
         "engine": "3D Slicer",
         "application_version": application_version,
         "repository_revision": revision,
         "module": "BRAINSFit",
+        "coverage_module": "BRAINSResample",
         "platform": f"{platform.system()}-{platform.machine()}",
         "parameters": parameters,
         "outputs": OUTPUTS,
@@ -118,7 +139,7 @@ def run() -> None:
     if not request_path:
         raise RuntimeError("private registration request is unavailable")
     request = json.loads(Path(request_path).read_text())
-    if request.get("schema_version") != "1.0.0":
+    if request.get("schema_version") != "2.0.0":
         raise RuntimeError("registration request version is unsupported")
     application_version = str(slicer.app.applicationVersion)
     repository_revision = str(slicer.app.repositoryRevision)
@@ -129,6 +150,8 @@ def run() -> None:
         raise RuntimeError("the installed Slicer build does not match the required version")
     if not getattr(slicer.modules, "brainsfit", None):
         raise RuntimeError("the required BRAINSFit module is unavailable")
+    if not getattr(slicer.modules, "brainsresample", None):
+        raise RuntimeError("the required BRAINSResample module is unavailable")
     if request.get("mode") == "preflight":
         _write_report(
             Path(request["report_path"]),
@@ -183,6 +206,38 @@ def run() -> None:
     if not cli_node or cli_node.GetStatusString() != "Completed":
         raise RuntimeError("BRAINSFit did not complete successfully")
     _save(registered, work / OUTPUTS["registered_moving_volume"], "registered volume")
+
+    moving_support = _constant_one_moving_grid(moving)
+    registered_support = slicer.mrmlScene.AddNewNodeByClass(
+        "vtkMRMLLabelMapVolumeNode", "ScanView registered moving sampling support"
+    )
+    coverage_cli_node = slicer.cli.run(
+        slicer.modules.brainsresample,
+        None,
+        {
+            "inputVolume": moving_support.GetID(),
+            "referenceVolume": fixed.GetID(),
+            "outputVolume": registered_support.GetID(),
+            "pixelType": "uchar",
+            "warpTransform": transform.GetID(),
+            "inverseTransform": False,
+            "interpolationMode": "NearestNeighbor",
+            "defaultValue": 0,
+        },
+        wait_for_completion=True,
+    )
+    if not coverage_cli_node or coverage_cli_node.GetStatusString() != "Completed":
+        raise RuntimeError("BRAINSResample did not complete sampling-support resampling")
+    if (
+        registered_support.GetImageData() is None
+        or registered_support.GetImageData().GetScalarType() != vtk.VTK_UNSIGNED_CHAR
+    ):
+        raise RuntimeError("registered moving sampling support is not uint8")
+    _save(
+        registered_support,
+        work / OUTPUTS["registered_moving_coverage"],
+        "registered moving sampling support",
+    )
     _write_lps_affine_transform(
         transform, work / OUTPUTS["moving_to_fixed_transform"]
     )

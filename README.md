@@ -84,13 +84,13 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   evidence counts. It is off by default, memory-only, pixel/PHI-free, and expires
   within 30 seconds without a browser heartbeat.
 - Transparent metadata compatibility score and warnings.
-- Version-gated local 3D Slicer/BRAINSFit rigid-registration jobs for explicitly
+- Version-gated local 3D Slicer/BRAINSFit/BRAINSResample rigid-registration jobs for explicitly
   attested, matching opaque patient-context, same-modality chronological series.
   Patient identity remains unverified. Outputs are source-hashed, published without
   replacement, and locked pending human QA; CT/MR registration and subtraction are
   prohibited.
-- Isolated browser-capability human registration QA with fixed/moving reference and registered
-  side-by-side views,
+- Isolated browser-capability human registration QA with fixed/moving reference,
+  registered side-by-side, and technical sampling-support boundary views,
   axial/coronal/sagittal traversal, opacity, swipe, checkerboard, edge comparison,
   qualitative landmarks, physical-point residual tools, and a separate hash-linked
   self-attested accept/reject JSON record. Acceptance requires quantitative 3-D
@@ -98,8 +98,10 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   this is a capability boundary, not proof a person is present.
 - Live-bundle-validated accepted reviews can open a separate exploratory comparison
   surface with only opacity and swipe. Both inputs are visibly derived, registered
-  moving is resampled, shared coverage is reviewer-identified rather than mask-enforced,
-  and native DICOM remains authoritative.
+  moving is resampled, and a hash-verified binary mask suppresses registered-moving
+  pixels without transformed moving-image sampling support. The mask is technical
+  support evidence—not anatomy, tumor, segmentation, registration quality, or a
+  clinical conclusion—and native DICOM remains authoritative.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
 - Versioned measurement, key-image, consultation-key-image, consultation-packet,
@@ -240,7 +242,7 @@ The server exposes:
 - `GET /v1/registration-qa/preview` (separate browser session capability only)
 - `GET /v1/registration-qa/files/{allowlisted_nrrd}` (separate browser session capability only)
 - `GET /v1/reviewed-registration/display` (accepted-review browser session only)
-- `GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd}`
+- `GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd|registered-moving-coverage.nrrd}`
   (accepted-review browser session only)
 - `GET /v1/instances/{opaque_id}`
 - `POST /v1/viewer-state` (same-origin browser publication/clear; memory only)
@@ -269,7 +271,7 @@ the offline local application, not an external processing API.
 
 ScanView can run one rigid moving-later-to-fixed-earlier job through a locally
 installed 3D Slicer 5.12.3 computed revision 34627 (runtime repository revision
-`9034c71`) and its bundled BRAINSFit module. Earlier
+`9034c71`) and its bundled BRAINSFit and BRAINSResample modules. Earlier
 and later are registration roles; neither establishes a clinical treatment baseline
 or nadir. ScanView never downloads an engine, sends DICOM to an API, or falls back to
 a cloud service. Check the host first:
@@ -295,8 +297,9 @@ accepts only original-primary brain/head MR↔MR or CT↔CT series from one matc
 opaque patient context, distinct strictly ordered studies, one conservative sequence
 family, one explicit contrast category, regular per-instance volume geometry, and a
 compatibility score of at least 80. Matching context does not verify patient identity.
-It writes an owner-only six-file directory: three NRRD volumes, one text ITK rigid
-transform in DICOM patient LPS coordinates, the engine report, and
+It writes an owner-only seven-file v2 directory: fixed, moving, and registered-moving
+NRRD volumes; a binary registered-moving sampling-support NRRD in fixed geometry; one
+text ITK rigid transform in DICOM patient LPS coordinates; the engine report; and
 `registration.json`. Existing outputs and source files are never overwritten.
 Slicer settings, the user startup script, and user-site Python packages are disabled
 for the job so local customizations cannot silently change the version-gated workflow.
@@ -307,7 +310,8 @@ a seccomp filter that denies socket creation, socket pairs, and io_uring. The we
 
 The expected SHA-256 must match before any DICOM is staged and is checked again after
 execution. A no-data preflight first verifies the self-reported Slicer version,
-runtime repository revision, and BRAINSFit availability. `registration-doctor` can
+runtime repository revision, and both BRAINSFit and BRAINSResample availability.
+`registration-doctor` can
 show the observed launcher hash, but ScanView does not authenticate the distributor
 or code signature; obtain and record the expected digest through a trusted
 software-installation process. The authenticated package and installed-copy evidence
@@ -318,10 +322,11 @@ registration process from reaching external or host network services.
 
 Every generated bundle is `generated_pending_qa` and `unreviewed`; the registration
 directory itself is never mutated by review. Validate integrity locally with
-`validate-registration`. Validation parses the scalar NRRDs, requires registered
-geometry to match the fixed volume, verifies a finite proper rigid transform, checks
-all hashes and owner-only permissions, and still does not establish registration
-quality.
+`validate-registration`. Validation parses the scalar NRRDs, requires registered and
+coverage-mask geometry to match the fixed volume, decodes every mask voxel as uint8
+`0` or `1`, rejects empty support, recomputes support counts, verifies a finite proper
+rigid transform, checks all hashes and owner-only permissions, and still does not
+establish registration quality.
 
 For one valid pending bundle, open the isolated local human QA workspace:
 
@@ -332,7 +337,8 @@ For one valid pending bundle, open the isolated local human QA workspace:
 It visibly watermarks the resampled preview, keeps fixed and moving derived reference
 volumes available alongside registered moving,
 requires full traversal in all three patient-space planes and four comparison modes,
-and can download one separate self-attested JSON decision. A qualified self-attested
+explicit review of the technical support boundary and excluded region, and can
+download one separate self-attested JSON decision. A qualified self-attested
 acceptance can authorize only exploratory shared-coverage overlay and swipe; it
 requires quantitative 3-D landmark error within the fixed geometry-derived tolerance.
 Subtraction, mask propagation, segmentation, measurements on the resampled image, and
@@ -341,7 +347,7 @@ authenticated, and event hashes are not digital signatures. A browser download i
 accepted directly because its Unix permissions are outside browser control. Run
 `import-registration-review` with the live bundle to validate the exact record and
 create one non-overwriting owner-only copy, then use `validate-registration-review`
-with the live bundle to recheck the full six-file source anchor.
+with the live bundle to recheck the full seven-file source anchor.
 
 After saving a valid accepted review, launch the ordinary local workspace with both
 exact inputs to enable the strictly limited exploratory comparison:
@@ -352,15 +358,18 @@ exact inputs to enable the strictly limited exploratory comparison:
   --registration-review '/safe/local/registration-review.json'
 ```
 
-The server revalidates the saved owner-only review against the live six-file bundle at
-startup and checks the review, bundle directory, and all six evidence-file identities
+The server revalidates the saved owner-only review against the live seven-file v2 bundle at
+startup and checks the review, bundle directory, and all seven evidence-file identities
 and metadata again before every context or pixel access. Rejected,
 tampered, linked, mismatched, or missing inputs leave ordinary DICOM available but all
 registered pixels locked. The accepted surface implements only opacity and swipe;
-subtraction, masks, segmentation, measurements, exports, and response conclusions are
-absent. Because the current bundle has no transformed coverage mask, the authorization
-applies only where both volumes visibly contain anatomy and is not enforced pixel by
-pixel.
+subtraction, lesion-mask propagation, segmentation, measurements, exports, and response
+conclusions are absent. Before any reviewed pixels render, the browser independently
+hashes and validates fixed, registered-moving, and the binary support mask; it then
+uses nearest-neighbor mask sampling and shows fixed pixels wherever support is zero.
+Shared anatomy and registration acceptability remain reviewer judgments. Legacy
+six-file v1 bundles and reviews fail closed and must be regenerated and reviewed under
+v2 before this display can open.
 
 The currently copied CD contains one MRI exam and one CT exam, so it cannot produce a
 valid registration pair. The authenticated local Slicer installation has completed a

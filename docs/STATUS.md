@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 19:24 PDT
+Last updated: 2026-08-28 20:36 PDT
 
 ## Data transfer
 
@@ -86,7 +86,7 @@ Last updated: 2026-08-28 19:24 PDT
   are enforced. It contains no pixels, descriptions, dates, measurement content,
   paths, or direct identifiers.
 - A version-gated local Slicer 5.12.3 computed revision 34627/runtime repository
-  revision `9034c71`/BRAINSFit rigid-registration
+  revision `9034c71`/BRAINSFit/BRAINSResample rigid-registration
   executor now accepts only explicitly attested, identity-unverified matching opaque
   patient context; same-modality distinct-study chronology; original-primary
   brain/head images; conservative sequence and explicit contrast matching; regular
@@ -97,11 +97,13 @@ Last updated: 2026-08-28 19:24 PDT
   private namespaces plus seccomp denial of socket creation, socket pairs, and
   io_uring—with no weaker `unshare`-only or unsandboxed fallback. DICOM is never
   mutated and ScanView requires no external processing API.
-- Successful registration creates an atomic no-replace, owner-only six-file
-  derivative directory containing fixed/moving/registered scalar NRRDs, one finite
-  proper-rigid text ITK transform in DICOM patient LPS, an engine report, and a strict
-  v1 manifest. Every source bundle remains `generated_pending_qa`/`unreviewed`; review
-  never mutates it.
+- Successful registration creates an atomic no-replace, owner-only seven-file v2
+  derivative directory containing fixed/moving/registered scalar NRRDs, a uint8 binary
+  registered-moving sampling-support NRRD in fixed geometry, one finite proper-rigid
+  text ITK transform in DICOM patient LPS, an engine report, and a strict manifest.
+  The validator decodes every support voxel, permits only `{0,1}`, rejects empty
+  support, and recomputes counts. Every source bundle remains
+  `generated_pending_qa`/`unreviewed`; review never mutates it.
 - An isolated browser-capability registration-QA workspace now provides true LPS
   axial/coronal/sagittal reformats for oblique/permuted NRRDs, derived reference and
   registered views, physical aspect, independent 3-D landmarks, opacity, swipe,
@@ -111,19 +113,23 @@ Last updated: 2026-08-28 19:24 PDT
   A bearer token alone cannot fetch the NRRDs or submit review. Qualified self-attested
   acceptance requires a trained clinician/medical physicist, three spatially distributed
   landmark pairs within the geometry-derived tolerance, three aligned qualitative
-  landmarks, every checklist item, every plane/mode, and no defect. It can authorize
+  landmarks, every checklist item, every plane/mode, explicit support-boundary and
+  excluded-region review, and no defect. It can authorize
   only exploratory shared-coverage overlay/swipe; all other derivative uses remain
   locked.
-- The ordinary local workspace can now consume one accepted, owner-only review only
-  with its exact live six-file bundle. A separate browser-only surface exposes only
-  fixed reference and registered-moving NRRDs, verifies hashes and geometry, loads
-  bounded files sequentially, enforces encoded/predecode/decoded and render-dimension
-  ceilings, recomputes the complete bundle anchor in the browser, and implements
-  opacity/swipe only. Rejected, stale, tampered, linked, mismatched, missing, or unsafe
-  inputs fall back to ordinary DICOM with registered pixels locked. Both images are
-  labeled derived, registered moving is labeled resampled, native DICOM remains
-  authoritative, and shared coverage is explicitly reviewer-visual because the bundle
-  has no machine overlap mask. Browser-downloaded decisions must pass the bounded
+- The ordinary local workspace can now consume one accepted, owner-only v2 review only
+  with its exact live seven-file bundle. A separate browser-only surface exposes fixed
+  reference, registered-moving, and the technical sampling-support NRRDs; verifies
+  hashes, binary payload, and geometry; loads bounded files sequentially; creates no
+  render state before all three pass; enforces encoded/predecode/decoded and
+  render-dimension ceilings; recomputes the complete bundle anchor in the browser; and
+  implements opacity/swipe only. The mask uses nearest-neighbor sampling, mattes the
+  standalone registered pane at zero, and forces fixed pixels at zero in composites.
+  Rejected, stale, tampered, linked, mismatched, missing, non-binary, or unsafe inputs
+  fall back to ordinary DICOM with registered pixels locked. Both images are labeled
+  derived, registered moving is labeled resampled, native DICOM remains authoritative,
+  and the mask is explicitly not anatomy, tumor, segmentation, registration quality,
+  or clinical comparability. Browser-downloaded decisions must pass the bounded
   no-symlink `import-registration-review` flow, which seals one non-overwriting
   owner-only record against the live bundle.
 - Review and amendment commands always create a new owner-only archive. Event hashes
@@ -185,10 +191,11 @@ Last updated: 2026-08-28 19:24 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 17 contracts without breaking lightweight
+  UI-embedded wheel together with all 20 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
-  runtime checks; signing/notarization and Linux execution remain pending.
+  runtime checks. The package and isolation boundary pass on Strawberry Linux;
+  signing/notarization and real Linux Slicer execution remain pending.
 - Browser sessions use a one-time local redirect and SameSite, HttpOnly cookie;
   service-backed measurement IDs join directly to the agent manifest while legacy
   folder-import drafts remain supported.
@@ -200,7 +207,7 @@ Last updated: 2026-08-28 19:24 PDT
 
 ## Verification
 
-- Python agent tests: 148 passing, including cross-patient and legacy-context
+- Python agent tests: 158 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -215,7 +222,9 @@ Last updated: 2026-08-28 19:24 PDT
   mandatory OS-level registration network denial, no-sandbox refusal, strict accepted-
   review/bundle binding, bounded owner-only review import, same-size review-read and
   startup-validation race refusal, stale-evidence relocking,
-  native-DICOM path-swap/in-place-change refusal, Linux namespace/seccomp no-socket
+  native-DICOM path-swap/in-place-change refusal, full raw/gzip uint8 support-mask
+  decoding, non-binary/empty/wrong-grid/missing/extra/tampered/legacy-v1 refusal,
+  seven-file review/display anchoring, mask mutation relocking, Linux namespace/seccomp no-socket
   enforcement, minimized agent summaries, reviewed-route capability separation,
   same-descriptor reviewed-volume streaming, consultation MR/CT/patient/study gates,
   live source hash/position binding, hostile nested/final ZIP refusal, strict JSON,
@@ -226,7 +235,7 @@ Last updated: 2026-08-28 19:24 PDT
   failures, authenticated exact-origin transport, owner-only/non-overwriting CLI
   output, and deterministic presentation; deterministic offline-bundle shape,
   pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
-- Viewer tests: 85 passing, including patient-context and local-only enforcement,
+- Viewer tests: 96 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, exact neutral two-view consultation transport/sidecar,
@@ -237,83 +246,97 @@ Last updated: 2026-08-28 19:24 PDT
   complete/regular MPR geometry gating, privacy-minimized viewer-state construction,
   source refusal, link-state labeling, same-origin publication/clear transport,
   oblique/permuted/RAS patient-space NRRD reformats, physical aspect, through-plane
-  landmark mapping, bounded gzip decoding, strict QA context, fail-closed probing,
-  strict reviewed-display context validation, local SHA-256 volume and complete-bundle
-  anchor checks, chronology/source-separation refusal, encoded/predecode/decoded and
-  render-dimension caps, ordinary-viewer state retention across mode switches, and
-  rejected/malformed reviewed-context refusal.
-- All 17 JSON Schemas pass Draft 2020-12 validation.
+  landmark mapping, bounded gzip decoding, strict v2 QA context and four-file
+  transport, fail-closed probing, binary-mask boundary/matte/composite enforcement,
+  strict reviewed-display v2 context validation, local SHA-256 image/mask and complete-bundle
+  anchor checks, binary-mask raw/gzip decoding, all-three-plane nearest-neighbor mask
+  sampling, mask-zero opacity/swipe leakage refusal and standalone matte behavior,
+  chronology/source-separation refusal, encoded/predecode/decoded and render-dimension
+  caps, ordinary-viewer state retention across mode switches, and rejected/malformed/
+  legacy reviewed-context refusal.
+- All 20 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
+  schemas remain as historical contracts while generation and display require v2.
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- UI-embedded staged Python wheel build: passing; the 2,927,401-byte wheel contains the
+- UI-embedded staged Python wheel build: passing; the 2,945,425-byte wheel contains the
   registration host/runner/review/display module, viewer-state server module, viewer
-  entry point, all 11 built UI/worker/codec files (9,897,749 bytes uncompressed), and
-  all 17 JSON Schemas (134,380 bytes). A fresh isolated installation resolved its
+  entry point, all 11 built UI/worker/codec files (9,912,738 bytes uncompressed), and
+  all 20 JSON Schemas (181,486 bytes). A fresh isolated installation resolved its
   embedded UI and schemas without the source checkout; temporary release, installation,
   and installer-log artifacts were moved to recoverable Trash.
-- Offline runtime bundle build and macOS arm64 smoke test: passing. The deterministic
-  5,321,443-byte ZIP contains nine fixed-timestamp members: `bundle.json` plus eight
-  hash-manifested payloads, including the 2,927,401-byte embedded ScanView wheel and
+- Offline runtime bundle build plus macOS arm64 and Strawberry Linux x86_64 smoke tests:
+  passing. The deterministic 5,339,467-byte ZIP contains nine fixed-timestamp members:
+  `bundle.json` plus eight hash-manifested payloads, including the 2,945,425-byte
+  embedded ScanView wheel and
   pinned 2,376,822-byte `pydicom` 3.0.2 wheel. A fresh extraction verified, installed
   with `PIP_NO_INDEX=1`, `--no-index`, and `--require-hashes`, then rechecked both
-  versions, the embedded UI, all 17 schemas, both consultation contracts, and explicit
+  versions, the embedded UI, all 20 schemas, both consultation contracts, and explicit
   `runtime_network_required: false` and
   `external_dicom_processing_api_required: false` runtime assertions. A second build
   from the same wheels was byte-identical. The retained ZIP SHA-256 is
-  `a4d3523c06f5e9d1d7c9b0d65125adc9ec83453ce19a3a93652250b141a16b99`. Its packaged
+  `1b46bfde292c8c3a5f0cbd65921b564c7651c8390139fa9735880a54f9eddf95`. Its packaged
   launcher indexed synthetic MR and CT instances, served health/manifest over loopback,
   and independently validated the production synthetic consultation board
-  with direct identifiers excluded and deidentification explicitly false. No local Linux container or VM is
-  available, so Linux execution is still unverified. One patient-free verified ZIP is
-  retained in the ignored local `release/` directory; synthetic sources, extracted
-  runtimes, staging directories, and the duplicate build were moved to recoverable
-  Trash.
+  with direct identifiers excluded and deidentification explicitly false. The exact
+  final ZIP also verified and installed offline on Strawberry Ubuntu 26.04 x86_64 and
+  reported all 20 schemas with both network/API requirements false. One patient-free
+  verified ZIP is retained in the ignored local `release/` directory; synthetic
+  sources, extracted runtimes, staging directories, and the duplicate build were
+  moved to recoverable Trash.
 - Registration execution test: synthetic version-gated-engine success and failure
   paths pass, including required expected-launcher hash, strict engine report, parsed
   scalar NRRDs/fixed-space geometry, finite proper-rigid transform, owner-only modes,
   atomic no-replace publication, no partial output, private deleted diagnostics,
   process-group timeout, no-data engine preflight, restricted environment,
-  source-change refusal, and v1 Schema plus semantic validation.
+  source-change refusal, and v2 Schema plus semantic validation.
   The official 3D Slicer 5.12.3 macOS amd64 DMG was downloaded from Slicer, matched its
   published SHA-512, passed `hdiutil verify`, and carried a valid stapled notarization
   ticket. Gatekeeper and deep strict code-signature checks accepted the mounted and
   installed app as Kitware Developer ID team `W38PE5Y733`. The launcher and BRAINSFit
   hashes, release/runtime revision distinction, and precise trust limits are recorded
   in `docs/SLICER-ENGINE-TRUST.md` and a machine-readable packaging record.
-  `registration-doctor` now finds the installed engine, BRAINSFit, and mandatory
+  `registration-doctor` now finds the installed engine, BRAINSFit, BRAINSResample, and mandatory
   macOS network sandbox and reports ready with no external API required.
-- Real-engine synthetic registration test: the normal ScanView command processed two
-  private synthetic 16-slice MR studies through the authenticated official
-  Slicer/BRAINSFit process inside the macOS deny-all-network sandbox. All 32 DICOM
-  source byte counts and SHA-256 values remained identical. The six owner-only outputs
-  independently passed schema and semantic validation, remained
+- Real-engine synthetic registration v2 test: normal ScanView commands processed two
+  pairs of private synthetic 16-slice MR studies through the authenticated official
+  Slicer/BRAINSFit/BRAINSResample process inside the macOS deny-all-network sandbox.
+  All source byte counts and SHA-256 values remained identical. Both seven-file
+  owner-only outputs independently passed schema and semantic validation, remained
   `generated_pending_qa`/`unreviewed`, exposed no computation or interpretation, and
-  kept overlay, swipe, subtraction, and mask propagation locked. The known +2 mm
-  synthetic displacement yielded approximately -1.997 mm moving-to-fixed translation
-  with near-identity rotation. No patient data was used and no decision was submitted.
-- Real-engine NRRD browser smoke test: the isolated loopback QA workspace loaded only
-  its local UI plus fixed, moving, and registered-moving NRRDs. All three planes and
-  opacity, swipe, checkerboard, and edge modes rendered visibly with no console warning
-  or error. The session stayed visibly unapproved and all downstream operations
-  remained locked. Synthetic inputs, engine diagnostics, and outputs were moved to
-  recoverable Trash after verification.
-- Registration-QA production-build smoke test: the distinct browser bootstrap/session
-  capability opened the isolated workspace while bearer-only access remained denied in
-  server tests. Five patient-space canvases rendered with correct sagittal A/P/S/I
-  orientation, the derived moving reference pane stayed explicitly approximate, all
-  three plane buttons and four QA modes activated, untrained acceptance remained
-  disabled, trained role selection alone did not enable submission, no external
-  resources were present, and the browser console reported no errors. Synthetic
-  fixtures were moved to Trash.
-- Reviewed-registration production-build smoke test: a saved synthetic accepted review
-  and its exact live bundle opened the separate exploratory surface automatically.
-  Fixed, registered-moving, and composite canvases rendered; axial, coronal, sagittal,
-  opacity, swipe, ordinary-DICOM exit, and reviewed-mode re-entry all worked. The
-  one-time session token was removed from the URL, the browser reported no errors, and
-  server requests were limited to loopback UI, context, manifest, and the two allowlisted
-  NRRDs. Synthetic fixtures and the isolated wheel-install test were moved to
-  recoverable Trash.
+  kept every derivative use locked. Known +2 mm displacements yielded approximately
+  -2.008 mm and -1.998 mm moving-to-fixed translation with near-identity rotation.
+  The equal-field mask contained 65,536/65,536 supported voxels; a deliberately wider
+  fixed field contained 65,536/69,632 (94.117647%), providing a real nontrivial boundary
+  and transform-direction oracle. No patient data was used.
+- Registration-QA v2 production-build smoke test: the real-engine synthetic
+  partial-coverage bundle opened through the distinct browser session and strict live
+  backend context. The browser sequentially fetched fixed, moving, registered-moving,
+  and sampling-support NRRDs from the four allowlisted loopback routes, accepted all
+  hashes/headers/geometry, and created no render state until all four passed. Opacity,
+  swipe, checkerboard, edges, and the technical boundary view rendered; the boundary
+  view was exercised in axial, coronal, and sagittal planes before its attestation
+  checkbox enabled. Accessible copy described mask-zero suppression and explicitly
+  denied anatomy, tumor, segmentation, registration-quality, or comparability meaning.
+  The browser diagnostic log was empty, page assets were loopback-only, the review
+  stayed unapproved, and no decision was submitted.
+- Reviewed-registration v2 production-build smoke test: a saved synthetic
+  commissioning-only accepted review and its exact real-engine partial-coverage bundle
+  opened the separate exploratory surface automatically. Fixed, registered-moving,
+  support-mask, and composite data validated before render; axial, coronal, sagittal,
+  opacity, and swipe all exposed mask-gated accessible labels and sampling-support-only
+  warnings. The browser console was empty, and server requests were limited to loopback
+  UI/context plus the three allowlisted NRRDs. Synthetic fixtures and review evidence
+  were moved to recoverable Trash.
+- Strawberry Linux runtime smoke test: the patient-free offline ZIP verified and
+  installed with `PIP_NO_INDEX=1`, `--no-index`, and required hashes on Ubuntu 26.04
+  x86_64/Python 3.14.4. It resolved the embedded UI and all 20 schemas, indexed a
+  two-instance synthetic MR series with direct identifiers excluded, and returned HTTP
+  200 for embedded UI and bearer-authorized manifest over loopback. Bubblewrap 0.11.1
+  private namespaces plus the generated seccomp filter denied socket creation with
+  `EPERM`; Linux `renameat2` atomic publication succeeded once and refused overwrite.
+  Strawberry has no Slicer 5.12.3 installation, so real Linux engine execution remains
+  pending.
 - Synthetic browser smoke test: two canvases render; all five viewer controls activate.
 - Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
   1162×1200 canvases; the full folder produces 57 pixel series; local server logs show
@@ -460,12 +483,13 @@ Last updated: 2026-08-28 19:24 PDT
 - Bearer reads of live viewer state do not yet have an append-only access audit.
   Any future audit must exclude tokens, payloads, and patient content.
 - Signed/notarized macOS/Linux release packaging remains pending. The wheel, offline
-  bundle, and source-checkout launcher are working and verified on macOS; the offline
-  bundle still requires host Python 3.11+ and has not executed on Linux.
+  bundle, and source-checkout launcher are working and verified on macOS; the same
+  offline bundle now passes on Strawberry Ubuntu 26.04 x86_64. It still requires host
+  Python 3.11+ and is not yet signed.
 - Registration generation, local QA, accepted-review opacity/swipe display, an
-  authenticated official macOS engine, and a real-engine synthetic execution now
-  exist. A real same-modality patient run, qualified real-case decision, Linux engine
-  authentication/execution, and signed ScanView release remain pending. There is still
-  no machine-enforced coverage mask, segmentation, response criteria, or automated
-  medical conclusion.
-- Linux packaging/smoke testing remains pending.
+  authenticated official macOS engine, real-engine synthetic execution, and mandatory
+  pixel-level moving sampling-support gating now exist. A real same-modality patient
+  run, qualified real-case decision, Linux Slicer authentication/execution, and signed
+  ScanView release remain pending. Sampling support is not shared-anatomy or
+  registration-quality evidence, and there is still no tumor segmentation, response
+  criteria, or automated medical conclusion.

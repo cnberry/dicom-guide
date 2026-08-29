@@ -136,29 +136,32 @@ brain/head MR↔MR or CT↔CT, distinct chronological studies, one conservative 
 and explicit contrast category, regular per-instance geometry, hashes, and a score
 of at least 80. The expected launcher SHA-256 must match before staging and after the
 job; a no-data preflight checks the self-reported version/runtime repository revision
-and BRAINSFit availability before source staging. Source bytes are rehashed before private staging;
-Slicer/BRAINSFit receives only
+and BRAINSFit/BRAINSResample availability before source staging. Source bytes are
+rehashed before private staging; Slicer and those two local modules receive only
 local generic paths, and user settings/startup scripts and user-site Python packages
 are disabled. OS-enforced network isolation is mandatory: macOS uses a deny-all-network
 sandbox; supported 64-bit Linux requires `bwrap` private namespaces plus seccomp denial
 of socket creation, socket pairs, and io_uring. The weaker `unshare`-only path is
-refused, and there is no unsandboxed fallback. A successful non-overwriting, owner-only directory contains the fixed,
-moving, and registered-moving NRRDs, moving-to-fixed text ITK transform, engine report,
-and v1 manifest. `validate-registration` rechecks all hashes, required versions,
-parameters, parsed output geometry/rigidity, private permissions, source provenance,
-and the invariant that the generated bundle stays `generated_pending_qa` and
-`unreviewed`.
+refused, and there is no unsandboxed fallback. A successful non-overwriting, owner-only
+v2 directory contains fixed, moving, registered-moving, and binary registered-moving
+sampling-support NRRDs; a moving-to-fixed text ITK transform; an engine report; and a
+manifest. `validate-registration` rechecks all hashes, required versions and both local
+modules, parameters, parsed output geometry/rigidity, the complete uint8 `{0,1}` mask
+payload and recomputed support counts, private permissions, source provenance, and the
+invariant that the generated bundle stays `generated_pending_qa` and `unreviewed`.
 
 `review-registration` serves a separate, watermarked, browser-capability QA workspace
-from loopback. It shows derived fixed/moving reference and registered volumes in all three planes with
+from loopback. It shows derived fixed/moving reference, registered, and technical
+sampling-support boundary views in all three planes with
 opacity, swipe, checkerboard, edges, landmarks, and physical-point residual tools.
 Agents can read only a privacy-minimized status; bearer authentication alone cannot
 fetch NRRDs or submit a decision. This is a separate browser capability, not proof a
 person is present. A downloaded self-attested JSON record anchors every byte of the unchanged
-six-file bundle. A qualified self-attested acceptance requires a trained clinician or
+seven-file bundle. A qualified self-attested acceptance requires a trained clinician or
 medical physicist, every checklist item, full three-plane/four-mode coverage, three
 aligned qualitative landmarks, and at least three spatially distributed 3-D landmark
-pairs within the fixed geometry-derived tolerance. It can authorize only exploratory
+pairs within the fixed geometry-derived tolerance, plus explicit review of the
+technical sampling-support boundary and excluded region. It can authorize only exploratory
 shared-coverage overlay/swipe; all other derivative uses stay false.
 `validate-registration-review` must be given the live bundle to establish source
 integrity. No command authenticates the reviewer or turns an event hash into a
@@ -181,11 +184,13 @@ scanview-agent launch '/safe/local/DICOM/root' \
   --registration-review '/safe/local/registration-review.json'
 ```
 
-The browser-only reviewed surface exposes only fixed reference and registered-moving
-NRRDs and implements opacity/swipe. A bearer agent sees a minimized authorization
-summary but cannot fetch these pixels. Rejected, tampered, linked, mismatched, missing,
-or non-owner-only review inputs keep the ordinary DICOM viewer available and every
-registered pixel locked. Startup hashes plus per-response review/bundle identity and
-metadata freshness checks relock the surface if any evidence changes. Shared coverage
-is reviewer-identified because the six-file bundle has no pixel-level transformed
-coverage mask.
+The browser-only reviewed surface exposes fixed reference, registered-moving, and the
+separate technical sampling-support NRRD and implements opacity/swipe. It verifies all
+three files before rendering, samples the mask with nearest-neighbor semantics, and
+uses the fixed pixel wherever support is zero. A bearer agent sees a minimized
+authorization summary but cannot fetch these pixels. Rejected, tampered, linked,
+mismatched, missing, non-binary, or non-owner-only inputs keep the ordinary DICOM
+viewer available and every registered pixel locked. Startup hashes plus per-response
+review/bundle identity and metadata freshness checks relock the surface if any
+evidence changes. The mask is not anatomy, tumor, lesion segmentation, registration
+quality, or proof of clinical comparability; shared anatomy remains reviewer-attested.

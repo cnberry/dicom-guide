@@ -1,0 +1,402 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-reviewed-registration-display-v2.schema.json",
+  "title": "ScanView reviewed registration display context v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "sensitive",
+    "deidentified",
+    "display_status",
+    "intended_use",
+    "scope",
+    "review",
+    "source",
+    "reviewer",
+    "volumes",
+    "coverage_mask",
+    "display_policy",
+    "display_label",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.0.0" },
+    "artifact_type": { "const": "reviewed_registration_display_context" },
+    "sensitive": { "const": true },
+    "deidentified": { "const": false },
+    "display_status": {
+      "const": "authorized_for_exploratory_shared_coverage_overlay_swipe"
+    },
+    "intended_use": { "const": "shared_coverage_exploratory_overlay_swipe" },
+    "scope": { "const": "shared_coverage" },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_id",
+        "job_id",
+        "decision",
+        "review_sha256",
+        "event_sha256",
+        "self_attested"
+      ],
+      "properties": {
+        "review_id": {
+          "type": "string",
+          "pattern": "^registration_review_[0-9a-f]{20}$"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^registration_[0-9a-f]{20}$"
+        },
+        "decision": {
+          "const": "accepted_for_shared_coverage_overlay_swipe"
+        },
+        "review_sha256": { "$ref": "#/$defs/sha256" },
+        "event_sha256": { "$ref": "#/$defs/sha256" },
+        "self_attested": { "const": true }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_sha256",
+        "bundle_sha256",
+        "transform_sha256",
+        "bundle_files",
+        "transform_direction",
+        "modality",
+        "fixed",
+        "moving"
+      ],
+      "properties": {
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "bundle_sha256": { "$ref": "#/$defs/sha256" },
+        "transform_sha256": { "$ref": "#/$defs/sha256" },
+        "bundle_files": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "prefixItems": [
+            { "$ref": "#/$defs/engineReportEntry" },
+            { "$ref": "#/$defs/fixedEntry" },
+            { "$ref": "#/$defs/transformEntry" },
+            { "$ref": "#/$defs/movingEntry" },
+            { "$ref": "#/$defs/coverageMaskEntry" },
+            { "$ref": "#/$defs/registeredMovingEntry" },
+            { "$ref": "#/$defs/registrationEntry" }
+          ],
+          "items": false
+        },
+        "transform_direction": { "const": "moving_later_to_fixed_earlier" },
+        "modality": { "enum": ["MR", "CT"] },
+        "fixed": { "$ref": "#/$defs/sourceSeries" },
+        "moving": { "$ref": "#/$defs/sourceSeries" }
+      }
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "training_status", "identity_status"],
+      "properties": {
+        "role": { "enum": ["clinician", "medical_physicist"] },
+        "training_status": { "const": "self_attested_trained" },
+        "identity_status": { "const": "self_attested_unverified" }
+      }
+    },
+    "volumes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed", "registered_moving"],
+      "properties": {
+        "fixed": {
+          "allOf": [
+            { "$ref": "#/$defs/volume" },
+            {
+              "properties": {
+                "role": { "const": "fixed_earlier_reference" },
+                "filename": { "const": "fixed.nrrd" },
+                "url": { "const": "/v1/reviewed-registration/files/fixed.nrrd" },
+                "derived": { "const": true },
+                "resampled": { "const": false }
+              }
+            }
+          ]
+        },
+        "registered_moving": {
+          "allOf": [
+            { "$ref": "#/$defs/volume" },
+            {
+              "properties": {
+                "role": { "const": "moving_later_registered_to_fixed" },
+                "filename": { "const": "registered-moving.nrrd" },
+                "url": {
+                  "const": "/v1/reviewed-registration/files/registered-moving.nrrd"
+                },
+                "derived": { "const": true },
+                "resampled": { "const": true }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "coverage_mask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "filename",
+        "url",
+        "bytes",
+        "sha256",
+        "derived",
+        "scalar_type",
+        "binary_values",
+        "semantics",
+        "geometry"
+      ],
+      "properties": {
+        "role": {
+          "const": "registered_moving_sampling_support_in_fixed_geometry"
+        },
+        "filename": { "const": "registered-moving-coverage.nrrd" },
+        "url": {
+          "const": "/v1/reviewed-registration/files/registered-moving-coverage.nrrd"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 268435456
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "derived": { "const": true },
+        "scalar_type": { "const": "uint8" },
+        "binary_values": { "const": [0, 1] },
+        "semantics": {
+          "const": "technical_sampling_support_not_anatomy_or_segmentation"
+        },
+        "geometry": { "$ref": "#/$defs/geometry" }
+      }
+    },
+    "display_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_modes",
+        "always_locked",
+        "native_moving_available",
+        "native_moving_withheld",
+        "sampling_support_enforcement",
+        "shared_anatomy_scope",
+        "mask_failure_behavior",
+        "mask_sampling"
+      ],
+      "properties": {
+        "allowed_modes": {
+          "const": ["opacity", "swipe"]
+        },
+        "always_locked": {
+          "const": [
+            "subtraction",
+            "mask_propagation",
+            "segmentation",
+            "resampled_image_measurements",
+            "response_conclusions"
+          ]
+        },
+        "native_moving_available": { "const": false },
+        "native_moving_withheld": { "const": true },
+        "sampling_support_enforcement": { "const": "required_pixel_mask" },
+        "shared_anatomy_scope": { "const": "reviewer_attested_visual_only" },
+        "mask_failure_behavior": { "const": "lock_display" },
+        "mask_sampling": { "const": "nearest_neighbor" }
+      }
+    },
+    "display_label": {
+      "const": "EXPLORATORY — SELF-ATTESTED REGISTRATION QA"
+    },
+    "limitations": {
+      "const": [
+        "Registered-moving display is authorized only where the required sampling-support mask is one and shared anatomy was visually reviewed.",
+        "The coverage mask identifies transformed moving-image sampling support only; it is not anatomy, tumor, segmentation, registration quality, or clinical comparability.",
+        "The sampling-support mask excludes default-filled registered-moving pixels but does not establish shared anatomy.",
+        "Reviewer identity, role, training, and organization are self asserted and unauthenticated.",
+        "The fixed volume is a derived local scalar-volume representation that preserves fixed geometry; it is not native DICOM.",
+        "The registered-moving volume is derived and interpolated into fixed geometry; it is not native DICOM.",
+        "Subtraction, mask propagation, segmentation, resampled-image measurements, and response conclusions remain prohibited.",
+        "This authorization is bound to the exact saved review and live seven-file registration bundle hashes, geometry, and coverage-mask semantics and counts.",
+        "This exploratory display is not a diagnosis, treatment-response conclusion, or authorization for treatment planning.",
+        "The review event SHA-256 and saved-review SHA-256 provide tamper evidence, not a digital signature or reviewer authentication."
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "fileEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "bytes", "sha256"],
+      "properties": {
+        "name": { "type": "string" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "engineReportEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/fileEntry" },
+        { "properties": { "name": { "const": "engine-report.json" } } }
+      ]
+    },
+    "fixedEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/fileEntry" },
+        {
+          "properties": {
+            "name": { "const": "fixed.nrrd" },
+            "bytes": { "type": "integer", "minimum": 1, "maximum": 268435456 }
+          }
+        }
+      ]
+    },
+    "transformEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/fileEntry" },
+        { "properties": { "name": { "const": "moving-to-fixed.tfm" } } }
+      ]
+    },
+    "movingEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/fileEntry" },
+        { "properties": { "name": { "const": "moving.nrrd" } } }
+      ]
+    },
+    "coverageMaskEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/fileEntry" },
+        {
+          "properties": {
+            "name": { "const": "registered-moving-coverage.nrrd" },
+            "bytes": { "type": "integer", "minimum": 1, "maximum": 268435456 }
+          }
+        }
+      ]
+    },
+    "registeredMovingEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/fileEntry" },
+        {
+          "properties": {
+            "name": { "const": "registered-moving.nrrd" },
+            "bytes": { "type": "integer", "minimum": 1, "maximum": 268435456 }
+          }
+        }
+      ]
+    },
+    "registrationEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/fileEntry" },
+        { "properties": { "name": { "const": "registration.json" } } }
+      ]
+    },
+    "sourceSeries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["study_id", "series_id", "acquisition_date"],
+      "properties": {
+        "study_id": {
+          "type": "string",
+          "pattern": "^study_[0-9a-f]{20}$"
+        },
+        "series_id": {
+          "type": "string",
+          "pattern": "^series_[0-9a-f]{20}$"
+        },
+        "acquisition_date": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sizes",
+        "voxel_spacing_mm",
+        "coordinate_system",
+        "space_directions",
+        "space_origin"
+      ],
+      "properties": {
+        "sizes": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "voxel_spacing_mm": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "coordinate_system": {
+          "enum": ["left-posterior-superior", "right-anterior-superior"]
+        },
+        "space_directions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": { "type": "number" }
+          }
+        },
+        "space_origin": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number" }
+        }
+      }
+    },
+    "volume": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "filename",
+        "url",
+        "bytes",
+        "sha256",
+        "derived",
+        "resampled",
+        "geometry"
+      ],
+      "properties": {
+        "role": { "type": "string" },
+        "filename": { "type": "string" },
+        "url": { "type": "string" },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 268435456
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "derived": { "type": "boolean" },
+        "resampled": { "type": "boolean" },
+        "geometry": { "$ref": "#/$defs/geometry" }
+      }
+    }
+  }
+}

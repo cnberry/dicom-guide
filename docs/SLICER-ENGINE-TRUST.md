@@ -40,7 +40,8 @@ earlier `34627` runtime pin was incorrect and failed closed before source stagin
 - The app did not independently carry a stapled ticket. The DMG did; Gatekeeper still
   accepted the app. This distinction is retained rather than reported as an app
   stapling success.
-- The bundled BRAINSFit executable is signed by the same Kitware team.
+- The bundled BRAINSFit and BRAINSResample executables are signed by the same Kitware
+  team.
 
 The x86_64 app is installed at `/Users/chris/Applications/Slicer.app` and runs on this
 arm64 Mac through Rosetta 2. The installed bundle is 1,647,276 KiB. Local execution
@@ -50,23 +51,48 @@ identifiers are:
   `710dfa764bf407377ee516b63f84cfb4cf0e0719218c7f43712cc0f231ed6b23`.
 - BRAINSFit SHA-256:
   `75d173916e0d2d48f6d9ba9b0cd093349661953538748809d7ea2ad93c85da93`.
+- BRAINSResample SHA-256:
+  `bd1e042194ff56673c01955782f9415a3e8706be75c7131ea93fbdcd310f207b`.
 
 ## Execution evidence
 
 `registration-doctor` found the installed engine, matched the launcher hash, verified
-version 5.12.3/runtime revision `9034c71`, found BRAINSFit, and reported the mandatory
-macOS deny-all-network sandbox ready. A normal `run-rigid-registration` invocation then
-processed two synthetic 16-slice MR studies through the real Slicer/BRAINSFit process
-inside that sandbox.
+version 5.12.3/runtime revision `9034c71`, found BRAINSFit and BRAINSResample, and
+reported the mandatory macOS deny-all-network sandbox ready. Normal
+`run-rigid-registration` invocations then processed two pairs of synthetic 16-slice MR
+studies through the real Slicer/BRAINSFit/BRAINSResample process inside that sandbox.
 
-The output remained `generated_pending_qa` and `unreviewed`; all overlay, swipe,
-subtraction, and mask-propagation display flags stayed locked. Independent validation
-accepted the six-file bundle, source hashes were identical before and after, and the
-known synthetic +2 mm displacement produced an approximately -1.997 mm moving-to-fixed
-x translation with near-identity rotation. The isolated local QA viewer rendered the
-real NRRDs in all three planes and all four comparison modes without browser errors.
-No decision was submitted. Synthetic sources, diagnostics, and derivatives were moved
-out of active storage to recoverable Trash after verification.
+Each engine output remained `generated_pending_qa` and `unreviewed`; all overlay,
+swipe, subtraction, and mask-propagation display flags stayed locked. Independent
+validation accepted both seven-file v2 bundles, source hashes were identical before
+and after, and the known synthetic +2 mm displacement produced approximately -2.008 mm
+and -1.998 mm moving-to-fixed x translations with near-identity rotations. The
+equal-field case produced 65,536/65,536 supported fixed-grid voxels. The deliberately
+wider fixed-field case produced 65,536/69,632 (94.117647%) and therefore independently
+confirmed a nontrivial BRAINSResample support boundary and transform direction.
+
+A production-build pending-QA session then consumed the live v2 backend context for
+that partial-coverage bundle. It verified and loaded the four allowlisted loopback
+NRRDs sequentially, exercised mask-gated opacity/swipe/checkerboard/edges, and opened
+the technical boundary view in axial, coronal, and sagittal planes before the boundary
+attestation became available. Browser diagnostics were empty, all page resources were
+loopback-only, and no review decision was submitted.
+
+A separate synthetic commissioning-only accepted review then opened the reviewed
+surface from the partial-coverage bundle. The browser loaded only loopback UI/context
+plus fixed, registered-moving, and sampling-support NRRDs; all three patient-space
+planes and opacity/swipe modes were exercised, the console was clean, and visible and
+accessible copy identified machine-enforced sampling support without calling it
+anatomy or segmentation. No patient data or medical review was used. Synthetic sources,
+diagnostics, derivatives, and review records were moved out of active storage to
+recoverable Trash after verification.
+
+On Strawberry, the same offline artifact verified and installed with `--no-index` on
+Ubuntu 26.04 x86_64/Python 3.14.4, resolved all 20 schemas and the embedded UI, indexed
+and served patient-free DICOM over loopback, denied socket creation with `EPERM` inside
+the required bubblewrap/seccomp engine boundary, and passed Linux atomic no-replace
+publication. Strawberry has no Slicer installation yet, so this is Linux runtime and
+isolation evidence—not a real Linux engine authentication or registration run.
 
 ## Remaining trust boundaries
 
@@ -76,6 +102,7 @@ out of active storage to recoverable Trash after verification.
   extension servers, and external/host networking excluded. There is no unsandboxed
   or cloud fallback.
 - This record authenticates one official macOS package and installed copy. Linux
-  package authentication and real execution remain pending.
+  runtime/isolation execution passed on Strawberry; Slicer package authentication and
+  real Linux engine execution remain pending.
 - It does not establish patient identity, registration quality for Mila, lesion
   identity, tumor response, clinical suitability, or regulatory approval.
