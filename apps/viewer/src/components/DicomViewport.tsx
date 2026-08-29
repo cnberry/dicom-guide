@@ -39,6 +39,7 @@ type Props = {
   presentationState?: AppliedPresentationState;
   onPresentationStateError?: (message: string) => void;
   interactionLocked?: boolean;
+  simple?: boolean;
 };
 
 type CanvasPresentationOverlay = {
@@ -101,6 +102,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     presentationState,
     onPresentationStateError,
     interactionLocked = false,
+    simple = false,
   }: Props,
   ref,
 ) {
@@ -443,8 +445,12 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
         <div className="viewport-actions">
           <span className="native-badge">
             {series
-              ? `Native source · ${series.sourceKind === 'loopback-service' ? 'local service' : 'folder'}`
-              : 'Native source'}
+              ? simple
+                ? 'Local DICOM'
+                : `Native source · ${series.sourceKind === 'loopback-service' ? 'local service' : 'folder'}`
+              : simple
+                ? 'Local DICOM'
+                : 'Native source'}
           </span>
           {presentationState && (
             <span className="source-presentation-badge">
@@ -461,48 +467,51 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
             }
             onClick={onOpenMpr}
           >
-            Open MPR
+            {simple ? '3-plane view' : 'Open MPR'}
           </button>
-          <button
-            className={`key-image-button ${keyImageState}`}
-            disabled={
-              !series ||
-              keyImageState === 'working' ||
-              Boolean(status) ||
-              presentationLocked
-            }
-            title={
-              keyImageError ||
-              (presentationLocked
-                ? 'Clear all active source-carried GSPS states before export; this evidence schema does not encode GSPS provenance.'
-                :
-              (consultationSelectionSlot
-                ? 'Save a neutral local reference-view ZIP with PNG, provenance, and measurements'
-                : 'Save a local ZIP with PNG, provenance, and measurements'))
-            }
-            onClick={() => void saveKeyImage()}
-          >
-            {keyImageState === 'working'
-              ? 'Saving…'
-              : keyImageState === 'saved'
-                ? consultationSelectionSlot
-                  ? 'Saved reference view'
-                  : 'Saved key image'
-                : keyImageState === 'error'
-                  ? 'Export failed'
-                  : consultationSelectionSlot
-                    ? 'Save reference view'
-                    : 'Save key image'}
-          </button>
-          <span className="sr-only" aria-live="polite">
-            {keyImageState === 'saved'
-              ? consultationSelectionSlot
-                ? 'Local neutral reference-view archive saved.'
-                : 'Local key-image archive saved.'
-              : keyImageState === 'error'
-                ? keyImageError
-                : ''}
-          </span>
+          {!simple && (
+            <>
+              <button
+                className={`key-image-button ${keyImageState}`}
+                disabled={
+                  !series ||
+                  keyImageState === 'working' ||
+                  Boolean(status) ||
+                  presentationLocked
+                }
+                title={
+                  keyImageError ||
+                  (presentationLocked
+                    ? 'Clear all active source-carried GSPS states before export; this evidence schema does not encode GSPS provenance.'
+                    : consultationSelectionSlot
+                      ? 'Save a neutral local reference-view ZIP with PNG, provenance, and measurements'
+                      : 'Save a local ZIP with PNG, provenance, and measurements')
+                }
+                onClick={() => void saveKeyImage()}
+              >
+                {keyImageState === 'working'
+                  ? 'Saving…'
+                  : keyImageState === 'saved'
+                    ? consultationSelectionSlot
+                      ? 'Saved reference view'
+                      : 'Saved key image'
+                    : keyImageState === 'error'
+                      ? 'Export failed'
+                      : consultationSelectionSlot
+                        ? 'Save reference view'
+                        : 'Save key image'}
+              </button>
+              <span className="sr-only" aria-live="polite">
+                {keyImageState === 'saved'
+                  ? consultationSelectionSlot
+                    ? 'Local neutral reference-view archive saved.'
+                    : 'Local key-image archive saved.'
+                  : keyImageState === 'error'
+                    ? keyImageError
+                    : ''}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div

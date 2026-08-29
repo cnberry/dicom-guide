@@ -16,7 +16,46 @@ result into a medical conclusion.
 - Run byte-for-byte SHA-256 verification and repair missing/mismatched files.
 - Keep the verification manifest with the local copy, never in Git.
 
-### Phase 1 — local comparison MVP (current)
+### Phase 1 — focused in-depth review (current)
+
+- Default to one explicitly selected series and one authoritative native DICOM pane.
+- Expose only Window, Pan, Zoom, Reset, slice navigation, and optional geometry-gated
+  axial/coronal/sagittal MPR.
+- Keep all source reading, decoding, and reconstruction local. The focused interface
+  must perform no analytics, telemetry, cloud processing, or external API call.
+- Keep advanced evidence and agent contracts implemented but outside the primary
+  viewer until each workflow earns a simple, deliberate entry point.
+- Present **Compare over time** as a distinct mode, disabled until the next phase's
+  measurement and alignment gates are implemented and tested.
+
+### Phase 2 — accurate comparison over time (next)
+
+- Require two distinct, dated, same-patient-context, same-modality studies; never use
+  the current MRI and CT as baseline/follow-up substitutes.
+- Require a person to confirm baseline/follow-up roles, intended sequence, contrast,
+  coverage, acquisition quality, lesion identity, represented tissue, and boundary
+  rules before enabling change calculations.
+- Keep native side-by-side review independent by default. Record registration as an
+  explicit state; keep overlay, swipe, subtraction, and spatial-change claims locked
+  unless a transform has passed the existing qualified QA path.
+- Calibrate every length, area, and volume from validated DICOM geometry. Bind each
+  observation to exact source instances, frames, units, tool/method version, target
+  definition, and reviewer state.
+- Add repeat measurements and inter/intra-reviewer variability or another explicit
+  uncertainty record. Never present more precision than acquisition geometry and the
+  measurement method support.
+- Compute absolute and percent change only after the two reviewed measurements pass
+  type, unit, source, chronology, target-definition, and comparability checks. Keep
+  response classification, treatment causality, diagnosis, and clinical conclusion
+  separate and locked by default.
+- Give agents the same versioned state machine and exact sources that people see;
+  agents may navigate and verify arithmetic but may not silently select timepoints,
+  targets, alignment, or clinical meaning.
+- Validate with synthetic known-geometry fixtures, adversarial provenance/unit/date
+  cases, repeated-measurement tests, production-browser QA, and macOS/Linux offline
+  commissioning before enabling the mode.
+
+### Existing local capability layer (retained outside the focused interface)
 
 - Local folder import and DICOM stack rendering.
 - Study/series inventory and timeline metadata.
@@ -137,14 +176,14 @@ result into a medical conclusion.
   Strawberry Ubuntu x86_64. ScanView release signing remains pending; Slicer's Linux
   artifact has no independent publisher signature in its documented release process.
 
-### Phase 2 — robust local archive and tools
+### Phase 3 — robust local archive and tools
 
 - Orthanc/DICOMweb import with localhost-only configuration.
 - OHIF longitudinal mode or ScanView mode extension.
 - Explicit clinician review/sign-off workflow built around the implemented key-image,
   measurement, and visit-packet contracts.
 
-### Phase 3 — reviewed derivatives
+### Phase 4 — reviewed derivatives
 
 - Version-gated local Slicer/BRAINSFit/BRAINSResample rigid-registration execution and
   source-hashed, generated-pending-QA seven-file v2 bundles with an explicit binary
@@ -325,3 +364,13 @@ result into a medical conclusion.
     response, diagnosis, and clinical conclusion remain unauthenticated, unverified,
     not assessed, or false. Agent validation output must omit IDs, reviewer identity,
     source text, pixels, paths, hashes, and numeric values.
+31. **Focused-interface discipline:** the default in-depth mode contains one series,
+    one native viewer, four display/navigation controls, slice navigation, and one
+    optional three-plane workspace. Advanced evidence workflows must not reappear as
+    competing panels or actions without a deliberate product decision and usability
+    test.
+32. **Measurement-grade time comparison:** enabling comparison requires exact
+    timepoint/source identity, calibrated DICOM geometry, explicit target and tissue
+    definitions, comparable methods and units, alignment state, uncertainty or
+    repeatability evidence, and qualified review. Failed or missing gates withhold
+    change arithmetic; no numeric change becomes a response or treatment conclusion.

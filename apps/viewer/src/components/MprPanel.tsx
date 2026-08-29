@@ -36,6 +36,7 @@ type Props = {
   onReadonlyReady?: () => void;
   onReadonlyError?: (message: string) => void;
   onClose: () => void;
+  simple?: boolean;
 };
 
 const orientationLabels: Array<{ id: MprOrientation; label: string }> = [
@@ -99,6 +100,7 @@ export function MprPanel({
   onReadonlyReady,
   onReadonlyError,
   onClose,
+  simple = false,
 }: Props) {
   const axialRef = useRef<HTMLDivElement>(null);
   const coronalRef = useRef<HTMLDivElement>(null);
@@ -362,6 +364,68 @@ export function MprPanel({
     }
     onClose();
   };
+
+  if (simple) {
+    return (
+      <section className="mpr-panel simple-mpr" aria-label={`3-plane view for ${series.description}`}>
+        <div className="mpr-heading">
+          <div>
+            <span className="eyebrow">3-plane view</span>
+            <h2>{series.description}</h2>
+            <p>
+              {formatDicomDate(series.acquisitionDate)} · {series.modality} ·{' '}
+              {series.instances.length} slices
+            </p>
+          </div>
+          <div className="mpr-actions" aria-label="3-plane tools">
+            {(
+              [
+                ['crosshairs', 'Crosshairs'],
+                ['window', 'Window'],
+                ['pan', 'Pan'],
+                ['zoom', 'Zoom'],
+              ] as const
+            ).map(([tool, label]) => (
+              <button
+                key={tool}
+                className={activeTool === tool ? 'active' : ''}
+                aria-pressed={activeTool === tool}
+                disabled={Boolean(status)}
+                onClick={() => setActiveTool(tool)}
+              >
+                {label}
+              </button>
+            ))}
+            <button disabled={Boolean(status)} onClick={() => controllerRef.current?.reset()}>
+              Reset
+            </button>
+            <button onClick={onClose}>Close</button>
+          </div>
+        </div>
+        <div className="mpr-link-note">
+          Click in any view to move the same point in all three planes.
+        </div>
+        <div className="mpr-grid">
+          {orientationLabels.map(({ id, label }) => (
+            <article className="mpr-viewport-card" key={id}>
+              <header>
+                <strong>{label}</strong>
+                <span>{activeTool === 'crosshairs' ? 'click to move' : 'wheel for slices'}</span>
+              </header>
+              <div
+                ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}
+                className="mpr-host"
+              />
+              {status && <div className="mpr-status">{status}</div>}
+            </article>
+          ))}
+        </div>
+        <p className="mpr-footnote">
+          Reconstructed locally from this series for navigation. It is not aligned with another scan.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="mpr-panel" aria-label={`MPR view for ${series.description}`}>

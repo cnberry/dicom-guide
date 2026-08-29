@@ -6,10 +6,16 @@ CT studies over time. It is being built for two audiences at once:
 - people who need to see, compare, measure, and discuss scans with clinicians;
 - software agents that need a structured, source-traceable, read-only interface.
 
-The current MVP reads copied DICOM files locally, groups them into studies and
-series, renders native pixels with Cornerstone3D, and presents two series side by
-side. It suggests pair compatibility with visible reasons but never approves a
-pair or issues a medical conclusion.
+The current default reads copied DICOM files locally, groups them into studies and
+series, and presents one selected series in a focused native Cornerstone3D viewer.
+The visible in-depth workflow is deliberately small: Window, Pan, Zoom, Reset, slice
+navigation, and an optional local axial/coronal/sagittal three-plane view.
+
+**Compare over time** is a separate planned mode and is intentionally disabled. It
+will be enabled only after exact timepoint pairing, calibrated measurements,
+alignment state, repeatability/uncertainty, and qualified review are designed and
+tested together. The repository retains earlier evidence and agent contracts, but
+they no longer compete for attention in the primary viewer.
 
 All DICOM processing is local by design. ScanView has no cloud-processing fallback:
 if a required local decoder, registration engine, or runtime dependency is missing,
@@ -28,6 +34,11 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 
 ## Current capabilities
 
+- Focused single-series interface with one native image pane and an optional minimal
+  three-plane MPR; no measurement, export, packet, readiness, SEG/GSPS, consultation,
+  or agent-state panels appear in the default workspace.
+- Separate visible but locked time-comparison mode, with measurement and alignment
+  requirements documented before implementation.
 - Local folder import; no upload, analytics, fonts, or telemetry.
 - One loopback launcher for the bundled UI, privacy-minimized catalog, protected
   native DICOM bytes, and agent endpoints.

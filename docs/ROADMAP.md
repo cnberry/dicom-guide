@@ -738,40 +738,71 @@
    Exact artifact hashes and platform commissioning evidence are recorded in
    `docs/STATUS.md`; no patient data enters release or browser testing.
 
+## Completed in the thirty-fifth milestone
+
+1. Replaced the default multi-panel workspace with a focused **In-depth review**
+   surface containing one series selector, one native DICOM viewport, and only
+   Window, Pan, Zoom, Reset, slice navigation, and a three-plane entry point.
+2. Added a minimal MPR presentation with axial, coronal, and sagittal panes,
+   crosshairs, Window, Pan, Zoom, Reset, and Close. Manual ROI, source-SEG review,
+   export, and attestation forms remain implemented but do not appear in this mode.
+3. Added a separate disabled **Compare over time** mode. Its visible lock states that
+   alignment and measurement checks must be built first; the previous approximate
+   two-pane surface is not presented as a finished response-comparison workflow.
+4. Kept local folder import and authenticated loopback catalog loading, while
+   skipping hidden GSPS/SEG catalog work in the focused surface. No external DICOM
+   processing API or upload path was added.
+5. Passed TypeScript typecheck, all 141 viewer tests in 29 files, production build,
+   and production-browser QA with the existing local copied-scan service: one native
+   pane, a 324-slice MR selection, three rendered MPR planes, clean close, and zero
+   legacy workspace panels.
+
 ## Immediate
 
-1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
+1. Use **In-depth review** for one series at a time. Treat the three-plane view as a
+   local reconstruction for navigation and confirm medical interpretations with the
+   clinical imaging system and a qualified clinician.
+2. Specify the measurement-grade **Compare over time** protocol before enabling its
+   UI: exact timepoints, comparable sequence/tissue definitions, DICOM calibration,
+   alignment state, repeatability/uncertainty, review responsibility, and explicit
+   rules for when arithmetic must remain hidden.
+3. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
    discussion artifacts. Even an accepted two-timepoint pairing is arithmetic—not a
    response category, treatment-effect conclusion, diagnosis, or clinical sign-off.
-2. Use consultation packets or boards only to prepare questions with Mila's
+4. Use consultation packets or boards only to prepare questions with Mila's
    clinicians; confirm every MRI/CT source view in the clinical imaging system and do
    not treat either artifact as a diagnosis or treatment-response analysis.
-3. Treat any agent consultation plan as a local navigation suggestion only. Inspect
+5. Treat any agent consultation plan as a local navigation suggestion only. Inspect
    each native source before adding it to a board, and keep prompts free of unnecessary
    direct identifiers because plan headings are sensitive and not de-identified.
-4. Treat GSPS text/geometry as unverified source display content. Confirm its meaning
+6. Treat GSPS text/geometry as unverified source display content. Confirm its meaning
    and authorship in the clinical imaging system; do not copy it into measurements or
    evidence until the evidence contract explicitly records GSPS provenance.
-5. Treat source-carried SEG labels, codes, creator/algorithm fields, masks, and
+7. Treat source-carried SEG labels, codes, creator/algorithm fields, masks, and
    technical volume as unverified local display content. Confirm the object and its
    meaning in the clinical imaging system before any clinical use.
-6. Import a future same-modality MRI follow-up, have a person confirm the intended
+8. Import a future same-modality MRI follow-up, have a person confirm the intended
    earlier/later sequences and clinical roles, run the required engine on that pair,
    and complete qualified visual/quantitative QA.
-7. Protect the authenticated local Slicer installation and keep using the recorded
+9. Protect the authenticated local Slicer installation and keep using the recorded
    launcher hash; reauthenticate any replacement before a future patient-specific job.
-8. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
+10. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
    hash; repeat authentication and synthetic commissioning after any replacement.
-9. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
+11. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
    offline bundle, and evaluate whether to include a separately authenticated interpreter.
-10. Design optional authenticated signature integration for clinical organizations;
+12. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
-11. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
+13. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
    on a clinically appropriate same-modality case before any patient-specific reliance.
 
 ## Next milestone
 
-1. Implement a distinct source-SEG longitudinal volume-pairing review artifact for
+1. Design and implement the locked shell for **Compare over time** around the Phase 2
+   measurement state machine in `docs/PLAN.md`. Begin with exact source/timepoint
+   pairing and calibrated same-method observations; add uncertainty/repeatability and
+   explicit alignment/review states before exposing absolute or percent change. Do
+   not enable response classification or use Mila's current MRI+CT as a time pair.
+2. Implement a distinct source-SEG longitudinal volume-pairing review artifact for
    two independently accepted source-SEG review ZIPs. Keep manual/source evidence
    lineages non-interchangeable; recursively revalidate both original SEG objects,
    masks, source images, and exact chronology; require a separate qualified pairing
@@ -779,20 +810,20 @@
    causality, registration, spatial change, diagnosis, conclusion, and sign-off
    locked. Add schema, privacy-minimized summary, CLI, browser-session-only local
    assembler, viewer form, adversarial tests, patient-free browser QA, and complete
-   offline-package gates. See the paused handoff in `docs/STATUS.md`.
-2. Test source-SEG v2 against a real vendor-produced or clinical-system-exported
+   offline-package gates. See the current handoff in `docs/STATUS.md`.
+3. Test source-SEG v2 against a real vendor-produced or clinical-system-exported
    patient-free fixture in addition to highdicom and dcmqi, while retaining the
    conservative fail-closed profile.
-3. Restore authenticated Strawberry access and rerun the exact v0.14 source-SEG review,
+4. Restore authenticated Strawberry access and rerun the exact v0.14 source-SEG review,
    viewer-state, dcmqi, no-index-package, and loopback endpoint gates under Linux
    bubblewrap.
-4. Import a future same-modality Mila follow-up and complete explicit series pairing,
+5. Import a future same-modality Mila follow-up and complete explicit series pairing,
    separately reviewed ROI boundaries, same-lesion/tissue confirmation, and qualified
    pairing review. Keep the current MRI+CT media out of this longitudinal path.
-5. Add platform signing and notarization without weakening local-only runtime behavior.
-6. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
+6. Add platform signing and notarization without weakening local-only runtime behavior.
+7. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
    configuration.
-7. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
+8. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
 
 ## Registration milestone
 

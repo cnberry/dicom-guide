@@ -96,6 +96,10 @@ type ConsultationBoardDraftItem = {
   stackCount: number;
 };
 const maxPastedMeasurementBytes = 2_000_000;
+// Keep the legacy evidence workflows available in code while the primary product is
+// intentionally narrowed to one-series review. Comparison will replace this gate only
+// after its alignment and measurement safeguards are ready.
+const focusedInterfaceEnabled = true;
 
 const SeriesSelect = ({
   label,
@@ -591,6 +595,14 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setFollowupIndex(0);
       setBaselinePresentationState(undefined);
       setFollowupPresentationState(undefined);
+      if (focusedInterfaceEnabled) {
+        setPresentationStateLoading(false);
+        setPresentationStateMessage('Source presentation workflows are hidden in focused review.');
+        setSourceSegmentationLoading(false);
+        setSourceSegmentationMessage('Source segmentation workflows are hidden in focused review.');
+        setSourceReady(true);
+        return;
+      }
       setPresentationStateLoading(true);
       try {
         const presentationStates = await loadPresentationStateCatalog(
@@ -1411,6 +1423,141 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       );
     }
   };
+
+  if (focusedInterfaceEnabled) {
+    const studyCount = new Set(series.map((item) => item.studyId)).size;
+    const sourceStatus = importState
+      ? `Reading ${importState.processed.toLocaleString()} of ${importState.total.toLocaleString()} files`
+      : series.length
+        ? `${studyCount} ${studyCount === 1 ? 'study' : 'studies'} · ${series.length} series · local only`
+        : 'No folder open';
+
+    return (
+      <main className="simple-app">
+        <header className="simple-header">
+          <div className="brand">
+            <div className="brand-mark" aria-hidden="true">
+              SV
+            </div>
+            <div>
+              <h1>ScanView</h1>
+              <p>Review one series</p>
+            </div>
+          </div>
+          <div className="mode-switch" role="tablist" aria-label="Review mode">
+            <button className="active" role="tab" aria-selected="true">
+              In-depth review
+            </button>
+            <button
+              role="tab"
+              aria-selected="false"
+              disabled
+              title="Comparison will be enabled after alignment and measurement checks are built."
+            >
+              Compare over time <small>Later</small>
+            </button>
+          </div>
+          <button className="import-button" onClick={openFolder}>
+            Open folder
+          </button>
+          <input
+            ref={inputRef}
+            className="hidden-input"
+            type="file"
+            multiple
+            // Supported by current Chromium and Safari; React's type omits the attribute.
+            {...({ webkitdirectory: '' } as Record<string, string>)}
+            onChange={(event) => void chooseFiles(event.target.files)}
+          />
+        </header>
+
+        <div className="simple-sourcebar">
+          <span>
+            <i className={`status-dot ${series.length ? 'ready' : ''}`} />
+            {sourceStatus}
+          </span>
+          <span>Comparison comes later, after alignment and measurement checks.</span>
+        </div>
+
+        {series.length === 0 ? (
+          <div className="simple-empty">
+            <h2>Open a DICOM folder</h2>
+            <p>Images are read on this computer and are not uploaded.</p>
+            <button className="primary-action" onClick={openFolder}>
+              Open folder
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="simple-controls">
+              <SeriesSelect
+                label="Series"
+                value={baselineId}
+                series={series}
+                onChange={(id) => {
+                  const selected = series.find((item) => item.id === id);
+                  setBaselinePresentationState(undefined);
+                  setMprSeriesId(undefined);
+                  setBaselineId(id);
+                  setBaselineIndex(Math.floor((selected?.instances.length ?? 1) / 2));
+                  setMeasurementComparisonDraft(undefined);
+                }}
+              />
+              <div className="simple-tools" aria-label="Image tools">
+                {(
+                  [
+                    ['window', 'Window'],
+                    ['pan', 'Pan'],
+                    ['zoom', 'Zoom'],
+                  ] as const
+                ).map(([tool, label]) => (
+                  <button
+                    key={tool}
+                    className={activeTool === tool ? 'active' : ''}
+                    aria-pressed={activeTool === tool}
+                    onClick={() => setActiveTool(tool)}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button onClick={() => setResetNonce((value) => value + 1)}>Reset</button>
+              </div>
+            </div>
+
+            <div className="single-viewport-grid">
+              <DicomViewport
+                ref={baselineViewportRef}
+                id="baseline"
+                label="Series"
+                series={baseline}
+                index={baselineIndex}
+                onIndexChange={(index) => updateIndex('baseline', index)}
+                activeTool={activeTool}
+                resetNonce={resetNonce}
+                interactionLocked={false}
+                simple
+                onOpenMpr={() => {
+                  if (baseline) setMprSeriesId(baseline.id);
+                }}
+              />
+            </div>
+
+            {mprSeries && (
+              <MprPanel
+                series={mprSeries}
+                simple
+                onClose={() => setMprSeriesId(undefined)}
+              />
+            )}
+          </>
+        )}
+
+        <footer className="simple-footer">
+          Local review tool · not validated for diagnosis · discuss conclusions with a clinician
+        </footer>
+      </main>
+    );
+  }
 
   return (
     <main>
