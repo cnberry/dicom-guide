@@ -505,6 +505,11 @@
    independent native tri-planar workspaces. The masks are read-only; normalized
    navigation is off by default; registration, cross-scan overlay, subtraction,
    spatial change, and response assessment remain locked.
+9. Added the 25th JSON Schema and an optional privacy-minimized bearer-access audit.
+   Owner-only JSONL events are application-appended, fsynced, restart-validated, and
+   hash-chained without tokens, targets, identifiers, paths, payload facts, pixels,
+   masks, measurements, or medical values. Covered bearer reads fail closed if the
+   configured audit cannot append; the chain is not agent identity authentication.
 
 ## Immediate
 
@@ -525,9 +530,7 @@
    offline bundle, and evaluate whether to include a separately authenticated interpreter.
 7. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
-8. Design an append-only, privacy-minimized local audit for bearer access to live
-   viewer state without recording patient content or putting tokens in logs.
-9. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
+8. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
    on a clinically appropriate same-modality case before any patient-specific reliance.
 
 ## Next milestone
@@ -539,7 +542,6 @@
 3. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
    configuration.
 4. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-5. Extend append-only audit records from review decisions to local evidence access.
 
 ## Registration milestone
 

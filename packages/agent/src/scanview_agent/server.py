@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
+from .agent_access_audit import AgentAccessAudit
 from .comparison import suggest_pairs
 from .comparison_reviews import (
     MAX_COMPARISON_REVIEW_TRANSPORT_BYTES,
@@ -80,6 +81,34 @@ REVIEWED_REGISTRATION_BUNDLE_FILES = (
     "registered-moving.nrrd",
     "registration.json",
 )
+
+
+def _agent_audit_operation(path: str) -> str | None:
+    exact = {
+        "/v1/manifest": "manifest_read",
+        "/v1/viewer-state": "viewer_state_read",
+        "/v1/comparison-candidates": "comparison_candidates_read",
+        "/v1/lesion-volume-comparison-display": "native_boundary_summary_read",
+        "/v1/lesion-volume-comparison-display/context": (
+            "browser_only_native_boundary_context_attempt"
+        ),
+        "/v1/registration-qa": "registration_status_read",
+        "/v1/registration-qa/preview": "browser_only_registration_context_attempt",
+        "/v1/reviewed-registration/display": (
+            "browser_only_registration_context_attempt"
+        ),
+    }
+    if path in exact:
+        return exact[path]
+    if path.startswith("/v1/instances/"):
+        return "native_dicom_instance_read"
+    if path.startswith("/v1/lesion-volume-comparison-display/masks/"):
+        return "browser_only_native_boundary_mask_attempt"
+    if path.startswith("/v1/registration-qa/files/") or path.startswith(
+        "/v1/reviewed-registration/files/"
+    ):
+        return "browser_only_registration_volume_attempt"
+    return None
 
 
 def _distinct_token(excluded: set[str]) -> str:
@@ -249,6 +278,15 @@ class ScanViewServer(ThreadingHTTPServer):
     lesion_volume_display_guard: dict[str, Any] | None
     lesion_volume_display_instance_ids: set[str]
     lesion_volume_display_agent_summary: dict[str, Any]
+    agent_access_audit: AgentAccessAudit | None
+
+    def server_close(self) -> None:
+        try:
+            super().server_close()
+        finally:
+            audit = getattr(self, "agent_access_audit", None)
+            if audit is not None:
+                audit.close()
 
     def reviewed_registration_inputs_unchanged(self) -> bool:
         if self.registration_review is None:
@@ -345,22 +383,14 @@ class Handler(BaseHTTPRequestHandler):
             path = "/v1/instances/{opaque_id}"
         print(f"scanview-local {self.command} {path} {args[1] if len(args) > 1 else ''}")
 
-    def _authorized(self) -> bool:
+    def _bearer_authorized(self) -> bool:
         supplied = self.headers.get("Authorization", "")
-        if secrets.compare_digest(supplied, f"Bearer {self.server.token}"):
-            return True
-        cookie = SimpleCookie()
-        try:
-            cookie.load(self.headers.get("Cookie", ""))
-        except ValueError:
-            return False
-        session = cookie.get("scanview_session")
-        return bool(
-            session
-            and secrets.compare_digest(
-                session.value, self.server.browser_session_token
-            )
+        return secrets.compare_digest(
+            supplied, f"Bearer {self.server.token}"
         )
+
+    def _authorized(self) -> bool:
+        return self._bearer_authorized() or self._browser_authorized()
 
     def _browser_authorized(self) -> bool:
         cookie = SimpleCookie()
@@ -375,6 +405,21 @@ class Handler(BaseHTTPRequestHandler):
                 session.value, self.server.browser_session_token
             )
         )
+
+    def _audit_bearer_get(self, path: str) -> bool:
+        operation = _agent_audit_operation(path)
+        audit = self.server.agent_access_audit
+        if operation is None or audit is None or not self._bearer_authorized():
+            return True
+        try:
+            audit.record(operation)
+            return True
+        except (OSError, TypeError, ValueError):
+            self._send_json(
+                {"error": "agent_access_audit_unavailable"},
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+            return False
 
     def _security_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -477,6 +522,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not self._authorized():
             self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
+            return
+        if not self._audit_bearer_get(path):
             return
         if path == "/v1/manifest":
             self._send_json(self.server.catalog)
@@ -1119,6 +1166,7 @@ def create_server(
     registration_bundle: Path | None = None,
     registration_review: Path | None = None,
     lesion_volume_comparison: Path | None = None,
+    agent_audit_log: Path | None = None,
     source_root: Path | None = None,
 ) -> ScanViewServer:
     if host not in {"127.0.0.1", "::1", "localhost"}:
@@ -1260,6 +1308,15 @@ def create_server(
                 )
             )
     server = ScanViewServer((host, port), Handler)
+    try:
+        agent_access_audit = (
+            AgentAccessAudit.open(agent_audit_log)
+            if agent_audit_log is not None
+            else None
+        )
+    except BaseException:
+        server.server_close()
+        raise
     server.catalog = catalog
     server.registry = guarded_registry
     server.source_root = resolved_source_root
@@ -1293,6 +1350,7 @@ def create_server(
     server.lesion_volume_display_agent_summary = (
         cached_lesion_volume_display_summary
     )
+    server.agent_access_audit = agent_access_audit
     return server
 
 
@@ -1309,6 +1367,7 @@ def serve(
     registration_bundle: Path | None = None,
     registration_review: Path | None = None,
     lesion_volume_comparison: Path | None = None,
+    agent_audit_log: Path | None = None,
     source_root: Path | None = None,
 ) -> None:
     if navigation_fragment is not None and (
@@ -1326,6 +1385,7 @@ def serve(
         registration_bundle=registration_bundle,
         registration_review=registration_review,
         lesion_volume_comparison=lesion_volume_comparison,
+        agent_audit_log=agent_audit_log,
         source_root=source_root,
     )
     url_host = f"[{host}]" if ":" in host else host
@@ -1356,9 +1416,14 @@ def serve(
             if server.lesion_volume_display_context is not None
             else "Reviewed native-boundary comparison display is locked; ordinary DICOM remains available."
         )
+    audit_notice = (
+        " Agent bearer-access audit is enabled and fail-closed."
+        if server.agent_access_audit is not None
+        else ""
+    )
     print(
         "Source mutation and deletion are disabled; visit/review derivatives and opt-in "
-        f"viewer state remain memory-only. {registration_notice} Press Ctrl-C to stop."
+        f"viewer state remain memory-only. {registration_notice}{audit_notice} Press Ctrl-C to stop."
     )
     try:
         server.serve_forever()

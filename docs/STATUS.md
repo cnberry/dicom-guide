@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 00:43 PDT
+Last updated: 2026-08-29 01:10 PDT
 
 ## Data transfer
 
@@ -128,6 +128,18 @@ Last updated: 2026-08-29 00:43 PDT
   expiry, visible opt-out, publisher revocation, `no-store`, and default-off behavior
   are enforced. It contains no pixels, descriptions, dates, measurement content,
   paths, or direct identifiers.
+- Launch/serve can now opt into an owner-only privacy-minimized bearer-access audit.
+  Each covered sensitive bearer GET appends and fsyncs one strict operation-class
+  event before routing. Events are sequence/hash chained across validated restarts and
+  contain no token, request target, opaque ID, path, response status/body/size, DICOM
+  content, pixels, masks, measurements, or reviewed values. Final-symlink, hard-link,
+  broad-permission, concurrent-writer, corrupt, externally changed, oversized, or
+  unwritable logs fail the bearer read closed with 503. Browser capability reads are
+  separate and remain outside this bearer log.
+- `verify-agent-audit` independently checks the strict JSONL chain and returns only
+  counts, sequence bounds, the last event hash, and fixed privacy declarations. The
+  audit proves bearer authorization events only—not response delivery, agent identity,
+  a digital signature, medical-record compliance, or OS immutability.
 - A version-gated local Slicer 5.12.3 computed revision 34627/runtime repository
   revision `9034c71`/BRAINSFit/BRAINSResample rigid-registration
   executor now accepts only explicitly attested, identity-unverified matching opaque
@@ -227,8 +239,8 @@ Last updated: 2026-08-29 00:43 PDT
   numeric-comparison, visit-packet,
   comparison-review, navigation-intent, viewer-state, rigid-registration,
   registration-QA, reviewed-registration-display, source-bound manual ROI volume,
-  manual boundary-review, reviewed manual ROI volume-comparison, and reviewed native-
-  boundary display
+  manual boundary-review, reviewed manual ROI volume-comparison, reviewed native-
+  boundary display, and agent-access-audit event
   JSON Schemas plus local validation are implemented. Same-series pairs, unknown units,
   mismatched measurement types, and mismatched visual/numeric evidence are refused; no
   response label is emitted.
@@ -238,7 +250,7 @@ Last updated: 2026-08-29 00:43 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 24 contracts without breaking lightweight
+  UI-embedded wheel together with all 25 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -255,6 +267,34 @@ Last updated: 2026-08-29 00:43 PDT
 
 ## Verification
 
+- v0.6.0 privacy-minimized agent-access audit milestone: passing. The full Python
+  suite reports 203 tests; the viewer reports 118 tests across 24 files; TypeScript
+  typecheck, production build, Python bytecode compilation, diff hygiene, and all 25
+  Draft 2020-12 schemas pass. Audit-specific coverage proves strict canonical events,
+  append/resume hash chaining, independent privacy-minimized verification, owner-only
+  creation, exclusive-writer locking, and refusal of tampering, partial events,
+  symlinks, hard links, broad permissions, concurrent writers, external modification,
+  and unsafe CLI startup. Browser-session reads create no bearer events. Authorized
+  bearer reads fail closed with HTTP 503 if the configured audit becomes unavailable.
+- Offline runtime bundle v0.6.0: passing on macOS arm64 and Strawberry Linux x86_64.
+  The retained owner-only 5,471,647-byte ZIP has nine fixed-timestamp members and
+  SHA-256 `a19a3944825249d2a56295f2f9eb4fd7067e96a478f1c42d714764779b2248d4`.
+  It contains the 3,076,211-byte ScanView wheel (SHA-256
+  `b0502d48776190214c634aef30f79986d8af29b19160fd2da763ccdd131e1b05`),
+  11 UI/worker/codec files (10,217,834 uncompressed bytes), all 25 schemas (231,279
+  bytes), and pinned `pydicom` 3.0.2. An independent second build was byte-identical.
+  Fresh extractions on macOS and Strawberry Ubuntu / Python 3.14.4 verified and
+  installed strictly from the included wheels with package-index access disabled,
+  then reported the embedded UI, all 25 schemas, and both
+  `runtime_network_required: false` and
+  `external_dicom_processing_api_required: false`. On both platforms the packaged
+  launcher indexed the same six-instance synthetic MR fixture; unauthenticated reads
+  returned 401, browser reads succeeded without audit events, and six covered bearer
+  operation classes appended a valid mode-0600 chain with no token, request target,
+  opaque ID, path, DICOM marker, pixels, masks, measurements, or reviewed value.
+  Restart continued the existing chain. A deliberately truncated copy failed both
+  verification and server startup without a traceback. Only the patient-free fixture
+  went to Strawberry; its staging tree was deleted, and no Mila data left this computer.
 - v0.5.0 reviewed native-boundary milestone: passing. The full Python suite reports
   197 tests; the viewer reports 118 tests across 24 files; TypeScript typecheck,
   production build, diff hygiene, and all 24 Draft 2020-12 schemas pass. Adversarial
@@ -284,7 +324,7 @@ Last updated: 2026-08-29 00:43 PDT
   Runtime and external DICOM-processing API requirements were both false. Only a
   six-instance synthetic fixture went to Strawberry; no Mila data left this computer.
 
-- Python agent tests: 195 passing, including cross-patient and legacy-context
+- Python agent tests: 203 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -318,9 +358,11 @@ Last updated: 2026-08-29 00:43 PDT
   privacy-minimized summaries; two-review manual ROI volume-comparison shape,
   live-catalog chronology, nested source/evidence recursion, human pairing gates,
   arithmetic/page/source tamper refusal, exact in-memory endpoint transport, and
-  privacy-minimized withholding; deterministic offline-bundle shape,
-  pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
-- Viewer tests: 114 passing, including patient-context and local-only enforcement,
+  privacy-minimized withholding; privacy-minimized bearer audit event/schema/hash-
+  chain validation, secure append/resume, exclusive-writer and file-shape gates,
+  fail-closed server integration, and concise CLI refusal; deterministic offline-
+  bundle shape, pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
+- Viewer tests: 118 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, exact neutral two-view consultation transport/sidecar,
@@ -342,7 +384,7 @@ Last updated: 2026-08-29 00:43 PDT
   the complete one-timepoint boundary-review decision/attestation workflow; reviewed
   volume-comparison preview, exact three-member transport, human acceptance gates,
   limitation-note requirement, same-origin endpoint, and local download behavior.
-- All 23 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
+- All 25 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
   schemas remain as historical contracts while generation and display require v2.
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
@@ -612,8 +654,10 @@ Last updated: 2026-08-29 00:43 PDT
   volume pairing. This is still not authenticated clinical sign-off, a proven tumor
   segmentation, spatial boundary-change evidence, a response classification, or a
   clinically validated tumor-volume comparison.
-- Bearer reads of live viewer state do not yet have an append-only access audit.
-  Any future audit must exclude tokens, payloads, and patient content.
+- The optional bearer audit identifies only possession of the process token and fixed
+  operation class. It cannot authenticate which person, model, agent, or process made
+  a request; privileged host users can still replace or delete the file. Organization-
+  authenticated identity and signed medical-record audit integration remain future work.
 - Signed/notarized macOS/Linux release packaging remains pending. The wheel, offline
   bundle, and source-checkout launcher are working and verified on macOS; the same
   offline bundle now passes on Strawberry Ubuntu 26.04 x86_64. It still requires host

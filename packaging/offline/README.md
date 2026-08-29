@@ -17,13 +17,15 @@ sh install.sh
 sh launch.sh '/absolute/path/to/DICOM'
 sh launch.sh '/absolute/path/to/DICOM' --lesion-volume-comparison \
   '/absolute/path/to/reviewed-volume-comparison.zip'
+sh launch.sh '/absolute/path/to/DICOM' --agent-audit-log \
+  '/absolute/private/path/to/scanview-agent-access.jsonl'
 ```
 
 Set `SCANVIEW_PYTHON=/absolute/path/to/python3` when the required interpreter is
 not named `python3`. Installation uses only the included wheels with `--no-index`
 and `--require-hashes`. Every launch rechecks the installed versions, embedded UI,
-all 24 schemas, consultation contracts, manual ROI review/comparison, and native-
-boundary display support before indexing DICOM. Launch binds the application
+all 25 schemas, consultation contracts, manual ROI review/comparison, native-boundary
+display, and the agent-access audit contract before indexing DICOM. Launch binds the application
 to loopback; DICOM bytes stay on the computer. There is no cloud fallback: missing
 local capability fails closed rather than sending source or derived data elsewhere.
 Keep this directory and its

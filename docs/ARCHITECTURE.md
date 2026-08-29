@@ -149,6 +149,14 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    latest publication under a lock, marks it `unreviewed`, and serves it only to an
    authenticated local GET with `no-store`. Publisher revocation closes opt-out races;
    the in-memory TTL is a fallback, not a consent substitute.
+   Optional bearer auditing is a separate local persistence boundary. It records only
+   fixed operation classes and authorization, never request targets or response
+   content. The owner-only single-link JSONL file is opened without following the
+   final symlink, exclusively locked, application-appended, fsynced, and hash-chained
+   across restarts. Covered bearer reads are fail-closed on audit error. Browser
+   sessions do not use the bearer and are outside this log. The hash chain detects
+   modification but neither authenticates the bearer holder nor supplies an OS
+   immutable/append-only guarantee.
    Registration QA is a separately mounted mode: a bearer-authorized agent receives
    only a minimized status, while preview context, the four allowlisted NRRDs, and
    decision submission require the distinct HttpOnly browser session; the POST also
@@ -348,8 +356,8 @@ is not an MVP feature and is never allowed between CT and MRI.
   `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
   payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
   and `--require-hashes`; every launch verifies the bundle and probes installed
-  versions, UI, all 24 schemas, consultation contracts, manual ROI review/comparison,
-  and native-boundary display support before cataloging DICOM.
+  versions, UI, all 25 schemas, consultation contracts, manual ROI review/comparison,
+  native-boundary display, and agent-access audit support before cataloging DICOM.
 - Trust boundary: the offline manifest detects payload corruption but is not publisher
   authentication. Python 3.11+ is supplied by the host and is not covered by the
   bundle. The builder may fetch the pinned wheel; installation and runtime do not.

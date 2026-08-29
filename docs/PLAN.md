@@ -88,6 +88,9 @@ result into a medical conclusion.
 - Explicit opt-in, read-only agent access to privacy-minimized live viewer state via
   the authenticated loopback service; publications are memory-only, validated
   against the catalog, revoked on opt-out, and expire after 30 seconds.
+- Optional owner-only, privacy-minimized, hash-chained bearer-access auditing with
+  secure resume, exclusive locking, application append/fsync, independent CLI
+  verification, fixed no-content events, and fail-closed sensitive bearer reads.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
 - Deterministic macOS/Linux offline runtime bundle with the embedded UI/contracts,
   pinned pure-Python DICOM dependency, exact payload manifest, hash-locked no-index
@@ -208,3 +211,9 @@ result into a medical conclusion.
     fetch mask pixels; browser masks are independently rehashed and remain read-only
     on separate native grids. Optional normalized navigation cannot become anatomical
     correspondence, registration, spatial change, or response evidence.
+22. **Agent access accountability:** when explicitly configured, every covered
+    sensitive bearer GET must durably append a schema-valid, hash-chained operation-
+    class event before routing. Audit events contain no token, target, identifiers,
+    paths, payload facts, pixels, masks, measurements, or clinical values; audit
+    failure denies the bearer read, and the chain is never called identity proof or a
+    filesystem immutability control.

@@ -58,6 +58,22 @@ quality-system, and regulatory review.
 - Consult Prep disables viewer-state v1 publication because that contract uses
   baseline/follow-up pane names. Neutral agent evidence travels only in the explicit
   consultation packet, preventing internal UI roles from becoming a chronology claim.
+- Bearer-access auditing is optional and local. If configured, covered sensitive GETs
+  are not routed until a privacy-minimized event has been durably appended. The event
+  contains a fixed operation class, sequence/time, authorization state, and hash-chain
+  anchors only. It excludes tokens, URLs/request targets, query strings, opaque IDs,
+  paths, status/body/size, DICOM metadata, pixels, masks, measurements, reviewed
+  values, and conclusions. The owner-only log refuses symlinks, hard links, concurrent
+  writers, broad permissions, corruption, external change, and oversize state. Audit
+  failure returns 503 for bearer reads; it never triggers an external service or
+  patient-data upload. Browser-session reads are a separate capability and are not
+  represented as bearer events.
+- An audit event means only that the random bearer capability authorized a covered
+  request. It does not prove which person, software agent, model, or process held the
+  token, and it does not prove response delivery. The SHA-256 chain is tamper evidence,
+  not a signature, medical-record audit, or OS immutable/append-only property. A
+  privileged local user can still alter or delete the file; independent verification
+  should run after the service releases its exclusive lock.
 - Paths, patient names/IDs, DICOM headers, and response bodies are absent from logs.
 - Agent viewer links contain only opaque local catalog IDs in a bounded URL fragment.
   Fragments are not transmitted in HTTP, are removed immediately on receipt, and

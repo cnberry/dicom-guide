@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 
+from .agent_access_audit import agent_access_audit_summary
 from .catalog import build_catalog
 from .comparison import suggest_pairs
 from .comparison_reviews import (
@@ -101,6 +102,11 @@ def parser() -> argparse.ArgumentParser:
         type=Path,
         help="Accepted reviewed volume-comparison ZIP to display in two unregistered native spaces",
     )
+    api.add_argument(
+        "--agent-audit-log",
+        type=Path,
+        help="Optional owner-only append-only JSONL audit for sensitive bearer GET requests",
+    )
 
     launch = commands.add_parser(
         "launch",
@@ -118,6 +124,11 @@ def parser() -> argparse.ArgumentParser:
         "--lesion-volume-comparison",
         type=Path,
         help="Accepted reviewed volume-comparison ZIP to display in two unregistered native spaces",
+    )
+    launch.add_argument(
+        "--agent-audit-log",
+        type=Path,
+        help="Optional owner-only append-only JSONL audit for sensitive bearer GET requests",
     )
     launch.add_argument("--baseline-series", help="Exact opaque baseline series ID")
     launch.add_argument("--baseline-instance", help="Exact opaque baseline instance ID")
@@ -213,6 +224,12 @@ def parser() -> argparse.ArgumentParser:
     )
     validate_lesion_volume_comparison.add_argument("archive", type=Path)
     validate_lesion_volume_comparison.add_argument("source_root", type=Path)
+
+    verify_agent_audit = commands.add_parser(
+        "verify-agent-audit",
+        help="Verify a local privacy-minimized hash-chained agent access audit",
+    )
+    verify_agent_audit.add_argument("audit_log", type=Path)
 
     assemble_visit_packet = commands.add_parser(
         "assemble-visit-packet",
@@ -468,16 +485,20 @@ def main() -> None:
         _write_json(suggest_pairs(catalog), args.output)
     elif args.command == "serve":
         catalog, registry = build_catalog(args.root, include_hashes=not args.no_hashes)
-        serve(
-            catalog,
-            registry,
-            port=args.port,
-            token=args.token,
-            registration_bundle=args.registration_bundle,
-            registration_review=args.registration_review,
-            lesion_volume_comparison=args.lesion_volume_comparison,
-            source_root=args.root,
-        )
+        try:
+            serve(
+                catalog,
+                registry,
+                port=args.port,
+                token=args.token,
+                registration_bundle=args.registration_bundle,
+                registration_review=args.registration_review,
+                lesion_volume_comparison=args.lesion_volume_comparison,
+                agent_audit_log=args.agent_audit_log,
+                source_root=args.root,
+            )
+        except (OSError, ValueError) as error:
+            argument_parser.error(str(error))
     elif args.command == "launch":
         try:
             ui_dist = _viewer_dist(args.ui_dist)
@@ -513,19 +534,23 @@ def main() -> None:
                 )["fragment"]
             except ValueError as error:
                 argument_parser.error(str(error))
-        serve(
-            catalog,
-            registry,
-            port=args.port,
-            token=args.token,
-            ui_dist=ui_dist,
-            open_browser=not args.no_open,
-            navigation_fragment=navigation_fragment,
-            registration_bundle=args.registration_bundle,
-            registration_review=args.registration_review,
-            lesion_volume_comparison=args.lesion_volume_comparison,
-            source_root=args.root,
-        )
+        try:
+            serve(
+                catalog,
+                registry,
+                port=args.port,
+                token=args.token,
+                ui_dist=ui_dist,
+                open_browser=not args.no_open,
+                navigation_fragment=navigation_fragment,
+                registration_bundle=args.registration_bundle,
+                registration_review=args.registration_review,
+                lesion_volume_comparison=args.lesion_volume_comparison,
+                agent_audit_log=args.agent_audit_log,
+                source_root=args.root,
+            )
+        except (OSError, ValueError) as error:
+            argument_parser.error(str(error))
     elif args.command == "viewer-link":
         try:
             catalog = json.loads(args.manifest.read_text())
@@ -577,6 +602,11 @@ def main() -> None:
             raise SystemExit(1)
     elif args.command == "validate-lesion-volume-comparison":
         summary = lesion_volume_comparison_summary(args.archive, args.source_root)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "verify-agent-audit":
+        summary = agent_access_audit_summary(args.audit_log)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

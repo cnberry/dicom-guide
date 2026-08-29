@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.5.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.6.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -24,11 +24,12 @@ DICOM catalog is built. The launched agent interface is the same loopback bearer
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-exact v0.5.0 artifact has passed no-index install, runtime, synthetic source-bound SEG,
-qualified boundary-review, reviewed volume-comparison validation, and reviewed native-
-boundary display with browser-only masks, source-tamper
-refusal, and loopback launch
-on macOS arm64 and Strawberry Linux x86_64; signing/notarization remains pending.
+exact v0.6.0 artifact has passed no-index install, runtime, privacy-minimized bearer-
+access audit, audit-tamper refusal, and loopback launch on macOS arm64 and Strawberry
+Linux x86_64. Synthetic source-bound SEG, qualified boundary review, reviewed volume-
+comparison validation, and reviewed native-boundary display remain covered by the full
+regression suite and the v0.5.0 cross-platform release gate; signing/notarization
+remains pending.
 
 ## Local artifacts
 
@@ -562,6 +563,46 @@ observation, pairing approval, registration result, measurement validation, clin
 review, diagnosis, or response conclusion. Agents needing evidentiary output must use
 the source-linked measurement/key-image/review contracts.
 
+## Optional bearer-access audit
+
+Agents can run the loopback service with an explicit private audit destination:
+
+```bash
+scanview-agent launch '/safe/local/DICOM/root' --no-open \
+  --agent-audit-log '/safe/private/scanview-agent-access.jsonl'
+```
+
+The destination parent must already exist. ScanView creates or resumes one owner-only,
+single-link regular file without following a final symlink, holds an exclusive process
+lock, writes with `O_APPEND`, and fsyncs each event. Startup validates the entire
+strict JSONL hash chain. Before routing each covered bearer GET, it appends one v1
+event. A changed, corrupt, concurrently used, over-limit, permission-broadened, or
+unwritable log causes HTTP 503 before the sensitive bearer operation is routed.
+Browser-session reads are not bearer events and remain usable if the optional bearer
+audit becomes unavailable.
+
+Events conform to `schemas/scanview-agent-access-audit-event-v1.schema.json` and
+contain only sequence, whole-second UTC timestamp, fixed operation class,
+`bearer_authorized_request`, previous-event SHA-256, event SHA-256, and explicit
+local-only/no-content declarations. Fixed classes cover manifest, viewer state,
+comparison candidates, native-boundary summary, registration status, native DICOM
+instance requests, and bearer attempts at browser-only boundary/registration context
+or pixels. An event proves that the configured bearer capability authorized a request;
+it does not claim response delivery or identify a person, process, model, or agent.
+
+The audit never stores the bearer token, HTTP target/URL, query, opaque IDs, filesystem
+path, response status/body/size, DICOM metadata, pixels, masks, measurements, reviewed
+values, or medical conclusions. Stop the service before independent verification:
+
+```bash
+scanview-agent verify-agent-audit '/safe/private/scanview-agent-access.jsonl'
+```
+
+The privacy-minimized verifier returns only validity, event count, first/last sequence,
+last event hash, and fixed absence declarations. The chain is tamper evidence, not a
+digital signature, authenticated agent identity, medical-record audit, or filesystem
+immutable/append-only flag. A privileged host user can still replace or delete it.
+
 ## Local rigid-registration jobs
 
 Agents can request one bounded local registration derivative after a person chooses
@@ -737,6 +778,8 @@ and metadata before each reviewed context or file response.
 The browser receives a
 SameSite, HttpOnly session cookie after a one-time loopback redirect; the token is
 not exposed to viewer JavaScript or retained in the visible URL.
+When `--agent-audit-log` is configured, covered bearer GETs are recorded before this
+routing step; an audit failure returns 503 without exposing the requested payload.
 
 ## Required agent output shape
 

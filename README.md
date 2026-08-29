@@ -108,6 +108,14 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   current opaque series/instance positions, active tool, link mode, MPR series, and
   evidence counts. It is off by default, memory-only, pixel/PHI-free, and expires
   within 30 seconds without a browser heartbeat.
+- Optional fail-closed bearer-access auditing: `--agent-audit-log` records only a
+  fixed sensitive-operation class, authorization outcome, sequence, UTC timestamp,
+  and SHA-256 chain anchors in one owner-only local JSONL file. It never records
+  tokens, URLs/request targets, opaque IDs, paths, payload sizes, pixels, masks,
+  metadata, measurements, or medical values. The application uses `O_APPEND`, an
+  exclusive process lock, fsync, and restart validation; external change or write
+  failure returns 503 before a sensitive bearer read is routed. This is tamper
+  evidence, not agent identity authentication or an OS immutable-file guarantee.
 - Transparent metadata compatibility score and warnings.
 - Version-gated local 3D Slicer/BRAINSFit/BRAINSResample rigid-registration jobs for explicitly
   attested, matching opaque patient-context, same-modality chronological series.
@@ -132,7 +140,7 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Versioned measurement, key-image, manual ROI volume, manual ROI review, manual ROI
   volume-comparison review, reviewed native-boundary display, consultation-key-image,
   consultation-packet, comparison, visit-packet, review-record,
-  navigation-intent, viewer-state, rigid-registration, and registration-QA JSON
+  navigation-intent, viewer-state, agent-access-audit event, rigid-registration, and registration-QA JSON
   Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
@@ -171,8 +179,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.5.0.zip
-cd scanview-offline-0.5.0
+unzip release/scanview-offline-0.6.0.zip
+cd scanview-offline-0.6.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -224,6 +232,10 @@ python3 -m venv .venv
 .venv/bin/scanview-agent launch '/path/to/copied/DICOM'
 .venv/bin/scanview-agent launch '/path/to/copied/DICOM' \
   --lesion-volume-comparison '/path/to/reviewed-volume-comparison.zip'
+.venv/bin/scanview-agent launch '/path/to/copied/DICOM' \
+  --agent-audit-log '/safe/private/scanview-agent-access.jsonl'
+.venv/bin/scanview-agent verify-agent-audit \
+  '/safe/private/scanview-agent-access.jsonl'
 .venv/bin/scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 .venv/bin/scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
 .venv/bin/scanview-agent validate-lesion-volume \

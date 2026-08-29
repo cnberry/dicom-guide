@@ -13,6 +13,9 @@ scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM' \
   --lesion-volume-comparison '/path/to/reviewed-volume-comparison.zip'
+scanview-agent launch '/path/to/copied/DICOM' \
+  --agent-audit-log '/safe/private/scanview-agent-access.jsonl'
+scanview-agent verify-agent-audit '/safe/private/scanview-agent-access.jsonl'
 scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
 scanview-agent validate-lesion-volume \
@@ -74,10 +77,12 @@ For offline transfer and installation on macOS or Linux, run
 wheel, pinned pure-Python `pydicom` 3.0.2, hash-locked local requirements, and
 verifier/install/launch scripts. The installer invokes pip only with `--no-index` and
 `--require-hashes`, and every launch checks the bundle and installed runtime before
-indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.5.0 bundle has passed
-offline install, runtime checks, source-bound boundary-review and reviewed volume-
-comparison validation, reviewed native-boundary display, tamper refusal, and loopback launch on both macOS arm64 and
-Strawberry Linux x86_64;
+indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.6.0 bundle has passed
+offline install, runtime checks, privacy-minimized bearer-access auditing, audit-
+tamper refusal, and loopback launch on both macOS arm64 and Strawberry Linux x86_64.
+The earlier source-bound boundary-review, reviewed volume-comparison, and reviewed
+native-boundary display gates remain covered by the full regression suite and v0.5.0
+cross-platform package evidence;
 publisher signing remains pending.
 The server has no source-write or delete endpoint. The unified viewer's derivative
 POSTs accept exact bounded transports: two timepoint key-image bundles for a visit

@@ -128,7 +128,7 @@ def _manifest(root: Path) -> dict[str, Any]:
         "schema_version": "1.0.0",
         "artifact_type": "scanview_offline_runtime_bundle",
         "project": "ScanView",
-        "version": "0.5.0",
+        "version": "0.6.0",
         "supported_platforms": ["macos", "linux"],
         "requires_python": ">=3.11",
         "runtime_network_required": False,
