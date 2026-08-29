@@ -129,7 +129,7 @@ export const getPatientOrientationLabels = (
   };
 };
 
-const normalFromOrientation = (orientation?: number[]): number[] | undefined => {
+export const normalFromOrientation = (orientation?: number[]): number[] | undefined => {
   if (!orientation || orientation.length < 6) return undefined;
   const [rx, ry, rz, cx, cy, cz] = orientation;
   const normal = [ry * cz - rz * cy, rz * cx - rx * cz, rx * cy - ry * cx];
@@ -187,10 +187,12 @@ export const assessMprEligibility = (series?: DicomSeries): MprEligibility => {
   ) {
     return { eligible: false, reason: 'Every source slice needs a finite patient position.' };
   }
-  const coordinates = series.instances.map((instance) => dot(instance.imagePosition!, normal));
+  const coordinates = series.instances
+    .map((instance) => dot(instance.imagePosition!, normal))
+    .sort((left, right) => left - right);
   const spacings = coordinates
     .slice(1)
-    .map((coordinate, index) => Math.abs(coordinate - coordinates[index]));
+    .map((coordinate, index) => coordinate - coordinates[index]);
   if (spacings.some((spacing) => !Number.isFinite(spacing) || spacing < 0.01)) {
     return { eligible: false, reason: 'Source slice positions overlap or are malformed.' };
   }
@@ -269,9 +271,16 @@ export const assessLesionVolumeEligibility = (series?: DicomSeries): MprEligibil
     };
   }
   const projections = series.instances.map((instance) => dot(instance.imagePosition!, normal));
-  const gaps = projections
+  const sortedProjections = [...projections].sort((left, right) => left - right);
+  const gaps = sortedProjections
     .slice(1)
-    .map((coordinate, index) => Math.abs(coordinate - projections[index]));
+    .map((coordinate, index) => coordinate - sortedProjections[index]);
+  if (gaps.some((gap) => gap < 0.01)) {
+    return {
+      eligible: false,
+      reason: 'Manual volume evidence is disabled because source planes overlap or repeat.',
+    };
+  }
   const sliceSpacingMm = median(gaps);
   const tolerance = Math.max(0.01, sliceSpacingMm * 0.001);
   if (gaps.some((gap) => Math.abs(gap - sliceSpacingMm) > tolerance)) {

@@ -608,6 +608,28 @@
    audited/no-store/409 endpoint, loopback-only listener, strict packaged-browser
    display/clear, and no-external-processing gates. No Mila data went to Strawberry.
 
+## Completed in the thirtieth milestone
+
+1. Added a strict local source-carried DICOM SEG catalog and the 29th embedded JSON
+   Schema. Stable no-follow reads bind every SEG and referenced MR/CT source byte;
+   malformed or changed inputs fail closed.
+2. Limited import to uncompressed binary SEG on one exact regular native grid with
+   single-frame sources, explicit per-frame source references, preserved spatial
+   locations, standard derivation/purpose codes, and coherent multi-frame dimensions.
+3. Rebuilt sparse frames into bounded in-memory dense masks, independently rechecked
+   ordering, hashes, binary values, voxel counts, and technical native-grid volumes in
+   the browser, and left all originals unchanged.
+4. Added a browser-session-only mask route and an explicitly sensitive authenticated
+   catalog route. Bearer agents may read catalog provenance, segment text, geometry,
+   and technical volume, but never mask bytes; validation summaries remain minimized,
+   and every external-processing and clinical permission remains false.
+5. Added a read-only three-plane Cornerstone display with linked crosshairs. It has no
+   paint, erase, measurement conversion, export, diagnosis, treatment-response, or
+   clinical-conclusion path and cannot be recorded in schemas that lack SEG provenance.
+6. Added adversarial Python/TypeScript/HTTP coverage and a sparse patient-free DICOM
+   SEG generator. Full DICOM conformance and independent vendor/highdicom fixture
+   interoperability remain explicit future gates.
+
 ## Immediate
 
 1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
@@ -622,18 +644,21 @@
 4. Treat GSPS text/geometry as unverified source display content. Confirm its meaning
    and authorship in the clinical imaging system; do not copy it into measurements or
    evidence until the evidence contract explicitly records GSPS provenance.
-5. Import a future same-modality MRI follow-up, have a person confirm the intended
+5. Treat source-carried SEG labels, codes, creator/algorithm fields, masks, and
+   technical volume as unverified local display content. Confirm the object and its
+   meaning in the clinical imaging system before any clinical use.
+6. Import a future same-modality MRI follow-up, have a person confirm the intended
    earlier/later sequences and clinical roles, run the required engine on that pair,
    and complete qualified visual/quantitative QA.
-6. Protect the authenticated local Slicer installation and keep using the recorded
+7. Protect the authenticated local Slicer installation and keep using the recorded
    launcher hash; reauthenticate any replacement before a future patient-specific job.
-7. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
+8. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
    hash; repeat authentication and synthetic commissioning after any replacement.
-8. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
+9. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
    offline bundle, and evaluate whether to include a separately authenticated interpreter.
-9. Design optional authenticated signature integration for clinical organizations;
+10. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
-10. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
+11. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
    on a clinically appropriate same-modality case before any patient-specific reliance.
 
 ## Next milestone

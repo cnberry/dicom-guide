@@ -17,6 +17,10 @@ scanview-agent presentation-states '/path/to/copied/DICOM' \
   --output '/safe/private/presentation-states.json'
 scanview-agent validate-presentation-states '/path/to/copied/DICOM' \
   '/safe/private/presentation-states.json'
+scanview-agent source-segmentations '/path/to/copied/DICOM' \
+  --output '/safe/private/source-segmentations.json'
+scanview-agent validate-source-segmentations '/path/to/copied/DICOM' \
+  '/safe/private/source-segmentations.json'
 scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM' \
@@ -88,8 +92,11 @@ verifier/install/launch scripts. The installer invokes pip only with `--no-index
 indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.8.0 bundle has passed
 offline install, runtime checks, consultation-plan generation/validation, browser and
 bearer authorization gates, and loopback launch on both macOS arm64 and Strawberry
-Linux x86_64. The v0.9.0 GSPS bundle must pass the same exact-artifact gate before its
-release statement is complete.
+Linux x86_64. The v0.9.0 GSPS bundle passed the same exact-artifact gate. The v0.10.0
+source-SEG bundle also passed fresh no-index install, 29-schema runtime, strict CLI,
+authorization, browser-only mask, hash/length, source-change, and loopback-only gates
+on macOS arm64 and Strawberry Linux x86_64. Its second build was byte-identical; no
+external DICOM-processing API or runtime network was required.
 The earlier source-bound boundary-review, reviewed volume-comparison, and reviewed
 native-boundary display gates remain covered by the full regression suite and v0.5.0
 cross-platform package evidence;
@@ -131,6 +138,20 @@ local agents and the human viewer. It returns `no-store` and can be audited as
 identifiers or clinical language. Creator identity is not authenticated, source-text
 clinical meaning is `not_assessed`, and ScanView interpretation, editing, measurement,
 diagnosis, response, and conclusion permissions are false. No external API is called.
+
+`source-segmentations` creates an owner-only catalog for a deliberately narrow local
+DICOM SEG profile. It requires uncompressed binary frames, one exact regular single-
+frame MR/CT source grid, explicit per-frame source references with Spatial Locations
+Preserved `YES`, supported segment/plane dimensions, strict geometry, and catalog-wide
+decode/mask budgets. `validate-source-segmentations` rehashes every source and returns
+only aggregate counts. Full DICOM conformance, creator identity, algorithm identity or
+accuracy, boundary accuracy, tissue meaning, diagnosis, and response are not asserted.
+The sensitive catalog is bearer-readable and audited as `source_segmentations_read`;
+dense mask bytes require the HttpOnly browser session, and bearer attempts are denied
+and audited separately. The browser rehashes/recounts the mask and aligns slice slabs
+by independently derived physical source order before read-only MPR display. No
+external API is called.
+
 `create-consultation-plan` accepts a strict local request containing 2–8 exact opaque
 series/instance pairs and bounded discussion headings. It rejoins every item to the
 supplied catalog, requires one opaque patient context, both MR and CT, distinct

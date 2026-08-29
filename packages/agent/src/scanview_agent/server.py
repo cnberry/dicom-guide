@@ -5,6 +5,7 @@ import io
 import json
 import mimetypes
 import os
+import re
 import secrets
 import stat
 import tempfile
@@ -66,6 +67,10 @@ from .registration_reviews import (
     registration_qa_context,
     registration_review_bytes,
 )
+from .source_segmentations import (
+    build_source_segmentation_catalog,
+    registry_segmentation_source_loader,
+)
 from .visit_packets import (
     MAX_VISIT_PACKET_TRANSPORT_BYTES,
     visit_packet_from_transport,
@@ -101,6 +106,7 @@ def _agent_audit_operation(path: str) -> str | None:
         "/v1/comparison-candidates": "comparison_candidates_read",
         "/v1/longitudinal-readiness": "longitudinal_readiness_read",
         "/v1/presentation-states": "presentation_states_read",
+        "/v1/source-segmentations": "source_segmentations_read",
         "/v1/lesion-volume-comparison-display": "native_boundary_summary_read",
         "/v1/lesion-volume-comparison-display/context": (
             "browser_only_native_boundary_context_attempt"
@@ -115,6 +121,8 @@ def _agent_audit_operation(path: str) -> str | None:
         return exact[path]
     if path.startswith("/v1/instances/"):
         return "native_dicom_instance_read"
+    if path.startswith("/v1/source-segmentations/"):
+        return "browser_only_source_segmentation_mask_attempt"
     if path.startswith("/v1/lesion-volume-comparison-display/masks/"):
         return "browser_only_native_boundary_mask_attempt"
     if path.startswith("/v1/registration-qa/files/") or path.startswith(
@@ -294,6 +302,9 @@ class ScanViewServer(ThreadingHTTPServer):
     agent_access_audit: AgentAccessAudit | None
     presentation_state_catalog: dict[str, Any]
     presentation_state_instance_ids: set[str]
+    source_segmentation_catalog: dict[str, Any]
+    source_segmentation_masks: dict[tuple[str, int], bytes]
+    source_segmentation_instance_ids: set[str]
 
     def server_close(self) -> None:
         try:
@@ -368,6 +379,29 @@ class ScanViewServer(ThreadingHTTPServer):
             return False
         return True
 
+    def source_segmentation_inputs_unchanged(self) -> bool:
+        try:
+            for instance_id in self.source_segmentation_instance_ids:
+                path = self.registry.get(instance_id)
+                guard = self.instance_guards.get(instance_id)
+                if path is None or guard is None:
+                    return False
+                metadata = path.lstat()
+                observed = {
+                    "device": metadata.st_dev,
+                    "inode": metadata.st_ino,
+                    "bytes": metadata.st_size,
+                    "mtime_ns": metadata.st_mtime_ns,
+                    "ctime_ns": metadata.st_ctime_ns,
+                }
+                if not stat.S_ISREG(metadata.st_mode) or any(
+                    observed[field] != guard[field] for field in observed
+                ):
+                    return False
+        except OSError:
+            return False
+        return True
+
     def publish_viewer_state(self, state: dict[str, Any]) -> bool:
         with self.viewer_state_lock:
             if state["publisher_id"] in self.viewer_state_revoked_publishers:
@@ -419,6 +453,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path.startswith("/v1/instances/"):
             path = "/v1/instances/{opaque_id}"
+        elif path.startswith("/v1/source-segmentations/"):
+            path = "/v1/source-segmentations/{opaque_id}/masks/{segment_number}"
         print(f"scanview-local {self.command} {path} {args[1] if len(args) > 1 else ''}")
 
     def _bearer_authorized(self) -> bool:
@@ -591,6 +627,21 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return
             self._send_json(self.server.presentation_state_catalog)
+            return
+        if path == "/v1/source-segmentations":
+            if not self.server.source_segmentation_inputs_unchanged():
+                self._send_json(
+                    {"error": "source_segmentation_inputs_changed"},
+                    HTTPStatus.CONFLICT,
+                )
+                return
+            self._send_json(self.server.source_segmentation_catalog)
+            return
+        source_segmentation_prefix = "/v1/source-segmentations/"
+        if path.startswith(source_segmentation_prefix):
+            self._send_source_segmentation_mask(
+                path.removeprefix(source_segmentation_prefix)
+            )
             return
         if path == "/v1/lesion-volume-comparison-display":
             summary = self.server.lesion_volume_display_agent_summary
@@ -958,6 +1009,76 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _send_source_segmentation_mask(self, suffix: str) -> None:
+        if not self._browser_authorized():
+            self._send_json(
+                {"error": "browser_session_required"}, HTTPStatus.FORBIDDEN
+            )
+            return
+        parts = suffix.split("/")
+        if (
+            len(parts) != 3
+            or parts[1] != "masks"
+            or not re.fullmatch(r"instance_[0-9a-f]{20}", parts[0])
+            or not re.fullmatch(r"[1-9][0-9]{0,4}", parts[2])
+        ):
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        segmentation_id = parts[0]
+        segment_number = int(parts[2])
+        if not self.server.source_segmentation_inputs_unchanged():
+            self._send_json(
+                {"error": "source_segmentation_inputs_changed"},
+                HTTPStatus.CONFLICT,
+            )
+            return
+        state = next(
+            (
+                candidate
+                for candidate in self.server.source_segmentation_catalog[
+                    "segmentations"
+                ]
+                if candidate["segmentation_id"] == segmentation_id
+            ),
+            None,
+        )
+        segment = next(
+            (
+                candidate
+                for candidate in state["segments"]
+                if candidate["segment_number"] == segment_number
+            ),
+            None,
+        ) if state is not None else None
+        payload = self.server.source_segmentation_masks.get(
+            (segmentation_id, segment_number)
+        )
+        if state is None or segment is None or payload is None:
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        dimensions = state["grid"]["dimensions"]
+        expected_bytes = dimensions[0] * dimensions[1] * dimensions[2]
+        if (
+            len(payload) != expected_bytes
+            or hashlib.sha256(payload).hexdigest() != segment["mask_sha256"]
+            or sum(payload) != segment["marked_voxel_count"]
+            or any(value not in {0, 1} for value in payload)
+        ):
+            self._send_json(
+                {"error": "source_segmentation_mask_integrity_failed"},
+                HTTPStatus.LOCKED,
+            )
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header(
+            "Content-Type", "application/vnd.scanview.source-binary-mask"
+        )
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("X-Content-SHA256", segment["mask_sha256"])
+        self._security_headers()
+        self.end_headers()
+        self.wfile.write(payload)
+
     def _send_instance_file(self, instance_id: str) -> None:
         source = self.server.registry.get(instance_id)
         guard = self.server.instance_guards.get(instance_id)
@@ -1301,6 +1422,14 @@ def create_server(
         state["presentation_state_id"]
         for state in cached_presentation_state_catalog["unsupported_states"]
     }
+    (
+        cached_source_segmentation_catalog,
+        cached_source_segmentation_masks,
+        source_segmentation_instance_ids,
+    ) = build_source_segmentation_catalog(
+        catalog,
+        registry_segmentation_source_loader(catalog, guarded_registry),
+    )
     resolved_source_root = (
         source_root.expanduser().resolve(strict=True) if source_root is not None else None
     )
@@ -1482,6 +1611,9 @@ def create_server(
     server.agent_access_audit = agent_access_audit
     server.presentation_state_catalog = cached_presentation_state_catalog
     server.presentation_state_instance_ids = presentation_state_instance_ids
+    server.source_segmentation_catalog = cached_source_segmentation_catalog
+    server.source_segmentation_masks = cached_source_segmentation_masks
+    server.source_segmentation_instance_ids = source_segmentation_instance_ids
     return server
 
 

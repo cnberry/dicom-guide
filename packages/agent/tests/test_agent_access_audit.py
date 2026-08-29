@@ -220,9 +220,14 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
             ("/v1/comparison-candidates", HTTPStatus.OK),
             ("/v1/longitudinal-readiness", HTTPStatus.OK),
             ("/v1/presentation-states", HTTPStatus.OK),
+            ("/v1/source-segmentations", HTTPStatus.OK),
             ("/v1/lesion-volume-comparison-display", HTTPStatus.OK),
             ("/v1/registration-qa", HTTPStatus.OK),
             (f"/v1/instances/{INSTANCE_ID}", HTTPStatus.OK),
+            (
+                f"/v1/source-segmentations/{INSTANCE_ID}/masks/1",
+                HTTPStatus.FORBIDDEN,
+            ),
             (
                 "/v1/lesion-volume-comparison-display/context",
                 HTTPStatus.FORBIDDEN,
@@ -244,7 +249,7 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
 
     summary = agent_access_audit_summary(audit_path)
     assert summary["valid"] is True
-    assert summary["event_count"] == 12
+    assert summary["event_count"] == 14
     events = [json.loads(line) for line in audit_path.read_text().splitlines()]
     assert [event["operation"] for event in events] == [
         "manifest_read",
@@ -252,9 +257,11 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
         "comparison_candidates_read",
         "longitudinal_readiness_read",
         "presentation_states_read",
+        "source_segmentations_read",
         "native_boundary_summary_read",
         "registration_status_read",
         "native_dicom_instance_read",
+        "browser_only_source_segmentation_mask_attempt",
         "browser_only_native_boundary_context_attempt",
         "browser_only_native_boundary_mask_attempt",
         "browser_only_registration_context_attempt",

@@ -26,11 +26,13 @@ OPERATIONS = (
     "comparison_candidates_read",
     "longitudinal_readiness_read",
     "presentation_states_read",
+    "source_segmentations_read",
     "native_boundary_summary_read",
     "registration_status_read",
     "native_dicom_instance_read",
     "browser_only_native_boundary_context_attempt",
     "browser_only_native_boundary_mask_attempt",
+    "browser_only_source_segmentation_mask_attempt",
     "browser_only_registration_context_attempt",
     "browser_only_registration_volume_attempt",
 )

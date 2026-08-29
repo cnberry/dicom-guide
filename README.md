@@ -43,6 +43,15 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   objects currently remain locked because their displayed-area far corner does not
   satisfy ScanView's strict DICOM full-image rule. Creator identity and source-text
   meaning are not assessed.
+- Conservative local source-carried DICOM SEG import: uncompressed binary masks with
+  explicit source references, `SpatialLocationsPreserved=YES`, a supported two-
+  dimension multi-frame organization, one exact regular single-frame MR/CT grid, and
+  bounded catalog-wide decode/mask budgets are decoded locally. Browser-session mask
+  bytes are independently rehashed and reordered by exact source identity to the
+  physical Cornerstone volume. Bearer agents may read the sensitive local catalog but
+  never mask bytes. Passing this narrow profile is not full DICOM conformance
+  certification; creator, algorithm, boundary, tissue, diagnosis, response, and
+  treatment effect are not verified or inferred.
 - Geometry-gated, single-series axial/coronal/sagittal MPR built locally from native
   source slices, with physically linked patient-space crosshairs, visible LPS
   coordinates, window/level, pan, zoom, wheel navigation, and reset.
@@ -201,8 +210,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.9.0.zip
-cd scanview-offline-0.9.0
+unzip release/scanview-offline-0.10.0.zip
+cd scanview-offline-0.10.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -217,6 +226,14 @@ Building the bundle may download the pinned dependency unless `--pydicom-wheel` 
 supplied, but installation, viewing, indexing, comparison, and evidence generation
 are offline. The integrity manifest is corruption evidence, not publisher signing or
 clinical authentication. Output is non-overwriting.
+
+The retained owner-only v0.10.0 ZIP is 5,531,237 bytes with SHA-256
+`715b161a4a55493b19d3b8895d97d1c8fd4644bf798c5617398d140ceacd503f`.
+It passed a second byte-identical build, no-index install, 29-schema runtime, strict
+source-SEG CLI/authorization/mask/hash/source-change gates on macOS arm64 and
+Strawberry Linux x86_64, and required no runtime network or external DICOM-processing
+API. Only patient-free synthetic data went to Strawberry, and its test tree was
+deleted afterward.
 
 The retained owner-only v0.9.0 ZIP is 5,510,395 bytes with SHA-256
 `d0ba563e5e8a0d41cac52b2da6f700a5ff22183b411af642f46012182c0dd1ae`.
@@ -286,6 +303,10 @@ python3 -m venv .venv
   --output presentation-states.json
 .venv/bin/scanview-agent validate-presentation-states \
   '/path/to/copied/DICOM' presentation-states.json
+.venv/bin/scanview-agent source-segmentations '/path/to/copied/DICOM' \
+  --output source-segmentations.json
+.venv/bin/scanview-agent validate-source-segmentations \
+  '/path/to/copied/DICOM' source-segmentations.json
 .venv/bin/scanview-agent compare-measurements baseline.json followup.json \
   --baseline-id 'bidirectional:baseline-id' \
   --followup-id 'bidirectional:followup-id' \
@@ -322,6 +343,10 @@ The server exposes:
 - `GET /v1/comparison-candidates`
 - `GET /v1/presentation-states` (source-bound GSPS display catalog; annotation text
   may contain identifiers)
+- `GET /v1/source-segmentations` (sensitive source-bound SEG catalog; bearer or
+  browser authentication; labels/codes may contain identifiers)
+- `GET /v1/source-segmentations/{opaque_id}/masks/{segment_number}` (browser session
+  only; dense binary mask rehashed against its catalog descriptor)
 - `GET /v1/registration-qa` (privacy-minimized agent status)
 - `GET /v1/registration-qa/preview` (separate browser session capability only)
 - `GET /v1/registration-qa/files/{allowlisted_nrrd}` (separate browser session capability only)

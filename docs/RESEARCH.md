@@ -95,6 +95,36 @@ interoperability foundation.
 It is bundled only at build time and no dependency install script is allowed, but the
 pin remains a dependency/license review item before a signed distribution.
 
+## Source-carried DICOM SEG import used in v0.10
+
+DICOM Segmentation is a multi-frame derived image object. Its Image Module defines
+binary and fractional segmentations, segment-number semantics, foreground values, and
+pixel-data constraints; the Segmentation IOD and functional-group table define the
+required shared/per-frame relationships. See [DICOM PS3.3 C.8.20.2](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.8.20.2.html),
+[PS3.3 A.51](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_A.51.html),
+and [PS3.3 A.51.5](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_A.51.5.html).
+
+ScanView v0.10 implements a deliberately narrow reader profile, not a general DICOM
+SEG conformance claim. It accepts only uncompressed binary SEG using Explicit or
+Implicit VR Little Endian; one referenced MR/CT series; single-frame sources; an exact
+regular native matrix/orientation/position/spacing grid; standard segmentation
+derivation and source-purpose codes; `SpatialLocationsPreserved=YES`; and coherent
+segment/plane dimension indexes. It refuses fractional or compressed objects,
+resampling, multiframe sources, inconsistent or missing references, duplicate planes,
+tilted/drifting grids, and objects beyond fixed decoded-work and retained-mask limits.
+
+Sparse frames are locally unpacked into a dense source-ordered 0/1 mask. The Python
+reader hashes every stable source descriptor and computes voxel count and native-grid
+volume; the browser independently checks physical slice order, permissions, hashes,
+binary bytes, counts, geometry, and arithmetic before creating a read-only labelmap.
+There is no upload or processing API, and ScanView does not modify or emit a new SEG.
+The display does not authenticate the creator, validate the algorithm, establish that
+a segment is tumor, quantify boundary uncertainty, or authorize diagnosis or response.
+
+The next interoperability gate is an independently produced highdicom/vendor fixture
+and comparison in an established viewer such as 3D Slicer or Weasis. Until that passes,
+support means only the fixed ScanView profile above.
+
 ## Manual ROI DICOM SEG profile
 
 DICOM defines Segmentation objects as pixel classifications derived from referenced

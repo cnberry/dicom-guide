@@ -115,6 +115,7 @@ function NativeBoundaryMpr({
         mask: loaded.mask,
         foregroundVoxels: loaded.timepoint.foreground_voxel_count,
         label: `${loaded.timepoint.role} accepted reviewed boundary`,
+        orderedInstanceIds: loaded.timepoint.ordered_instance_ids,
       },
     )
       .then((controller) => {

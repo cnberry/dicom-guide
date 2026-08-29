@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-source-segmentation-catalog-v1.schema.json",
+  "title": "ScanView source-bound read-only DICOM SEG catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "generated_at",
+    "catalog_content_sha256",
+    "local_only",
+    "privacy",
+    "segmentation_count",
+    "supported_segmentation_count",
+    "unsupported_segmentation_count",
+    "segment_count",
+    "segmentations",
+    "unsupported_segmentations",
+    "permissions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "artifact_type": { "const": "scanview.source-segmentation-catalog" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "catalog_content_sha256": { "$ref": "#/$defs/sha256" },
+    "local_only": { "const": true },
+    "privacy": { "$ref": "#/$defs/privacy" },
+    "segmentation_count": { "type": "integer", "minimum": 0 },
+    "supported_segmentation_count": { "type": "integer", "minimum": 0 },
+    "unsupported_segmentation_count": { "type": "integer", "minimum": 0 },
+    "segment_count": { "type": "integer", "minimum": 0 },
+    "segmentations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/segmentation" }
+    },
+    "unsupported_segmentations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unsupportedSegmentation" }
+    },
+    "permissions": { "$ref": "#/$defs/permissions" },
+    "limitations": {
+      "const": [
+        "These are read-only masks extracted from source-carried DICOM Segmentation objects and rejoined to exact local MR/CT source instances.",
+        "ScanView does not authenticate the segmentation creator, verify the algorithm, or assess segment labels and coded properties for identifiers, accuracy, or clinical meaning.",
+        "Only a conservative native-grid subset is displayed: uncompressed binary SEG, one referenced MR/CT series, single-frame sources, exact matrix/orientation/position/spacing, and one explicit source-image reference with Spatial Locations Preserved YES per frame.",
+        "Passing this narrow ScanView import profile is not full DICOM conformance certification; technical marked-voxel counts and native-grid volumes remain unreviewed, unsupported objects fail closed, and original DICOM objects remain authoritative."
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "studyId": {
+      "type": "string",
+      "pattern": "^study_[0-9a-f]{20}$"
+    },
+    "seriesId": {
+      "type": "string",
+      "pattern": "^series_[0-9a-f]{20}$"
+    },
+    "instanceId": {
+      "type": "string",
+      "pattern": "^instance_[0-9a-f]{20}$"
+    },
+    "patientId": {
+      "type": "string",
+      "pattern": "^patient_[0-9a-f]{20}$"
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "direct_identifier_tags_excluded",
+        "segment_text_may_contain_identifiers",
+        "deidentified",
+        "contains_pixels",
+        "contains_paths",
+        "contains_segment_text"
+      ],
+      "properties": {
+        "classification": { "const": "sensitive_local_medical_data" },
+        "direct_identifier_tags_excluded": { "const": true },
+        "segment_text_may_contain_identifiers": { "const": true },
+        "deidentified": { "const": false },
+        "contains_pixels": { "const": false },
+        "contains_paths": { "const": false },
+        "contains_segment_text": { "type": "boolean" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "study_id",
+        "series_id",
+        "instance_id",
+        "patient_context_id",
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "study_id": { "$ref": "#/$defs/studyId" },
+        "series_id": { "$ref": "#/$defs/seriesId" },
+        "instance_id": { "$ref": "#/$defs/instanceId" },
+        "patient_context_id": { "$ref": "#/$defs/patientId" },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 268435456
+        },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "referencedSeries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "study_id",
+        "series_id",
+        "patient_context_id",
+        "modality",
+        "ordered_instance_ids",
+        "referenced_instance_ids"
+      ],
+      "properties": {
+        "study_id": { "$ref": "#/$defs/studyId" },
+        "series_id": { "$ref": "#/$defs/seriesId" },
+        "patient_context_id": { "$ref": "#/$defs/patientId" },
+        "modality": { "enum": ["MR", "CT"] },
+        "ordered_instance_ids": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/instanceId" }
+        },
+        "referenced_instance_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/instanceId" }
+        }
+      }
+    },
+    "grid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relationship",
+        "dimensions",
+        "pixel_spacing_mm",
+        "projected_slice_spacing_mm",
+        "voxel_volume_mm3",
+        "resampled_by_scanview"
+      ],
+      "properties": {
+        "relationship": { "const": "exact_native_source_grid" },
+        "dimensions": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "integer", "minimum": 3, "maximum": 4096 },
+            { "type": "integer", "minimum": 2, "maximum": 65535 },
+            { "type": "integer", "minimum": 2, "maximum": 65535 }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "pixel_spacing_mm": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "number", "exclusiveMinimum": 0 }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "projected_slice_spacing_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "voxel_volume_mm3": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "resampled_by_scanview": { "const": false }
+      }
+    },
+    "code": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "scheme", "meaning"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "scheme": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "meaning": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment_number",
+        "segment_label",
+        "algorithm_type",
+        "algorithm_name",
+        "property_category",
+        "property_type",
+        "recommended_display_cielab",
+        "frame_count",
+        "marked_voxel_count",
+        "computed_volume_mm3",
+        "computed_volume_ml",
+        "mask_sha256"
+      ],
+      "properties": {
+        "segment_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "segment_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "algorithm_type": {
+          "enum": ["MANUAL", "SEMIAUTOMATIC", "AUTOMATIC"]
+        },
+        "algorithm_name": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 256 },
+            { "type": "null" }
+          ]
+        },
+        "property_category": { "$ref": "#/$defs/code" },
+        "property_type": { "$ref": "#/$defs/code" },
+        "recommended_display_cielab": {
+          "oneOf": [
+            {
+              "type": "array",
+              "prefixItems": [
+                { "type": "integer", "minimum": 0, "maximum": 65535 },
+                { "type": "integer", "minimum": 0, "maximum": 65535 },
+                { "type": "integer", "minimum": 0, "maximum": 65535 }
+              ],
+              "minItems": 3,
+              "maxItems": 3
+            },
+            { "type": "null" }
+          ]
+        },
+        "frame_count": { "type": "integer", "minimum": 1, "maximum": 131072 },
+        "marked_voxel_count": { "type": "integer", "minimum": 1, "maximum": 67108864 },
+        "computed_volume_mm3": { "type": "number", "exclusiveMinimum": 0 },
+        "computed_volume_ml": { "type": "number", "exclusiveMinimum": 0 },
+        "mask_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "algorithm_type": { "enum": ["SEMIAUTOMATIC", "AUTOMATIC"] }
+            },
+            "required": ["algorithm_type"]
+          },
+          "then": {
+            "properties": {
+              "algorithm_name": { "type": "string", "minLength": 1, "maxLength": 256 }
+            }
+          }
+        }
+      ]
+    },
+    "segmentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segmentation_id",
+        "source",
+        "display_status",
+        "referenced_series",
+        "referenced_instance_count",
+        "grid",
+        "frame_count",
+        "segment_count",
+        "segments",
+        "creator_identity_authenticated",
+        "source_segment_clinical_meaning",
+        "scanview_interpretation_added"
+      ],
+      "properties": {
+        "segmentation_id": { "$ref": "#/$defs/instanceId" },
+        "source": { "$ref": "#/$defs/source" },
+        "display_status": { "const": "supported_read_only" },
+        "referenced_series": { "$ref": "#/$defs/referencedSeries" },
+        "referenced_instance_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "grid": { "$ref": "#/$defs/grid" },
+        "frame_count": { "type": "integer", "minimum": 1, "maximum": 131072 },
+        "segment_count": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "segments": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/segment" }
+        },
+        "creator_identity_authenticated": { "const": false },
+        "source_segment_clinical_meaning": { "const": "not_assessed" },
+        "scanview_interpretation_added": { "const": false }
+      }
+    },
+    "unsupportedSegmentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segmentation_id", "display_status", "reason"],
+      "properties": {
+        "segmentation_id": { "$ref": "#/$defs/instanceId" },
+        "display_status": { "const": "unsupported" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 300 }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bearer_agent_sensitive_catalog_read_authorized",
+        "bearer_agent_mask_read_authorized",
+        "browser_session_sensitive_catalog_read_authorized",
+        "browser_session_mask_read_authorized",
+        "browser_session_exact_source_navigation_authorized",
+        "browser_session_read_only_mask_display_authorized",
+        "browser_session_technical_volume_display_authorized",
+        "edit_source_segmentation_authorized",
+        "convert_to_scanview_measurement_authorized",
+        "creator_identity_authenticated",
+        "segment_accuracy_verified",
+        "diagnosis_authorized",
+        "response_classification_authorized",
+        "clinical_conclusion_authorized"
+      ],
+      "properties": {
+        "bearer_agent_sensitive_catalog_read_authorized": { "const": true },
+        "bearer_agent_mask_read_authorized": { "const": false },
+        "browser_session_sensitive_catalog_read_authorized": { "const": true },
+        "browser_session_mask_read_authorized": { "const": true },
+        "browser_session_exact_source_navigation_authorized": { "const": true },
+        "browser_session_read_only_mask_display_authorized": { "const": true },
+        "browser_session_technical_volume_display_authorized": { "const": true },
+        "edit_source_segmentation_authorized": { "const": false },
+        "convert_to_scanview_measurement_authorized": { "const": false },
+        "creator_identity_authenticated": { "const": false },
+        "segment_accuracy_verified": { "const": false },
+        "diagnosis_authorized": { "const": false },
+        "response_classification_authorized": { "const": false },
+        "clinical_conclusion_authorized": { "const": false }
+      }
+    }
+  }
+}

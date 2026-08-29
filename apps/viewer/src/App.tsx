@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
 import { MeasurementWorkspace } from './components/MeasurementWorkspace';
 import { MprPanel } from './components/MprPanel';
 import { LesionVolumeComparisonPanel } from './components/LesionVolumeComparisonPanel';
 import { PresentationStatePanel } from './components/PresentationStatePanel';
+import { SourceSegmentationPanel } from './components/SourceSegmentationPanel';
 import {
   createMeasurementEvidencePacket,
   removeMeasurementAnnotation,
@@ -70,6 +71,14 @@ import {
   type ResolvedPresentationState,
   type ResolvedPresentationStateCatalog,
 } from './presentationStates';
+import {
+  loadSourceSegmentationCatalog,
+  loadSourceSegmentationMask,
+  type LoadedSourceSegmentation,
+  type ResolvedSourceSegmentation,
+  type ResolvedSourceSegmentationCatalog,
+  type SourceSegment,
+} from './sourceSegmentations';
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
@@ -128,6 +137,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const followupViewportRef = useRef<DicomViewportHandle>(null);
   const consultationBoardOperationRef = useRef(false);
   const sourceGenerationRef = useRef(0);
+  const sourceSegmentationOperationRef = useRef(0);
+  const sourceSegmentationAbortRef = useRef<AbortController | undefined>(undefined);
   const sourceSummaryRef = useRef('No scan folder loaded');
   const [agentPublisherId, setAgentPublisherId] = useState(createViewerStatePublisherId);
   const agentPublisherIdRef = useRef(agentPublisherId);
@@ -198,6 +209,17 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     useState<AppliedPresentationState>();
   const [followupPresentationState, setFollowupPresentationState] =
     useState<AppliedPresentationState>();
+  const [sourceSegmentationCatalog, setSourceSegmentationCatalog] =
+    useState<ResolvedSourceSegmentationCatalog>();
+  const [sourceSegmentationLoading, setSourceSegmentationLoading] = useState(true);
+  const [sourceSegmentationOpening, setSourceSegmentationOpening] = useState(false);
+  const [sourceSegmentationMessage, setSourceSegmentationMessage] = useState(
+    'Checking source-carried DICOM segmentations locally…',
+  );
+  const [loadedSourceSegmentation, setLoadedSourceSegmentation] =
+    useState<LoadedSourceSegmentation>();
+
+  useEffect(() => () => sourceSegmentationAbortRef.current?.abort(), []);
 
   const baseline = series.find((item) => item.id === baselineId);
   const followup = series.find((item) => item.id === followupId);
@@ -221,6 +243,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const presentationStateActive = Boolean(
     baselinePresentationState || followupPresentationState,
   );
+  const sourceSegmentationActive = Boolean(loadedSourceSegmentation) || sourceSegmentationOpening;
   const visitPacketUsesLoopback = Boolean(
     baseline?.sourceKind === 'loopback-service' && followup?.sourceKind === 'loopback-service',
   );
@@ -278,7 +301,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     consultationBoardState === 'working';
   const viewerStatePublication = useMemo(
     () => {
-      if (consultPrepMode || presentationStateActive) return undefined;
+      if (consultPrepMode || presentationStateActive || sourceSegmentationActive) return undefined;
       return buildViewerStatePublication({
         publisherId: agentPublisherId,
         activeTool,
@@ -305,6 +328,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       measurementComparisonDraft,
       mprSeries,
       presentationStateActive,
+      sourceSegmentationActive,
       effectiveSynchronized,
       visibleMeasurements.length,
     ],
@@ -382,11 +406,13 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setAgentStateMessage(
       presentationStateActive
         ? 'Live agent state is unavailable while a source-carried GSPS presentation is active because the current state schema does not encode GSPS provenance.'
+        : sourceSegmentationActive
+          ? 'Live agent state is unavailable while a source-carried DICOM SEG mask is open because the current state schema does not encode SEG provenance.'
         : consultPrepMode
         ? 'Live agent state is unavailable in Consult Prep because the current state schema uses timepoint roles. Use the neutral consultation packet for agent evidence.'
         : 'Agent viewer state is off by default. Enable it to share only expiring opaque positions locally.',
     );
-  }, [agentStateSharing, consultPrepMode, presentationStateActive]);
+  }, [agentStateSharing, consultPrepMode, presentationStateActive, sourceSegmentationActive]);
 
   useEffect(() => {
     agentPublisherIdRef.current = agentPublisherId;
@@ -412,6 +438,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setAgentStateMessage(
         presentationStateActive
           ? 'Agent viewer state stopped because the active source-carried GSPS presentation is not represented by the current state schema.'
+          : sourceSegmentationActive
+            ? 'Agent viewer state stopped because the active source-carried DICOM SEG mask is not represented by the current state schema.'
           : consultPrepMode
           ? 'Agent viewer state stopped because Consult Prep does not publish timepoint-role state. Use the neutral consultation packet instead.'
           : 'Agent viewer state stopped: it is available only through the authenticated local launcher.',
@@ -465,6 +493,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     agentStateSharing,
     consultPrepMode,
     presentationStateActive,
+    sourceSegmentationActive,
     viewerStatePublication,
   ]);
 
@@ -520,6 +549,10 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         setPresentationStateMessage(
           'Source-carried GSPS states are available only through the authenticated local launcher.',
         );
+        setSourceSegmentationLoading(false);
+        setSourceSegmentationMessage(
+          'Source-carried DICOM SEG masks are available only through the authenticated local launcher.',
+        );
         setSourceReady(true);
         return;
       }
@@ -565,6 +598,37 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           setPresentationStateLoading(false);
         }
       }
+      setSourceSegmentationLoading(true);
+      try {
+        const sourceSegmentations = await loadSourceSegmentationCatalog(
+          catalog.series,
+          controller.signal,
+        );
+        if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
+        setSourceSegmentationCatalog(sourceSegmentations);
+        const supported = sourceSegmentations.catalog.supported_segmentation_count;
+        const unsupported = sourceSegmentations.catalog.unsupported_segmentation_count;
+        const segments = sourceSegmentations.catalog.segment_count;
+        setSourceSegmentationMessage(
+          supported > 0
+            ? `Recognized ${supported} supported source DICOM SEG ${supported === 1 ? 'object' : 'objects'} with ${segments} ${segments === 1 ? 'segment' : 'segments'}; ${unsupported} unsupported ${unsupported === 1 ? 'object remains' : 'objects remain'} locked.`
+            : unsupported > 0
+              ? `No supported source DICOM SEG objects; ${unsupported} ${unsupported === 1 ? 'object failed' : 'objects failed'} closed.`
+              : 'No DICOM Segmentation objects were found in this local workspace.',
+        );
+      } catch (error) {
+        if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
+        setSourceSegmentationCatalog(undefined);
+        setSourceSegmentationMessage(
+          error instanceof Error
+            ? error.message
+            : 'Source-carried DICOM segmentations are unavailable. No mask was displayed.',
+        );
+      } finally {
+        if (!controller.signal.aborted && generation === sourceGenerationRef.current) {
+          setSourceSegmentationLoading(false);
+        }
+      }
       setSourceReady(true);
     });
     return () => controller.abort();
@@ -606,12 +670,22 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const chooseFiles = async (fileList: FileList | null) => {
     if (!fileList?.length) return;
     sourceGenerationRef.current += 1;
+    sourceSegmentationOperationRef.current += 1;
+    sourceSegmentationAbortRef.current?.abort();
+    sourceSegmentationAbortRef.current = undefined;
     const files = Array.from(fileList).filter((file) => !file.name.startsWith('.'));
     setSeries([]);
     setSourceReady(false);
     setBaselineId(undefined);
     setFollowupId(undefined);
     setMprSeriesId(undefined);
+    setLoadedSourceSegmentation(undefined);
+    setSourceSegmentationCatalog(undefined);
+    setSourceSegmentationLoading(false);
+    setSourceSegmentationOpening(false);
+    setSourceSegmentationMessage(
+      'Source-carried DICOM SEG masks are available only through the authenticated local launcher.',
+    );
     setPresentationStateCatalog(undefined);
     setPresentationStateLoading(false);
     setPresentationStateMessage(
@@ -695,6 +769,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setAgentStateMessage(
         presentationStateActive
           ? 'Clear source-carried GSPS states before sharing viewer state; the current state schema does not encode GSPS provenance.'
+          : sourceSegmentationActive
+            ? 'Close the source-carried DICOM SEG mask before sharing viewer state; the current state schema does not encode SEG provenance.'
           : 'Agent viewer state requires scans opened through the authenticated local launcher.',
       );
       return;
@@ -914,12 +990,17 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     target: PresentationStateTarget,
     slot: 'image_a' | 'image_b',
   ) => {
+    sourceSegmentationOperationRef.current += 1;
+    sourceSegmentationAbortRef.current?.abort();
+    sourceSegmentationAbortRef.current = undefined;
+    setSourceSegmentationOpening(false);
     const application: AppliedPresentationState = {
       state: resolved.state,
       target,
     };
     setActiveTool('window');
     setMprSeriesId(undefined);
+    setLoadedSourceSegmentation(undefined);
     if (slot === 'image_a') {
       setBaselineId(target.seriesId);
       setBaselineIndex(target.instanceIndex);
@@ -931,6 +1012,79 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     }
     setPresentationStateMessage(
       `Opened a supported GSPS subset on exact referenced ${target.modality} image ${target.stackPosition} / ${target.stackCount} in ${slot === 'image_a' ? 'Image A' : 'Image B'}. Creator identity and source-text meaning are not assessed. No ScanView measurement, finding, diagnosis, or conclusion was created.`,
+    );
+  };
+
+  const openSourceSegmentation = async (
+    resolved: ResolvedSourceSegmentation,
+    segment: SourceSegment,
+  ) => {
+    const generation = sourceGenerationRef.current;
+    const operation = sourceSegmentationOperationRef.current + 1;
+    sourceSegmentationOperationRef.current = operation;
+    sourceSegmentationAbortRef.current?.abort();
+    const controller = new AbortController();
+    sourceSegmentationAbortRef.current = controller;
+    setSourceSegmentationOpening(true);
+    setSourceSegmentationMessage(
+      'Fetching, rehashing, and checking the browser-session-only dense binary mask locally…',
+    );
+    try {
+      const loaded = await loadSourceSegmentationMask(resolved, segment, controller.signal);
+      if (
+        controller.signal.aborted ||
+        generation !== sourceGenerationRef.current ||
+        operation !== sourceSegmentationOperationRef.current
+      ) return;
+      setBaselinePresentationState(undefined);
+      setFollowupPresentationState(undefined);
+      setLoadedSourceSegmentation(loaded);
+      setMprSeriesId(loaded.series.id);
+      setSourceSegmentationMessage(
+        `Rehashed read-only segment ${segment.segment_number}; building its exact ${loaded.series.modality} native-grid display locally…`,
+      );
+    } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== sourceGenerationRef.current ||
+        operation !== sourceSegmentationOperationRef.current
+      ) return;
+      setSourceSegmentationOpening(false);
+      setSourceSegmentationMessage(
+        error instanceof Error
+          ? error.message
+          : 'Source-carried DICOM segmentation could not be opened. No mask was displayed.',
+      );
+    }
+  };
+
+  const finishSourceSegmentationOpen = useCallback(() => {
+    sourceSegmentationAbortRef.current = undefined;
+    setSourceSegmentationOpening(false);
+    setSourceSegmentationMessage(
+      'Opened the rehashed read-only source DICOM SEG mask on its exact native grid. Creator identity, algorithm accuracy, boundary accuracy, and source clinical meaning are not assessed.',
+    );
+  }, []);
+
+  const failSourceSegmentationOpen = useCallback((message: string) => {
+    sourceSegmentationOperationRef.current += 1;
+    sourceSegmentationAbortRef.current?.abort();
+    sourceSegmentationAbortRef.current = undefined;
+    setLoadedSourceSegmentation(undefined);
+    setMprSeriesId(undefined);
+    setSourceSegmentationOpening(false);
+    setSourceSegmentationMessage(`${message} No source DICOM SEG mask was displayed.`);
+  }, []);
+
+  const closeSourceSegmentation = () => {
+    sourceSegmentationOperationRef.current += 1;
+    sourceSegmentationAbortRef.current?.abort();
+    sourceSegmentationAbortRef.current = undefined;
+    setLoadedSourceSegmentation(undefined);
+    setMprSeriesId(undefined);
+    setSourceSegmentationOpening(false);
+    setSourceSegmentationMessage(
+      'Closed the read-only source DICOM SEG display. Original DICOM images and segmentation objects were not changed.',
     );
   };
 
@@ -1403,11 +1557,13 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                 aria-pressed={agentStateSharing}
                 disabled={!viewerStatePublication}
                 title={
-                  viewerStatePublication
-                    ? 'Opt in to an expiring, privacy-minimized state for bearer-authorized local agents'
-                    : presentationStateActive
+                    viewerStatePublication
+                      ? 'Opt in to an expiring, privacy-minimized state for bearer-authorized local agents'
+                      : presentationStateActive
                       ? 'Unavailable until source-carried GSPS states are cleared'
-                    : consultPrepMode
+                      : sourceSegmentationActive
+                        ? 'Unavailable until the source-carried DICOM SEG mask is closed'
+                      : consultPrepMode
                       ? 'Live agent state is unavailable because its current schema uses longitudinal pane roles; use a consultation packet instead'
                     : 'Available only through the authenticated local launcher'
                 }
@@ -1558,12 +1714,19 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               resetNonce={resetNonce}
               measurementPacket={measurementPacket}
               presentationState={baselinePresentationState}
-              interactionLocked={presentationStateActive}
+              interactionLocked={presentationStateActive || sourceSegmentationOpening}
               onPresentationStateError={(message) =>
                 lockPresentationState('image_a', message)
               }
               consultationSelectionSlot={consultPrepMode ? 'view_a' : undefined}
-              onOpenMpr={() => baseline && setMprSeriesId(baseline.id)}
+              onOpenMpr={() => {
+                sourceSegmentationOperationRef.current += 1;
+                sourceSegmentationAbortRef.current?.abort();
+                sourceSegmentationAbortRef.current = undefined;
+                setSourceSegmentationOpening(false);
+                setLoadedSourceSegmentation(undefined);
+                if (baseline) setMprSeriesId(baseline.id);
+              }}
             />
             <DicomViewport
               ref={followupViewportRef}
@@ -1576,16 +1739,34 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               resetNonce={resetNonce}
               measurementPacket={measurementPacket}
               presentationState={followupPresentationState}
-              interactionLocked={presentationStateActive}
+              interactionLocked={presentationStateActive || sourceSegmentationOpening}
               onPresentationStateError={(message) =>
                 lockPresentationState('image_b', message)
               }
               consultationSelectionSlot={consultPrepMode ? 'view_b' : undefined}
-              onOpenMpr={() => followup && setMprSeriesId(followup.id)}
+              onOpenMpr={() => {
+                sourceSegmentationOperationRef.current += 1;
+                sourceSegmentationAbortRef.current?.abort();
+                sourceSegmentationAbortRef.current = undefined;
+                setSourceSegmentationOpening(false);
+                setLoadedSourceSegmentation(undefined);
+                if (followup) setMprSeriesId(followup.id);
+              }}
             />
           </section>
 
-          {mprSeries && <MprPanel series={mprSeries} onClose={() => setMprSeriesId(undefined)} />}
+          {mprSeries && (
+            <MprPanel
+              series={mprSeries}
+              readonlySourceSegmentation={loadedSourceSegmentation}
+              onReadonlyReady={finishSourceSegmentationOpen}
+              onReadonlyError={failSourceSegmentationOpen}
+              onClose={() => {
+                if (loadedSourceSegmentation) closeSourceSegmentation();
+                else setMprSeriesId(undefined);
+              }}
+            />
+          )}
 
           {!presentationStateActive && !consultPrepMode && (
             <LesionVolumeComparisonPanel
@@ -1671,16 +1852,31 @@ export default function App({ active = true }: { active?: boolean } = {}) {
             </article>
           </section>
           {series.some((item) => item.sourceKind === 'loopback-service') && (
-            <PresentationStatePanel
-              catalog={presentationStateCatalog}
-              message={presentationStateMessage}
-              loading={presentationStateLoading}
-              disabled={evidenceExportWorking}
-              imageA={baselinePresentationState}
-              imageB={followupPresentationState}
-              onOpen={openPresentationState}
-              onClear={clearPresentationState}
-            />
+            <>
+              <PresentationStatePanel
+                catalog={presentationStateCatalog}
+                message={presentationStateMessage}
+                loading={presentationStateLoading}
+                disabled={evidenceExportWorking || sourceSegmentationOpening}
+                imageA={baselinePresentationState}
+                imageB={followupPresentationState}
+                onOpen={openPresentationState}
+                onClear={clearPresentationState}
+              />
+              <SourceSegmentationPanel
+                catalog={sourceSegmentationCatalog}
+                message={sourceSegmentationMessage}
+                loading={sourceSegmentationLoading}
+                opening={sourceSegmentationOpening}
+                active={loadedSourceSegmentation}
+                disabled={
+                  evidenceExportWorking || presentationStateActive || Boolean(mprSeriesId)
+                }
+                onOpen={(segmentation, segment) =>
+                  void openSourceSegmentation(segmentation, segment)}
+                onClear={closeSourceSegmentation}
+              />
+            </>
           )}
           {!presentationStateActive && consultPrepMode && (
             <section
@@ -2007,7 +2203,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       )}
 
       <footer>
-        <span>ScanView 0.9 · local-first prototype</span>
+        <span>ScanView 0.10 · local-first prototype</span>
         <span>Every automated result is unreviewed until a qualified clinician accepts it.</span>
       </footer>
     </main>

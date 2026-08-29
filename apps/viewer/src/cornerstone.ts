@@ -41,7 +41,11 @@ import {
   type MeasurementEvidencePacket,
   type RawMeasurementAnnotation,
 } from './measurements';
-import { mprCrosshairConfiguration, type MprPatientPoint } from './mpr';
+import {
+  mprCrosshairConfiguration,
+  reorderDenseMaskSlices,
+  type MprPatientPoint,
+} from './mpr';
 import {
   MAX_MANUAL_LABELMAP_VOXELS,
   buildLesionVolumeArchive,
@@ -76,6 +80,7 @@ export type ReadonlyMprSegmentation = {
   mask: Uint8Array;
   foregroundVoxels: number;
   label: string;
+  orderedInstanceIds: string[];
 };
 export type MprViewportController = {
   setPrimaryTool: (tool: MprTool) => void;
@@ -588,7 +593,7 @@ const buildDicomSeg = async ({
   dataset.SeriesDescription = 'ScanView unreviewed manual lesion ROI';
   dataset.Manufacturer = 'ScanView local';
   dataset.ManufacturerModelName = 'ScanView';
-  dataset.SoftwareVersions = '0.9.0';
+  dataset.SoftwareVersions = '0.10.0';
   const segmentItem = Array.isArray(dataset.SegmentSequence)
     ? dataset.SegmentSequence[0]
     : dataset.SegmentSequence;
@@ -683,21 +688,44 @@ export const createMprViewports = async (
           readonlySegmentation.foregroundVoxels < 1 ||
           readonlySegmentation.foregroundVoxels > volume.numVoxels
         ) {
-          throw new Error('The reviewed native boundary does not match the exact source grid.');
+          throw new Error('The read-only native mask does not match the exact source grid.');
         }
         let foreground = 0;
         for (const value of readonlySegmentation.mask) {
           if (value !== 0 && value !== 1) {
-            throw new Error('The reviewed native boundary must remain strictly binary.');
+            throw new Error('The read-only native mask must remain strictly binary.');
           }
           foreground += value;
         }
         if (foreground !== readonlySegmentation.foregroundVoxels) {
-          throw new Error('The reviewed native boundary foreground count changed.');
+          throw new Error('The read-only native mask foreground count changed.');
         }
-        const ownedMask = new Uint8Array(readonlySegmentation.mask);
+        const volumeOrderedInstanceIds = volume.imageIds.map((imageId) => {
+          const reference = imageReferences.get(imageId);
+          if (!reference || reference.seriesId !== series.id) {
+            throw new Error('The read-only mask volume source identity is unavailable.');
+          }
+          return reference.instanceId;
+        });
+        const sourceRows = series.geometry.rows;
+        const sourceColumns = series.geometry.columns;
+        if (
+          !Number.isSafeInteger(sourceRows) ||
+          !Number.isSafeInteger(sourceColumns) ||
+          !sourceRows ||
+          !sourceColumns
+        ) {
+          throw new Error('The read-only mask source matrix is unavailable.');
+        }
+        const ownedMask = reorderDenseMaskSlices({
+          mask: readonlySegmentation.mask,
+          rows: sourceRows,
+          columns: sourceColumns,
+          sourceOrderedInstanceIds: readonlySegmentation.orderedInstanceIds,
+          volumeOrderedInstanceIds,
+        });
         if (!labelmapVolume.voxelManager?.setCompleteScalarDataArray) {
-          throw new Error('The local reviewed-boundary labelmap is unavailable.');
+          throw new Error('The local read-only native-mask labelmap is unavailable.');
         }
         labelmapVolume.voxelManager.setCompleteScalarDataArray(ownedMask);
         labelmapVolume.modified();
@@ -925,7 +953,7 @@ export const createMprViewports = async (
       },
       exportSegmentationEvidence: async (label, targetDefinition) => {
         if (readonlySegmentation) {
-          throw new Error('Reviewed native boundaries are read-only and cannot be re-exported as drafts.');
+          throw new Error('Read-only native masks cannot be re-exported as drafts.');
         }
         if (!labelmapVolume || !evidenceEligibility.eligible) {
           throw new Error(evidenceEligibility.reason);

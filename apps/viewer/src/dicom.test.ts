@@ -292,6 +292,11 @@ describe('MPR geometry gate', () => {
     ).toContain('overlap');
     expect(
       assessMprEligibility(
+        volumetricSeries({ instances: [instance(0), instance(1), instance(0, 2)] }),
+      ).reason,
+    ).toContain('overlap');
+    expect(
+      assessMprEligibility(
         volumetricSeries({ instances: [instance(0), instance(1), instance(4)] }),
       ).reason,
     ).toContain('irregular');

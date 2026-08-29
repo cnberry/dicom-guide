@@ -22,9 +22,13 @@ import {
   type LesionVolumeReviewDecision,
   type LesionVolumeReviewerRole,
 } from '../lesionVolumeReview';
+import type { LoadedSourceSegmentation } from '../sourceSegmentations';
 
 type Props = {
   series: DicomSeries;
+  readonlySourceSegmentation?: LoadedSourceSegmentation;
+  onReadonlyReady?: () => void;
+  onReadonlyError?: (message: string) => void;
   onClose: () => void;
 };
 
@@ -56,7 +60,13 @@ const emptyReviewChecklist = (): LesionVolumeReviewChecklist => ({
   acquisition_protocol_considered: false,
 });
 
-export function MprPanel({ series, onClose }: Props) {
+export function MprPanel({
+  series,
+  readonlySourceSegmentation,
+  onReadonlyReady,
+  onReadonlyError,
+  onClose,
+}: Props) {
   const axialRef = useRef<HTMLDivElement>(null);
   const coronalRef = useRef<HTMLDivElement>(null);
   const sagittalRef = useRef<HTMLDivElement>(null);
@@ -98,12 +108,12 @@ export function MprPanel({ series, onClose }: Props) {
 
   useEffect(() => {
     if (
-      !evidenceEligibility.eligible &&
+      (!evidenceEligibility.eligible || readonlySourceSegmentation) &&
       (activeTool === 'paint' || activeTool === 'erase')
     ) {
       setActiveTool('crosshairs');
     }
-  }, [evidenceEligibility.eligible, activeTool]);
+  }, [evidenceEligibility.eligible, readonlySourceSegmentation, activeTool]);
 
   useEffect(() => {
     const axial = axialRef.current;
@@ -111,6 +121,7 @@ export function MprPanel({ series, onClose }: Props) {
     const sagittal = sagittalRef.current;
     if (!axial || !coronal || !sagittal || !eligibility.eligible) {
       setStatus(eligibility.reason);
+      if (readonlySourceSegmentation) onReadonlyError?.(eligibility.reason);
       return;
     }
     const elements: Record<MprOrientation, HTMLDivElement> = { axial, coronal, sagittal };
@@ -125,6 +136,15 @@ export function MprPanel({ series, onClose }: Props) {
       elements,
       series,
       'crosshairs',
+      readonlySourceSegmentation
+        ? {
+            mask: readonlySourceSegmentation.mask,
+            foregroundVoxels: readonlySourceSegmentation.segment.marked_voxel_count,
+            label: `Source DICOM SEG · ${readonlySourceSegmentation.segment.segment_label}`,
+            orderedInstanceIds:
+              readonlySourceSegmentation.state.referenced_series.ordered_instance_ids,
+          }
+        : undefined,
     )
       .then((controller) => {
         ownedController = controller;
@@ -137,11 +157,15 @@ export function MprPanel({ series, onClose }: Props) {
         unsubscribeSegmentationStats = controller.subscribeToSegmentationStats(
           setSegmentationStats,
         );
-        controller.setBrushSize(brushSize);
+        if (!readonlySourceSegmentation) controller.setBrushSize(brushSize);
         setStatus('');
+        if (readonlySourceSegmentation) onReadonlyReady?.();
       })
       .catch((error: unknown) => {
-        setStatus(error instanceof Error ? error.message : 'Unable to build this local volume.');
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : 'Unable to build this local volume.';
+        setStatus(message);
+        if (readonlySourceSegmentation) onReadonlyError?.(message);
       });
     const observer = new ResizeObserver(() => controllerRef.current?.resize());
     Object.values(elements).forEach((element) => observer.observe(element));
@@ -153,15 +177,21 @@ export function MprPanel({ series, onClose }: Props) {
       ownedController?.destroy();
       if (controllerRef.current === ownedController) controllerRef.current = undefined;
     };
-  }, [series.id]);
+  }, [
+    series.id,
+    readonlySourceSegmentation?.state.segmentation_id,
+    readonlySourceSegmentation?.segment.segment_number,
+    onReadonlyReady,
+    onReadonlyError,
+  ]);
 
   useEffect(() => {
     controllerRef.current?.setPrimaryTool(activeTool);
   }, [activeTool]);
 
   useEffect(() => {
-    controllerRef.current?.setBrushSize(brushSize);
-  }, [brushSize]);
+    if (!readonlySourceSegmentation) controllerRef.current?.setBrushSize(brushSize);
+  }, [brushSize, readonlySourceSegmentation]);
 
   const downloadSegmentationEvidence = async () => {
     const controller = controllerRef.current;
@@ -238,6 +268,10 @@ export function MprPanel({ series, onClose }: Props) {
   };
 
   const closeWithDraftCheck = () => {
+    if (readonlySourceSegmentation) {
+      onClose();
+      return;
+    }
     if (
       (controllerRef.current?.hasSegmentationDraft() || segmentationStats.foregroundVoxels > 0) &&
       !window.confirm('Discard the in-memory unreviewed manual region and close this workspace?')
@@ -251,7 +285,11 @@ export function MprPanel({ series, onClose }: Props) {
     <section className="mpr-panel" aria-label={`MPR view for ${series.description}`}>
       <div className="mpr-heading">
         <div>
-          <span className="eyebrow">Single-series local MPR · derived navigation view</span>
+          <span className="eyebrow">
+            {readonlySourceSegmentation
+              ? 'Source-carried DICOM SEG · read-only native-grid overlay'
+              : 'Single-series local MPR · derived navigation view'}
+          </span>
           <h2>{series.description}</h2>
           <p>
             {formatDicomDate(series.acquisitionDate)} · {series.modality} ·{' '}
@@ -262,8 +300,9 @@ export function MprPanel({ series, onClose }: Props) {
         <div className="mpr-actions">
           {(
             [
-              ['paint', 'Paint ROI'],
-              ['erase', 'Erase ROI'],
+              ...(!readonlySourceSegmentation
+                ? ([['paint', 'Paint ROI'], ['erase', 'Erase ROI']] as const)
+                : []),
               ['crosshairs', 'Linked crosshairs'],
               ['window', 'Window / level'],
               ['pan', 'Pan'],
@@ -286,13 +325,51 @@ export function MprPanel({ series, onClose }: Props) {
           <button disabled={Boolean(status)} onClick={() => controllerRef.current?.reset()}>
             Reset MPR
           </button>
-          <button onClick={closeWithDraftCheck}>Close MPR</button>
+          <button disabled={exporting || reviewExporting} onClick={closeWithDraftCheck}>
+            Close MPR
+          </button>
         </div>
       </div>
       <div className="mpr-warning">
-        DERIVED INTERPOLATED DISPLAY · MANUAL ROI STORED ON THE NATIVE GRID · UNREVIEWED ·
-        NOT REGISTERED · NOT FOR DIAGNOSIS
+        {readonlySourceSegmentation
+          ? 'SOURCE-CARRIED DICOM SEG · READ-ONLY NATIVE-GRID MASK · CREATOR NOT AUTHENTICATED · MEANING NOT ASSESSED · NO CROSS-TIMEPOINT REGISTRATION · NOT FOR DIAGNOSIS'
+          : 'DERIVED INTERPOLATED DISPLAY · MANUAL ROI STORED ON THE NATIVE GRID · UNREVIEWED · NOT REGISTERED · NOT FOR DIAGNOSIS'}
       </div>
+      {readonlySourceSegmentation ? (
+        <div className="mpr-source-segmentation-controls" aria-label="Read-only source DICOM segmentation">
+          <div>
+            <strong>
+              Segment {readonlySourceSegmentation.segment.segment_number} ·{' '}
+              {readonlySourceSegmentation.segment.segment_label}
+            </strong>
+            <span>
+              Source coded property: {readonlySourceSegmentation.segment.property_type.meaning}{' '}
+              ({readonlySourceSegmentation.segment.property_type.scheme}{' '}
+              {readonlySourceSegmentation.segment.property_type.value})
+            </span>
+          </div>
+          <div>
+            <strong>
+              {readonlySourceSegmentation.segment.marked_voxel_count.toLocaleString()} marked voxels ·{' '}
+              {readonlySourceSegmentation.segment.computed_volume_ml.toFixed(3)} mL
+            </strong>
+            <span>Technical native-grid arithmetic · unreviewed · boundary uncertainty not quantified</span>
+          </div>
+          <div>
+            <strong>
+              {readonlySourceSegmentation.segment.algorithm_type.toLowerCase()}
+              {readonlySourceSegmentation.segment.algorithm_name
+                ? ` · ${readonlySourceSegmentation.segment.algorithm_name}`
+                : ''}
+            </strong>
+            <span>
+              Creator identity is not authenticated; algorithm identity and accuracy are not
+              verified. Editing, evidence conversion, longitudinal linking, and response
+              assessment are disabled.
+            </span>
+          </div>
+        </div>
+      ) : (
       <div className="mpr-segmentation-controls" aria-label="Manual lesion ROI evidence controls">
         <div>
           <strong>One local person-painted region draft</strong>
@@ -528,6 +605,7 @@ export function MprPanel({ series, onClose }: Props) {
           )}
         </details>
       </div>
+      )}
       <div className="mpr-link-note">
         <strong>One patient-space point, three planes.</strong> With Linked crosshairs selected,
         click or drag in any pane to move the same DICOM patient-coordinate location in all three.
@@ -562,12 +640,9 @@ export function MprPanel({ series, onClose }: Props) {
         ))}
       </div>
       <p className="mpr-footnote">
-        These planes are reconstructed locally from one source series. A painted region is only a
-        person-painted manual region draft; it does not establish tumor identity, included tissue,
-        longitudinal alignment, or treatment response. Export rehashes exact source instances and
-        includes an uncompressed DICOM SEG plus a strict local evidence sidecar for independent
-        validation. A separate self-attested boundary review can qualify that one timepoint for
-        discussion, but cannot link it to another scan or calculate treatment response.
+        {readonlySourceSegmentation
+          ? 'These planes are reconstructed locally from the exact referenced source series. The overlay is a locally decoded, source-byte-anchored dense reconstruction of one DICOM SEG segment. Its label, coded meaning, algorithm declaration, and boundary are source content—not a ScanView measurement, finding, diagnosis, response label, or clinical conclusion. Confirm the original DICOM objects in the clinical imaging system.'
+          : 'These planes are reconstructed locally from one source series. A painted region is only a person-painted manual region draft; it does not establish tumor identity, included tissue, longitudinal alignment, or treatment response. Export rehashes exact source instances and includes an uncompressed DICOM SEG plus a strict local evidence sidecar for independent validation. A separate self-attested boundary review can qualify that one timepoint for discussion, but cannot link it to another scan or calculate treatment response.'}
       </p>
     </section>
   );

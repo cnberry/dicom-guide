@@ -1,5 +1,34 @@
 # Medical safety and privacy
 
+## Source DICOM segmentation safety
+
+- The full source-SEG catalog is sensitive local medical data. Segment labels, coded
+  meanings, algorithms, hashes, and opaque source relationships may be identifying or
+  clinically meaningful; the catalog is not de-identified.
+- ScanView supports only a narrow technical import profile: uncompressed binary SEG,
+  one exact regular single-frame MR/CT grid, explicit source mapping with Spatial
+  Locations Preserved `YES`, supported segment/plane dimensions, strict geometry, and
+  bounded work/memory. Unsupported or changed objects display no partial mask. Passing
+  this profile is not full DICOM conformance certification.
+- Bearer agents may read the authenticated sensitive catalog but cannot fetch dense
+  mask bytes. Masks require the HttpOnly browser session. Both permission classes are
+  explicit and bearer operations can be recorded without IDs, paths, labels, geometry,
+  hashes, volumes, pixels, or masks in the optional privacy-minimized audit.
+- The browser independently validates catalog structure, counts, technical volume,
+  physical plane order, exact local series membership, mask headers, SHA-256, binary
+  values, and foreground count. Whole mask slabs are aligned to Cornerstone's physical
+  source order by exact opaque instance identity before display.
+- The visible overlay is a locally decoded, source-byte-anchored dense reconstruction,
+  not a byte-for-byte copy and not a ScanView segmentation. Creator identity is not
+  authenticated; algorithm identity/accuracy, boundary accuracy, tissue meaning,
+  diagnosis, response, and treatment effect are not verified or inferred.
+- Source masks are read-only. Editing, evidence conversion, cross-timepoint linking,
+  registration claims, response assessment, and agent viewer-state publication are
+  disabled while the display is being prepared or open. Opening becomes successful
+  only after the source volume and locked labelmap are ready.
+- Parsing, decoding, hashing, and rendering are local. No external API, telemetry,
+  cloud processing, or network fallback is used.
+
 ## DICOM presentation-state safety
 
 - GSPS objects and their annotation text are sensitive local medical data. The full

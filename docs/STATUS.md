@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 03:16 PDT
+Last updated: 2026-08-29 04:23 PDT
 
 ## Data transfer
 
@@ -42,9 +42,24 @@ Last updated: 2026-08-29 03:16 PDT
   DICOM's exact `(Columns,Rows)` full-image boundary. No identifiers, annotation text,
   coordinates, pixels, paths, or patient artifact left the Mac or entered Git; native
   MR/CT display remains available.
+- The copied media has no DICOM SEG objects: the complete modality inventory is MR,
+  CT, PR, and SR only. The v0.10 source-SEG reader was therefore exercised only with
+  patient-free synthetic data; no segmentation was inferred from Mila's images.
 
 ## Repository
 
+- A strict read-only source-carried DICOM SEG path now catalogs a conservative binary,
+  uncompressed, exact-native-grid subset. It performs stable no-follow reads, rehashes
+  every referenced MR/CT source, validates per-frame derivation/source references,
+  `SpatialLocationsPreserved=YES`, segment/plane dimensions, regular geometry, and
+  aggregate work/memory bounds, then reconstructs bounded dense masks in memory.
+- The browser independently checks catalog privacy and permission constants, physical
+  slice ordering, geometry, mask SHA-256, binary values, voxel count, and technical
+  native-grid volume before a read-only three-plane display. Browser capability is
+  required for mask bytes; authenticated bearer agents may read the explicitly
+  sensitive full catalog, while CLI validation output is privacy-minimized. Paint,
+  erase, evidence conversion, export, identity, accuracy, diagnosis, response, and
+  clinical conclusions are all unavailable.
 - Initial local-first React/TypeScript/Cornerstone3D viewer implemented.
 - Baseline/follow-up pairing, linked stack position, compatibility explanations, and
   registration safety gate implemented.
@@ -284,7 +299,7 @@ Last updated: 2026-08-29 03:16 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 28 contracts without breaking lightweight
+  UI-embedded wheel together with all 29 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -301,6 +316,40 @@ Last updated: 2026-08-29 03:16 PDT
 
 ## Verification
 
+- v0.10.0 strict source-carried DICOM SEG milestone: passing. The full Python suite
+  reports 254 tests; the viewer reports 135 tests across 28 files; TypeScript
+  typecheck, production build, Python bytecode compilation, diff hygiene, and all 29
+  Draft 2020-12 schemas pass. Coverage includes stable source-byte guards, exact
+  single-series native geometry, sparse binary decoding, multi-frame dimensions,
+  standard derivation/purpose codes, explicit spatial preservation, duplicate/drift/
+  mismatch refusal, aggregate decoded-work and retained-mask limits, source-change
+  locks, owner-only CLI round-trip, authenticated/no-store catalog, browser-only mask,
+  strict browser parsing/order/hash/count/arithmetic, and atomic read-only opening.
+- Patient-free production-browser QA loaded one supported sparse SEG with one 3,083-
+  voxel segment and 3.946240 mL technical native-grid volume, rendered its overlay on
+  exactly three axial/coronal/sagittal canvases with linked crosshairs, and reported no
+  browser errors or warnings. Paint, erase, measurement/evidence conversion, export,
+  diagnosis, response, and clinical conclusions were absent. No patient SEG exists on
+  the copied media and no Mila segmentation was displayed or inferred.
+- Offline runtime bundle v0.10.0: passing on macOS arm64 and Strawberry Linux x86_64.
+  The retained owner-only 5,531,237-byte ZIP has nine fixed-timestamp members and
+  SHA-256 `715b161a4a55493b19d3b8895d97d1c8fd4644bf798c5617398d140ceacd503f`.
+  It contains the 3,134,567-byte ScanView wheel (SHA-256
+  `2237df3813bc21683c2a4a49111aa78637489cc7bd626ad4e4ba0974e11a30f4`),
+  11 UI/worker/codec files (10,289,232 uncompressed bytes), all 29 schemas (271,110
+  bytes), and pinned `pydicom` 3.0.2. A second independent build was byte-identical.
+  Fresh extractions installed with `PIP_NO_INDEX=1`, reported version 0.10.0,
+  `schema_count: 29`, `runtime_network_required: false`, and
+  `external_dicom_processing_api_required: false`, then created and independently
+  validated an owner-only patient-free source-SEG catalog on both platforms.
+- Exact packaged macOS and Strawberry gates returned 401 without authority, 200 plus
+  `Cache-Control: no-store` with bearer authority, 403 for bearer mask access, and 200
+  for browser-session mask access with the exact 98,304-byte dense binary mask and
+  matching SHA-256. Both returned 409 after mutating the disposable synthetic SEG.
+  Strawberry listened only on loopback and had no server-owned established external
+  socket. Only the exact ZIP and 25 patient-free synthetic DICOM files went to
+  Strawberry; its entire temporary runtime/test tree was deleted afterward, and no
+  Mila data left this computer.
 - v0.9.0 source-bound GSPS milestone: passing. The full Python suite reports 242
   tests; the viewer reports 131 tests across 27 files; TypeScript typecheck,
   production build, Python bytecode compilation, diff hygiene, and all 28 Draft
@@ -759,6 +808,12 @@ Last updated: 2026-08-29 03:16 PDT
 
 ## Known gaps
 
+- Source-carried SEG support is intentionally a narrow ScanView profile, not full DICOM
+  conformance. Fractional/compressed SEG, multiframe sources, resampling, non-native or
+  irregular grids, and unsupported reference/dimension forms are refused. Independent
+  highdicom/vendor fixture interoperability and clinical-system comparison remain.
+  A displayed mask, label, code, creator, algorithm, count, or technical volume is not
+  a reviewed tumor segmentation, clinical conclusion, or treatment-response result.
 - Different-frame longitudinal exams still use approximate normalized linking until
   a reviewed registration exists; patient-position linking is only enabled for a
   shared compatible frame.

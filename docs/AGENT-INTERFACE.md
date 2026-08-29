@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.9.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.10.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -19,13 +19,13 @@ sh launch.sh '/safe/local/DICOM/root' --no-open
 ```
 
 Installation invokes pip with `--no-index --require-hashes`; every launch rechecks
-the bundle and installed versions, UI, schemas, consultation contracts, and agent
-consultation-plan contract before any DICOM catalog is built. The launched agent
+the bundle and installed versions, UI, all 29 schemas, consultation contracts, agent
+consultation-plan, GSPS, and source-SEG contracts before any DICOM catalog is built. The launched agent
 interface is the same loopback bearer-
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-exact v0.9.0 artifact passed no-index install, 28-schema runtime, GSPS creation/
+The exact v0.9.0 artifact passed no-index install, 28-schema runtime, GSPS creation/
 validation, browser/bearer endpoint validation, no-store/audit/source-change gates,
 strict packaged-browser display locks, and loopback launch on macOS arm64 and
 Strawberry Linux x86_64. Longitudinal-readiness,
@@ -35,6 +35,16 @@ comparison validation, and reviewed native-boundary display remain covered by th
 regression suite and earlier cross-platform release gates; signing/notarization
 remains pending. Only the patient-free fixture and exact software ZIP were transferred
 to Strawberry; its temporary staging tree was removed and no Mila data left the Mac.
+
+The owner-only v0.10.0 artifact is 5,531,237 bytes with SHA-256
+`715b161a4a55493b19d3b8895d97d1c8fd4644bf798c5617398d140ceacd503f`.
+Its second build was byte-identical. Fresh macOS arm64 and Strawberry Linux x86_64
+extractions passed verification, no-index install, 29-schema runtime, owner-only
+source-SEG catalog creation/validation, 401/200 catalog authorization, `no-store`,
+bearer mask refusal, browser-session exact mask hash/length, and changed-source 409.
+The Linux listener was loopback-only with no server-owned established external socket.
+Only the exact ZIP and patient-free synthetic fixture went to Strawberry; the remote
+test tree was deleted and no Mila data left the Mac.
 
 ## Local artifacts
 
@@ -137,6 +147,47 @@ are fixed false. The human viewer requires an explicit click and locks all viewp
 measurement, MPR, agent-state, and evidence operations until the state is cleared;
 runtime projection is atomic. Agents must treat text as sensitive, creator-unauthenticated
 source content and must not promote it to an observation or conclusion.
+
+## Source-carried DICOM segmentations
+
+Create and independently revalidate the owner-only sensitive catalog:
+
+```bash
+scanview-agent source-segmentations '/safe/local/DICOM/root' \
+  --output '/safe/private/source-segmentations.json'
+scanview-agent validate-source-segmentations '/safe/local/DICOM/root' \
+  '/safe/private/source-segmentations.json'
+```
+
+The `scanview.source-segmentation-catalog` v1 artifact accepts only ScanView's
+narrow native-grid profile: uncompressed Explicit/Implicit VR Little Endian binary
+SEG, one exact regular single-frame MR/CT series, explicit frame source references
+with Spatial Locations Preserved `YES`, segment and plane-position dimensions, and
+bounded text/frame/segment/grid/work/memory. A supported object carries opaque
+source relationships, labels/codes, declared algorithm, technical voxel/volume
+arithmetic, source/SEG hashes, and a hash for each dense 0/1 segment mask. It contains
+no mask pixels or paths but remains sensitive and `deidentified: false`. Passing the
+profile is not full DICOM conformance certification.
+
+`validate-source-segmentations` reopens and rehashes the SEG and every source image,
+rebuilds the dense masks and arithmetic, and emits only validity plus aggregate counts.
+It omits labels, codes, IDs, paths, pixels, geometry, hashes, and volumes.
+
+`GET /v1/source-segmentations` returns the sensitive catalog with `no-store` to an
+authenticated browser or bearer agent. A bearer read may be audited as
+`source_segmentations_read`. Dense masks at
+`GET /v1/source-segmentations/{opaque_id}/masks/{segment_number}` require the HttpOnly
+browser session; bearer attempts return 403 and may be audited as
+`browser_only_source_segmentation_mask_attempt`. The browser independently validates
+the catalog, derives physical source order from DICOM geometry, rehashes/recounts the
+mask, aligns whole slabs to Cornerstone's actual image order, and exposes only a
+read-only tri-planar display. Agents receive technical source content, not permission
+to infer tissue identity, correctness, diagnosis, treatment effect, or response.
+
+Creator identity is not authenticated; algorithm identity/accuracy, boundary accuracy,
+represented tissue, and clinical meaning are not assessed. Editing, conversion into
+ScanView measurement evidence, longitudinal linking, response classification,
+diagnosis, and conclusion permissions are fixed false. No external API is called.
 
 ## Agent-to-person consultation plans
 
@@ -882,6 +933,8 @@ GET /v1/manifest
 GET /v1/viewer-state
 GET /v1/comparison-candidates
 GET /v1/presentation-states
+GET /v1/source-segmentations
+GET /v1/source-segmentations/{opaque_id}/masks/{segment_number}
 GET /v1/lesion-volume-comparison-display
 GET /v1/lesion-volume-comparison-display/context
 GET /v1/lesion-volume-comparison-display/masks/{baseline|followup}

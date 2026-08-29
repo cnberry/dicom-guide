@@ -19,7 +19,7 @@ from typing import Any, NamedTuple
 
 
 PROJECT_NAME = "scanview-agent"
-PROJECT_VERSION = "0.9.0"
+PROJECT_VERSION = "0.10.0"
 PYDICOM_VERSION = "3.0.2"
 BUNDLE_SCHEMA_VERSION = "1.0.0"
 BUNDLE_ARTIFACT_TYPE = "scanview_offline_runtime_bundle"

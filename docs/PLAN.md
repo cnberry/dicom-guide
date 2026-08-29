@@ -82,6 +82,12 @@ result into a medical conclusion.
   manipulation, measurement, evidence, MPR, and agent-state paths until cleared.
   Creator identity and source-text clinical meaning are not assessed; measurement,
   finding, diagnosis, and response authority remain false.
+- Source-carried DICOM SEG read-only display for a deliberately narrow profile:
+  guarded uncompressed binary SEG plus exact regular single-frame MR/CT sources,
+  explicit preserved spatial locations, consistent multi-frame dimensions, bounded
+  decoding/masks, independent physical-order and mask-hash validation, and browser-
+  session-only dense mask access. Full DICOM conformance, creator/algorithm identity,
+  boundary accuracy, tissue meaning, diagnosis, and response authority remain absent.
 - Source-bound one-MR/one-CT consultation packets for clinician discussion. Neutral
   key-image archives, exact live-catalog position and source-byte rehashing, strict
   cross-study/patient-context gates, static human presentation, privacy-minimized
@@ -255,3 +261,12 @@ result into a medical conclusion.
     distinct and read-only; source text may contain identifiers and cannot become a
     ScanView measurement, finding, diagnosis, response label, or clinical conclusion.
     Unsupported or changed input displays no state-derived content.
+26. **Source segmentation separation:** a supported source DICOM SEG must bind to the
+    exact guarded SEG and every exact referenced MR/CT source, pass the documented
+    uncompressed binary native-grid/dimension/spatial-preservation profile, and remain
+    within catalog-wide work/memory limits. Bearer agents may read only the sensitive
+    catalog; dense mask bytes require the browser session. The browser independently
+    authenticates physical slab order, mask SHA-256, binary values, and foreground
+    arithmetic before read-only display. No source edit, evidence conversion,
+    longitudinal linkage, response, diagnosis, or conclusion is authorized; passing
+    the profile is not full DICOM conformance or clinical validation.

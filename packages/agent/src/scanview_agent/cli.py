@@ -58,6 +58,11 @@ from .registration_reviews import (
     write_registration_review,
 )
 from .server import serve
+from .source_segmentations import (
+    build_source_segmentation_catalog,
+    registry_segmentation_source_loader,
+    source_segmentation_summary,
+)
 from .visit_packets import visit_packet_summary, write_visit_packet
 
 
@@ -136,6 +141,20 @@ def parser() -> argparse.ArgumentParser:
     )
     validate_presentation_states.add_argument("root", type=Path)
     validate_presentation_states.add_argument("artifact", type=Path)
+
+    source_segmentations = commands.add_parser(
+        "source-segmentations",
+        help="Extract a source-bound read-only DICOM SEG catalog locally",
+    )
+    source_segmentations.add_argument("root", type=Path)
+    source_segmentations.add_argument("--output", "-o", type=Path, required=True)
+
+    validate_source_segmentations = commands.add_parser(
+        "validate-source-segmentations",
+        help="Revalidate a DICOM SEG catalog against every exact local source byte",
+    )
+    validate_source_segmentations.add_argument("root", type=Path)
+    validate_source_segmentations.add_argument("artifact", type=Path)
 
     api = commands.add_parser("serve", help="Run the source-read-only loopback agent API")
     api.add_argument("root", type=Path)
@@ -576,6 +595,31 @@ def main() -> None:
         except (OSError, TypeError, ValueError) as error:
             argument_parser.error(str(error))
         summary = presentation_state_summary(catalog, loader, artifact)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "source-segmentations":
+        try:
+            catalog, registry = build_catalog(args.root, include_hashes=True)
+            artifact, _, _ = build_source_segmentation_catalog(
+                catalog,
+                registry_segmentation_source_loader(catalog, registry),
+            )
+        except (OSError, TypeError, ValueError) as error:
+            argument_parser.error(str(error))
+        _write_json(artifact, args.output)
+    elif args.command == "validate-source-segmentations":
+        try:
+            catalog, registry = build_catalog(args.root, include_hashes=True)
+            loader = registry_segmentation_source_loader(catalog, registry)
+            artifact = load_strict_json(args.artifact.read_bytes())
+        except (OSError, TypeError, ValueError) as error:
+            argument_parser.error(str(error))
+        summary = source_segmentation_summary(
+            artifact,
+            catalog=catalog,
+            load_source=loader,
+        )
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

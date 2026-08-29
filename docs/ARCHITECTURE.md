@@ -1,5 +1,38 @@
 # Architecture
 
+## Source DICOM segmentation boundary
+
+Source-carried SEG is a guarded read-only display path, not a ScanView measurement or
+clinical interpretation path:
+
+```text
+guarded local manifest + exact SEG/source SHA-256
+        │
+        └── narrow binary native-grid parser
+              ├── one regular single-frame MR/CT source series
+              ├── Spatial Locations Preserved = YES
+              ├── segment + plane-position dimension consistency
+              ├── catalog-wide decode and dense-mask budgets
+              └── unsupported object fails closed as a whole
+                         │
+                         ├── sensitive catalog → bearer/browser, no-store
+                         └── dense 0/1 mask → HttpOnly browser session only
+                                      │
+                         independent hash/count/order validation
+                                      │
+                         read-only Cornerstone tri-planar overlay
+                         no edit, evidence conversion, linking, or response claim
+```
+
+The parser physically orders source planes by the dot product of Image Position
+(Patient) and the normal derived from Image Orientation (Patient). The browser derives
+that order independently, authenticates the catalog mapping, and then reorders whole
+mask slabs to Cornerstone's actual `volume.imageIds` by opaque instance identity.
+Mask opening is cancellable and becomes “open” only after the source volume and locked
+labelmap are ready. Full DICOM conformance, creator/algorithm identity, boundary
+accuracy, represented tissue, and clinical meaning are outside this import profile.
+All work is local; there is no external processing API or fallback.
+
 ## Source DICOM presentation-state boundary
 
 GSPS is a guarded source-display path, not an evidence or interpretation path:
@@ -403,8 +436,9 @@ is not an MVP feature and is never allowed between CT and MRI.
   `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
   payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
   and `--require-hashes`; every launch verifies the bundle and probes installed
-  versions, UI, all 28 schemas, consultation contracts, agent consultation-plan
-  validation, manual ROI review/comparison, native-boundary display, agent-access
+  versions, UI, all 29 schemas, consultation contracts, agent consultation-plan,
+  source-segmentation validation, manual ROI review/comparison, native-boundary
+  display, agent-access
   audit, and longitudinal-readiness support
   before cataloging DICOM.
 - Trust boundary: the offline manifest detects payload corruption but is not publisher
