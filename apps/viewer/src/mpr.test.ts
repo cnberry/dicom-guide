@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateMprCropFit,
+  constrainMprCropToViewportAspect,
   formatMprPatientPoint,
   mprCrosshairConfiguration,
   reorderDenseMaskSlices,
@@ -38,6 +39,25 @@ describe('MPR crosshair contract', () => {
         parallelScale: 120,
       }),
     ).toEqual({ center: [200, 350], parallelScale: 60 / 0.94 });
+  });
+
+  it('constrains a crop box to the destination viewport aspect without expanding it', () => {
+    expect(
+      constrainMprCropToViewportAspect({
+        start: [100, 100],
+        end: [500, 300],
+        viewportWidth: 300,
+        viewportHeight: 600,
+      }),
+    ).toEqual([200, 300]);
+    expect(
+      constrainMprCropToViewportAspect({
+        start: [500, 500],
+        end: [300, 100],
+        viewportWidth: 300,
+        viewportHeight: 600,
+      }),
+    ).toEqual([300, 100]);
   });
 
   it('refuses tiny, invalid, and non-zooming crop selections', () => {

@@ -841,6 +841,41 @@ export const createMprViewports = async (
       viewport.resetCamera();
       viewport.render();
     });
+    let sharedCrop:
+      | {
+          center: Types.Point3;
+          parallelScale: number;
+        }
+      | undefined;
+    const cropSpacing = volume.spacing.filter((value) => Number.isFinite(value) && value > 0);
+    const minimumCropParallelScale = Math.max(
+      0.1,
+      (cropSpacing.length ? Math.min(...cropSpacing) : 0.1) * 4,
+    );
+    const applySharedCrop = () => {
+      if (!sharedCrop) return;
+      viewports.forEach((viewport) => {
+        viewport.resetCamera();
+        const camera = viewport.getCamera();
+        const { focalPoint, position, parallelScale } = camera;
+        if (
+          !Number.isFinite(parallelScale) ||
+          !focalPoint ||
+          focalPoint.length !== 3 ||
+          !position ||
+          position.length !== 3
+        ) {
+          return;
+        }
+        const offset = sharedCrop!.center.map((value, axis) => value - focalPoint[axis]);
+        viewport.setCamera({
+          focalPoint: [...sharedCrop!.center] as Types.Point3,
+          position: position.map((value, axis) => value + offset[axis]) as Types.Point3,
+          parallelScale: sharedCrop!.parallelScale,
+        });
+        viewport.render();
+      });
+    };
     const sliceSpacingMm = series.geometry.pixelSpacing
       ? Math.abs(volume.spacing[2])
       : Number.NaN;
@@ -959,16 +994,16 @@ export const createMprViewports = async (
         if (centerWorld.length !== 3 || !centerWorld.every(Number.isFinite)) {
           return false;
         }
-        const offset = centerWorld.map((value, axis) => value - focalPoint[axis]);
-        viewport.setCamera({
-          focalPoint: [...centerWorld] as Types.Point3,
-          position: position.map((value, axis) => value + offset[axis]) as Types.Point3,
-          parallelScale: fit.parallelScale,
-        });
-        viewport.render();
+        sharedCrop = {
+          center: [...centerWorld] as Types.Point3,
+          parallelScale: Math.max(minimumCropParallelScale, fit.parallelScale),
+        };
+        crosshairs.setToolCenter([...centerWorld] as Types.Point3, true);
+        applySharedCrop();
         return true;
       },
       reset: () => {
+        sharedCrop = undefined;
         viewports.forEach((viewport) => {
           viewport.resetCamera();
           viewport.resetProperties();
@@ -1080,10 +1115,12 @@ export const createMprViewports = async (
         });
       },
       hasSegmentationDraft: () => !readonlySegmentation && segmentationDirty,
-      // ResizeObserver fires after the initial reviewed-boundary center is set.
-      // Preserve each viewport camera so layout changes cannot silently move the
-      // independent native-space crosshair back to the volume midpoint.
-      resize: () => engine.resize(true, true),
+      // Preserve ordinary manual cameras across layout changes. A linked crop keeps
+      // one physical patient-space field size and center across all three panes.
+      resize: () => {
+        engine.resize(true, true);
+        applySharedCrop();
+      },
       destroy: () => {
         loadAbortController.abort();
         removeSegmentation();

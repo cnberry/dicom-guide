@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 10:31 PDT
+Last updated: 2026-08-29 10:45 PDT
 
 ## Current handoff
 
@@ -24,12 +24,13 @@ Last updated: 2026-08-29 10:31 PDT
   and occupy the remaining 649 pixels; the document remains exactly one viewport tall.
   Focused display-tool state now has one owner, removing the parent/child feedback loop
   that made Crosshairs and Window switch back after a person selected them.
-- MPR Zoom now owns both vertical drag and wheel input while selected; the wheel
-  returns to slice navigation for other tools. A new **Crop** tool accepts a drag box
-  or two opposite corners in any plane, then recenters and aspect-fits that one camera
-  to the selected display area. It is reversible camera state only: DICOM pixels,
-  source geometry, patient-space coordinates, and the other planes are unchanged.
-  **Reset** restores all three full-view cameras and clears an unfinished selection.
+- MPR Zoom owns both vertical drag and wheel input while selected; the wheel returns
+  to slice navigation for other tools. **Crop** now accepts a drag box or two opposite
+  corners in any plane, constrains that box to the pane aspect, moves the shared patient-
+  space center, and applies the same bounded physical field size to all three planes. The
+  linked crop is stored independently of canvas size and reapplied after side-panel
+  resizing. It is reversible camera state only: DICOM pixels and source geometry are
+  unchanged. **Reset** clears it and restores all three full-volume cameras.
 - A versioned local viewer-control API now separates bearer-agent commands from
   browser-session observations. Codex can select an exact catalog series/instance,
   choose native or MPR, set the display tool, reset, and focus a DICOM LPS point. The
@@ -62,7 +63,11 @@ Last updated: 2026-08-29 10:31 PDT
   569-pixel-high MPR hosts. The crop selector rendered over the local image without
   entering the Cornerstone canvas host, and the relaunched local controller accepted
   Crop as a ready person-selected display state. No crop or pixel derivative persists.
-- Current code verification passes TypeScript typecheck, 147 viewer tests in 30
+- Follow-up QA at 1280×720 retained exact document/viewport dimensions and three
+  649-pixel-high panes with the explicit `Linked crop · all 3 panes` state. Crop aspect
+  and bounded fit math now have direct regression coverage; resize reapplies the stored
+  center/field size rather than preserving stale canvas-scale camera state.
+- Current code verification passes TypeScript typecheck, 148 viewer tests in 30
   files, the production build, the full Python agent suite, six focused viewer-
   control tests, and skill CLI help. The known Vite codec
   externalization and large-chunk messages remain build warnings, not failures.

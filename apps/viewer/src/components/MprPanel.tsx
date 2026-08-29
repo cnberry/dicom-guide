@@ -12,6 +12,7 @@ import {
   type DicomSeries,
 } from '../dicom';
 import {
+  constrainMprCropToViewportAspect,
   formatMprPatientPoint,
   type MprCanvasPoint,
   type MprPatientPoint,
@@ -368,6 +369,18 @@ export function MprPanel({
     setCropSelection(selection);
   };
 
+  const constrainedCropEnd = (
+    element: HTMLDivElement,
+    start: MprCanvasPoint,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ): MprCanvasPoint =>
+    constrainMprCropToViewportAspect({
+      start,
+      end: pointInHost(element, event),
+      viewportWidth: element.clientWidth,
+      viewportHeight: element.clientHeight,
+    });
+
   const startCrop = (
     orientation: MprOrientation,
     event: ReactPointerEvent<HTMLDivElement>,
@@ -399,9 +412,10 @@ export function MprPanel({
       return;
     }
     event.preventDefault();
+    const current = cropSelectionRef.current;
     updateCropSelection({
-      ...cropSelectionRef.current,
-      end: pointInHost(event.currentTarget, event),
+      ...current,
+      end: constrainedCropEnd(event.currentTarget, current.start, event),
     });
   };
 
@@ -419,11 +433,11 @@ export function MprPanel({
     }
     event.preventDefault();
     event.stopPropagation();
-    const end = pointInHost(event.currentTarget, event);
+    const current = cropSelectionRef.current;
+    const end = constrainedCropEnd(event.currentTarget, current.start, event);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    const current = cropSelectionRef.current;
     const selected = controllerRef.current?.fitToCanvasRectangle(
       orientation,
       current.start,
@@ -588,7 +602,11 @@ export function MprPanel({
             </article>
           ))}
         </div>
-        <span className="simple-mpr-note">Local MPR · not aligned</span>
+        <span className="simple-mpr-note">
+          {displayTool === 'crop'
+            ? 'Linked crop · all 3 panes · Reset restores'
+            : 'Local MPR · not aligned'}
+        </span>
       </section>
     );
   }
@@ -1047,7 +1065,7 @@ export function MprPanel({
                 {activeTool === 'crosshairs'
                   ? 'click to link'
                   : activeTool === 'crop'
-                    ? 'drag a box to fit'
+                    ? 'drag a linked crop for all panes'
                   : activeTool === 'paint' || activeTool === 'erase'
                     ? 'manual native-grid edit'
                     : 'wheel to navigate'}

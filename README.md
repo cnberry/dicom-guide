@@ -11,8 +11,9 @@ series, and presents one selected series in a focused Cornerstone3D surface inte
 to stay open in the Codex side panel. It shows either one native pane or three side-by-
 side axial/coronal/sagittal MPR panes. One compact toolbar holds series/folder, view,
 and display controls; point and reconstruction context float over the images instead
-of taking away viewing space. MPR Zoom works by vertical drag or wheel, and Crop fits
-one plane to a person-selected display box without changing source DICOM data.
+of taking away viewing space. MPR Zoom works by vertical drag or wheel, and a linked
+Crop centers and magnifies a selected region across all three planes without changing
+source DICOM data.
 
 Conversation stays in Codex instead of being duplicated in the website. A repository
 skill and authenticated loopback control API let Codex read the exact visible series,
@@ -49,8 +50,9 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   future-mode switch, measurement, export, packet,
   readiness, SEG/GSPS, consultation, or legacy agent-state panels appear in the
   default workspace.
-- Reversible MPR display crop by drag-box or two-corner selection. The selected plane
-  fits the box with aspect-ratio-preserving padding; Reset restores all three cameras.
+- Reversible linked MPR display crop by drag-box or two-corner selection. The box is
+  constrained to the pane aspect, all three cameras share its center and physical field size,
+  resizing reapplies it, and Reset restores the uncropped full-volume cameras.
 - Versioned, session-only Codex control state with exact opaque series/source identity,
   stack position, view mode, render status, display tool, and pinned/crosshair LPS
   coordinates. Browser observations contain no pixels, source text, direct

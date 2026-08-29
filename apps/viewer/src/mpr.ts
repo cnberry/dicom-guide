@@ -6,6 +6,36 @@ export type MprCropFit = {
   parallelScale: number;
 };
 
+export const constrainMprCropToViewportAspect = ({
+  start,
+  end,
+  viewportWidth,
+  viewportHeight,
+}: {
+  start: MprCanvasPoint;
+  end: MprCanvasPoint;
+  viewportWidth: number;
+  viewportHeight: number;
+}): MprCanvasPoint => {
+  if (
+    ![...start, ...end, viewportWidth, viewportHeight].every(Number.isFinite) ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0
+  ) {
+    return end;
+  }
+  const deltaX = end[0] - start[0];
+  const deltaY = end[1] - start[1];
+  const width = Math.abs(deltaX);
+  const height = Math.abs(deltaY);
+  if (width === 0 || height === 0) return end;
+  const targetAspect = viewportWidth / viewportHeight;
+  if (width / height > targetAspect) {
+    return [start[0] + Math.sign(deltaX) * height * targetAspect, end[1]];
+  }
+  return [end[0], start[1] + Math.sign(deltaY) * width / targetAspect];
+};
+
 export const calculateMprCropFit = ({
   start,
   end,

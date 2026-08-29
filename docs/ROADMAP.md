@@ -848,6 +848,23 @@
    840×640 copied-scan QA pass. The page stays exactly one viewport tall, all three MPR
    hosts remain 569 pixels high, and Crop publishes a ready local control observation.
 
+## Completed in the forty-first milestone
+
+1. Replaced the one-pane, one-time crop camera with one linked MPR crop. A crop drawn
+   in axial, coronal, or sagittal view moves the shared patient-space center and applies
+   the same bounded physical field size to all three cameras.
+2. Constrained the live crop box to the pane aspect ratio. The chosen field therefore
+   fills each pane instead of preserving avoidable letterbox space from an arbitrary
+   selection aspect; a small padding remains so boundary pixels are not placed exactly
+   on the viewport edge.
+3. Persisted the linked crop as center plus patient-space field size rather than frozen canvas
+   dimensions. Resize now recomputes each full-volume camera for its new pane size and
+   reapplies that crop, matching the intentionally tight framing across side-panel size
+   changes. Reset clears it and restores all full-volume cameras.
+4. Added crop-aspect tests and passed TypeScript, all 148 viewer tests, production
+   build, and live 1280×720 copied-scan QA with three 649-pixel-high MPR panes and an
+   explicit linked-crop state. DICOM pixels and geometry remain unchanged.
+
 ## Immediate
 
 1. Use **In-depth review** for one series at a time. Treat the three-plane view as a

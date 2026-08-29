@@ -32,10 +32,12 @@ Never infer a finding from metadata, series names, or one intensity value. Separ
 Use `show` with one exact series and instance. Choose `native` for an authoritative source slice or `mpr` for a locally reconstructed navigation view. For MPR, supply a pinned LPS point when spatial focus matters. Wait for the matching applied revision and `render_status: ready` before telling the user the view changed.
 
 MPR `zoom` supports vertical drag and wheel input while it is selected. MPR `crop`
-activates a reversible display-only box selection: drag a box, or click two opposite
-corners, in one plane to fit that plane to the selected area. Use Reset to restore all
-three full-view cameras. Crop does not alter source pixels, geometry, or the patient-
-space crosshair.
+activates a reversible linked display crop: drag a box, or click two opposite corners,
+in any plane to center that region and use its physical field size across all three planes. The box is
+constrained to the pane aspect so the selected field fills the available space, and
+the linked crop is reapplied when the side panel resizes. Use Reset to restore all
+three full-view cameras. Crop does not alter source pixels or geometry; its selected
+center becomes the shared patient-space crosshair.
 
 In native view, the applied instance must equal the requested instance. In MPR, the requested instance is a source-series anchor; the applied observation reports the exact nearest native slice at the rendered crosshair and may differ from that anchor. Treat the applied LPS point and ready revision as authoritative.
 

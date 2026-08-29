@@ -1744,7 +1744,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                               tool === 'zoom'
                                 ? 'Drag vertically or use the wheel to zoom'
                                 : tool === 'crop'
-                                  ? 'Drag a box, or click two corners, to fit one pane'
+                                  ? 'Drag a box, or click two corners, to crop all three panes'
                                   : undefined
                             }
                             onClick={() => {

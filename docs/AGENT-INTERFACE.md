@@ -836,8 +836,11 @@ monotonic in-memory revision; last accepted command wins.
 MPR display tools include `crosshairs`, `window`, `pan`, `zoom`, and `crop`. Zoom owns
 vertical drag and the wheel while selected; otherwise the wheel navigates slices.
 Crop is display-only and reversible: a person or browser controller drags a rectangle
-or selects two opposite corners in one plane, and Reset restores the uncropped cameras.
-It never modifies DICOM pixels, geometry, or the patient-space point.
+or selects two opposite corners in any plane. ScanView constrains the selection to the
+pane aspect, applies its bounded physical field size and patient-space center to all three
+cameras, and reapplies it after panel resizing. Reset restores the uncropped cameras.
+It never modifies DICOM pixels or geometry; the selected crop center becomes the
+shared patient-space point.
 
 The browser polls and applies each revision once. It alone may post
 `/v1/viewer-control/observation`, using the distinct HttpOnly browser session, exact
