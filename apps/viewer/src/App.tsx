@@ -1616,25 +1616,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
             </div>
             <div>
               <h1>ScanView</h1>
-              <p>Review one series</p>
             </div>
           </div>
-          <div className="mode-switch" role="tablist" aria-label="Review mode">
-            <button className="active" role="tab" aria-selected="true">
-              In-depth review
-            </button>
-            <button
-              role="tab"
-              aria-selected="false"
-              disabled
-              title="Comparison will be enabled after alignment and measurement checks are built."
-            >
-              Compare over time <small>Later</small>
-            </button>
-          </div>
-          <button className="import-button" onClick={openFolder}>
-            Open folder
-          </button>
           <input
             ref={inputRef}
             className="hidden-input"
@@ -1667,23 +1650,28 @@ export default function App({ active = true }: { active?: boolean } = {}) {
             ) : (
               <>
                 <div className="simple-controls">
-                  <SeriesSelect
-                    label="Series"
-                    value={baselineId}
-                    series={series}
-                    onChange={(id) => {
-                      notePersonInteraction();
-                      const selected = series.find((item) => item.id === id);
-                      setBaselinePresentationState(undefined);
-                      setMprSeriesId(undefined);
-                      setPatientPoint(undefined);
-                      setRequestedMprPoint(undefined);
-                      setViewerRenderStatus('loading');
-                      setBaselineId(id);
-                      setBaselineIndex(Math.floor((selected?.instances.length ?? 1) / 2));
-                      setMeasurementComparisonDraft(undefined);
-                    }}
-                  />
+                  <div className="simple-series-control">
+                    <SeriesSelect
+                      label="Series"
+                      value={baselineId}
+                      series={series}
+                      onChange={(id) => {
+                        notePersonInteraction();
+                        const selected = series.find((item) => item.id === id);
+                        setBaselinePresentationState(undefined);
+                        setMprSeriesId(undefined);
+                        setPatientPoint(undefined);
+                        setRequestedMprPoint(undefined);
+                        setViewerRenderStatus('loading');
+                        setBaselineId(id);
+                        setBaselineIndex(Math.floor((selected?.instances.length ?? 1) / 2));
+                        setMeasurementComparisonDraft(undefined);
+                      }}
+                    />
+                    <button className="import-button" onClick={openFolder}>
+                      Open folder
+                    </button>
+                  </div>
                   <div className="simple-control-groups">
                     <div className="simple-view-switch" role="group" aria-label="Image view">
                       <button

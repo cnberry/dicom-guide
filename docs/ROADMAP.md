@@ -800,6 +800,19 @@
    A real local skill command changed the 57-series copied-scan viewer to MPR and
    received the matching `ready` revision with exact patient coordinates.
 
+## Completed in the thirty-eighth milestone
+
+1. Removed the unfinished comparison-mode switch, duplicate header folder action, and
+   redundant MPR Close button from the focused side-panel surface.
+2. Moved **Open folder** directly beside the Series selector while retaining the
+   empty-state folder action for first use.
+3. Changed focused MPR from a vertical stack to one three-column row. Native and MPR
+   canvases now flex into the remaining viewport height, keep bounded nonzero render
+   hosts, and avoid document scrolling at the tested side-panel size.
+4. Passed TypeScript typecheck, all 144 viewer tests, production build, and live
+   1280×720 browser QA. Both Single and 3-plane modes reported document height equal
+   to viewport height; all three MPR cards shared identical top/bottom coordinates.
+
 ## Immediate
 
 1. Use **In-depth review** for one series at a time. Treat the three-plane view as a

@@ -23,7 +23,7 @@ result into a medical conclusion.
 - Default to one explicitly selected series and one authoritative native DICOM pane.
 - Expose only Window, Pan, Zoom, Reset, slice navigation, and optional geometry-gated
   axial/coronal/sagittal MPR. Native and MPR presentations are mutually exclusive;
-  the three MPR panes stack vertically in the image area.
+  the three MPR panes share one horizontal row and scale within the available viewport.
 - Publish a versioned short-lived browser observation containing exact opaque
   series/source identity, stack position, view mode, display tool, render state, and
   a pinned or crosshair LPS point without screenshots, pixels, source text, paths, or
@@ -37,8 +37,8 @@ result into a medical conclusion.
   must perform no analytics, telemetry, cloud processing, or external API call.
 - Keep advanced evidence and agent contracts implemented but outside the primary
   viewer until each workflow earns a simple, deliberate entry point.
-- Present **Compare over time** as a distinct mode, disabled until the next phase's
-  measurement and alignment gates are implemented and tested.
+- Keep **Compare over time** out of the focused UI until the next phase's measurement
+  and alignment gates are implemented and tested.
 
 ### Phase 1B — Codex control boundary (implemented; hardening continues)
 

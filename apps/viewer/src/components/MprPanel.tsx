@@ -490,18 +490,10 @@ export function MprPanel({
             >
               Reset
             </button>
-            <button
-              onClick={() => {
-                onPersonInteraction?.();
-                onClose();
-              }}
-            >
-              Close
-            </button>
           </div>
         </div>
         <div className="mpr-link-note">
-          Click in any view to move the same point in all three planes.
+          Click any view to move the shared point · local reconstruction, not aligned.
         </div>
         <div className="mpr-grid">
           {orientationLabels.map(({ id, label }) => (
@@ -519,9 +511,6 @@ export function MprPanel({
             </article>
           ))}
         </div>
-        <p className="mpr-footnote">
-          Reconstructed locally from this series for navigation. It is not aligned with another scan.
-        </p>
       </section>
     );
   }

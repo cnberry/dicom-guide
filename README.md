@@ -8,8 +8,8 @@ CT studies over time. It is being built for two audiences at once:
 
 The current default reads copied DICOM files locally, groups them into studies and
 series, and presents one selected series in a focused Cornerstone3D surface intended
-to stay open in the Codex side panel. It shows either one native pane or three stacked
-axial/coronal/sagittal MPR panes. Controls remain deliberately small: Window, Pan,
+to stay open in the Codex side panel. It shows either one native pane or three side-by-
+side axial/coronal/sagittal MPR panes. Controls remain deliberately small: Window, Pan,
 Zoom, Reset, slice navigation, point pinning, and the three-plane switch.
 
 Conversation stays in Codex instead of being duplicated in the website. A repository
@@ -43,7 +43,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 ## Current capabilities
 
 - Focused side-panel single-series interface with one native image pane or three
-  vertically stacked MPR panes; no embedded chat, measurement, export, packet,
+  auto-fitting side-by-side MPR panes; no embedded chat, future-mode switch,
+  measurement, export, packet,
   readiness, SEG/GSPS, consultation, or legacy agent-state panels appear in the
   default workspace.
 - Versioned, session-only Codex control state with exact opaque series/source identity,

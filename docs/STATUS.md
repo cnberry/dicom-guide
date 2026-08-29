@@ -1,12 +1,12 @@
 # Status
 
-Last updated: 2026-08-29 09:30 PDT
+Last updated: 2026-08-29 09:48 PDT
 
 ## Current handoff
 
 - The primary viewer is now a focused **In-depth review** visualization surface for
   the Codex side panel. Embedded chat is removed; conversation remains in Codex. The
-  page shows one native DICOM pane or three stacked axial/coronal/sagittal MPR panes
+  page shows one native DICOM pane or three side-by-side axial/coronal/sagittal MPR panes
   plus only the relevant display tools. Measurement, export, packet, readiness,
   GSPS, SEG, consultation, and legacy agent-state panels remain outside this surface.
 - The focused surface exposes explicit **Single** and **3-plane** switches. It now
@@ -14,6 +14,10 @@ Last updated: 2026-08-29 09:30 PDT
   ineligible selections disable the switch with a concrete geometry reason. A native
   click pins a visible point instead of publishing transient hover state, and the pin
   remains available to Codex until the source changes.
+- The side-panel cleanup removes the future comparison switch, the duplicate header
+  folder action, and the redundant MPR Close button. **Open folder** now sits directly
+  beside the Series selector. Both native and MPR workspaces flex into the remaining
+  viewport height; three MPR cards stay in one row with no document scrolling.
 - A versioned local viewer-control API now separates bearer-agent commands from
   browser-session observations. Codex can select an exact catalog series/instance,
   choose native or MPR, set the display tool, reset, and focus a DICOM LPS point. The
@@ -26,8 +30,8 @@ Last updated: 2026-08-29 09:30 PDT
   workflows. Root `AGENTS.md` routes future Codex sessions through this skill. All
   DICOM reading and processing stays local; the skill forbids sending DICOM, pixels,
   screenshots, source text, coordinates, or credentials to external services.
-- **Compare over time** is visible as the second product mode but intentionally
-  disabled. It will not be enabled by reusing the former approximate two-pane UI.
+- **Compare over time** is intentionally absent from the focused surface. It will not
+  be enabled by reusing the former approximate two-pane UI.
   The next design must begin with exact source/timepoint pairing, measurement-grade
   geometry and calibration, explicit target/tissue definitions, alignment state,
   repeatability/uncertainty, and qualified review before it exposes change arithmetic.
@@ -37,6 +41,9 @@ Last updated: 2026-08-29 09:30 PDT
   viewer rendered three MPR planes and returned a matching `ready`
   observation with the exact LPS crosshair and nearest source slice. No derivative,
   screenshot, token, or patient-specific finding was saved to Git.
+- Side-panel browser QA at 1280×720 confirmed one horizontal MPR row, adjacent Series
+  and Open-folder controls, both Single and 3-plane transitions, and exact 720-pixel
+  document/viewport heights in both modes.
 - Current code verification passes TypeScript typecheck, 144 viewer tests in 30
   files, the production build, the full Python agent suite, five focused viewer-
   control tests, skill CLI help, and skill-package validation. The known Vite codec
