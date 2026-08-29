@@ -63,6 +63,10 @@ result into a medical conclusion.
   source pair exists. It uses neutral Image A/Image B roles, disables approximate
   cross-exam linking and lesion-pair arithmetic, and never silently treats MRI+CT as
   a treatment-response pair.
+- Catalog-hash-bound longitudinal-readiness reporting for agents and a matching human
+  card. Both require valid dates, eligible MR/CT stacks, distinct studies, and one
+  opaque patient context before surfacing metadata candidates; all selection,
+  registration, lesion, response, diagnosis, and conclusion authority remains false.
 - Source-bound one-MR/one-CT consultation packets for clinician discussion. Neutral
   key-image archives, exact live-catalog position and source-byte rehashing, strict
   cross-study/patient-context gates, static human presentation, privacy-minimized
@@ -217,3 +221,8 @@ result into a medical conclusion.
     paths, payload facts, pixels, masks, measurements, or clinical values; audit
     failure denies the bearer read, and the chain is never called identity proof or a
     filesystem immutability control.
+23. **Follow-up readiness honesty:** a catalog-hash-bound local report and the human
+    viewer apply the same strict MR↔MR/CT↔CT, distinct-study, valid-distinct-date, and
+    opaque patient-context gates. Missing input is explicit, candidates stay
+    unreviewed, and readiness never authorizes selection, registration, lesion
+    linkage, response, diagnosis, treatment effect, or a clinical conclusion.

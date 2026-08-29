@@ -58,6 +58,12 @@ quality-system, and regulatory review.
 - Consult Prep disables viewer-state v1 publication because that contract uses
   baseline/follow-up pane names. Neutral agent evidence travels only in the explicit
   consultation packet, preventing internal UI roles from becoming a chronology claim.
+- Longitudinal readiness is metadata-only and never turns a candidate into a pairing.
+  It requires valid distinct DICOM dates, separate studies, eligible MR↔MR or CT↔CT
+  stacks, and one matching opaque patient context. Its agent form omits descriptions,
+  pixels, and paths; its human form shows only aggregate readiness and missing gates.
+  Both keep selection, registration, spatial comparison, lesion linkage, response,
+  treatment effect, diagnosis, and clinical conclusion unauthorized.
 - Bearer-access auditing is optional and local. If configured, covered sensitive GETs
   are not routed until a privacy-minimized event has been durably appended. The event
   contains a fixed operation class, sequence/time, authorization state, and hash-chain

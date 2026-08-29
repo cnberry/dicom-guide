@@ -196,6 +196,52 @@ def test_pair_suggestions_are_unreviewed_and_registration_gated(tmp_path: Path) 
     assert candidate["derived_operations"]["overlay"] == "locked_pending_registration_qc"
 
 
+def test_pair_suggestions_require_two_valid_distinct_dicom_dates() -> None:
+    catalog = {
+        "schema_version": "1.0.0",
+        "studies": [
+            {
+                "acquisition_date": None,
+                "series": [
+                    {
+                        "id": "series_0123456789abcdef0123",
+                        "patient_context_id": "patient_0123456789abcdef0123",
+                        "modality": "MR",
+                        "series_description": "T1 POST",
+                        "image_type": ["ORIGINAL", "PRIMARY"],
+                        "instance_count": 3,
+                    }
+                ],
+            },
+            {
+                "acquisition_date": "20260231",
+                "series": [
+                    {
+                        "id": "series_abcdef0123456789abcd",
+                        "patient_context_id": "patient_0123456789abcdef0123",
+                        "modality": "MR",
+                        "series_description": "T1 POST",
+                        "image_type": ["ORIGINAL", "PRIMARY"],
+                        "instance_count": 3,
+                    }
+                ],
+            },
+        ],
+    }
+
+    suggestions = suggest_pairs(catalog)
+
+    assert suggestions["candidates"] == []
+    assert len(suggestions["excluded_series"]) == 2
+    assert all(
+        "missing_or_invalid_acquisition_date" in item["reasons"]
+        for item in suggestions["excluded_series"]
+    )
+    assert "valid, distinct DICOM acquisition dates" in " ".join(
+        suggestions["limitations"]
+    )
+
+
 def test_server_refuses_non_loopback_binding() -> None:
     try:
         serve({"schema_version": "1.0.0"}, {}, host="0.0.0.0", port=0)

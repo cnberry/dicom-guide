@@ -83,6 +83,11 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   disables approximate linking and lesion-pair arithmetic, and never presents MRI+CT
   as a response pair. Live viewer-state v1 is disabled in this mode because it uses
   timepoint field names; agents use the neutral consultation packet instead.
+- A strict longitudinal-readiness report binds to the exact local catalog hash and
+  gives agents and people the same MR/CT study, eligible-series, date, patient-context,
+  and metadata-candidate gates. The human card states what follow-up input is missing;
+  the agent report contains no descriptions, pixels, or paths and authorizes no
+  selection, registration, lesion link, response, diagnosis, or clinical conclusion.
 - One-click and CLI local consultation packets for exactly one MRI plus one CT from
   distinct studies with one matching opaque patient context. Exact catalog positions
   and stable DICOM bytes are reverified and hashed; the static packet contains no
@@ -140,7 +145,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Versioned measurement, key-image, manual ROI volume, manual ROI review, manual ROI
   volume-comparison review, reviewed native-boundary display, consultation-key-image,
   consultation-packet, comparison, visit-packet, review-record,
-  navigation-intent, viewer-state, agent-access-audit event, rigid-registration, and registration-QA JSON
+  navigation-intent, viewer-state, longitudinal-readiness, agent-access-audit event,
+  rigid-registration, and registration-QA JSON
   Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
 
@@ -179,8 +185,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.6.0.zip
-cd scanview-offline-0.6.0
+unzip release/scanview-offline-0.7.0.zip
+cd scanview-offline-0.7.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -234,6 +240,8 @@ python3 -m venv .venv
   --lesion-volume-comparison '/path/to/reviewed-volume-comparison.zip'
 .venv/bin/scanview-agent launch '/path/to/copied/DICOM' \
   --agent-audit-log '/safe/private/scanview-agent-access.jsonl'
+.venv/bin/scanview-agent readiness '/safe/local/manifest.json' \
+  --output '/safe/private/longitudinal-readiness.json'
 .venv/bin/scanview-agent verify-agent-audit \
   '/safe/private/scanview-agent-access.jsonl'
 .venv/bin/scanview-agent validate-measurements '/path/to/scanview-measurements.json'

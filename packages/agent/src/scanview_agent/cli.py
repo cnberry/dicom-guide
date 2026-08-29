@@ -24,6 +24,7 @@ from .consultation_packets import (
     write_consultation_packet,
 )
 from .key_images import key_image_archive_summary
+from .longitudinal_readiness import build_longitudinal_readiness
 from .lesion_volume_comparisons import (
     lesion_volume_comparison_summary,
     write_lesion_volume_comparison,
@@ -89,6 +90,13 @@ def parser() -> argparse.ArgumentParser:
     candidates = commands.add_parser("candidates", help="Suggest, but never approve, series pairs")
     candidates.add_argument("manifest", type=Path)
     candidates.add_argument("--output", "-o", type=Path)
+
+    readiness = commands.add_parser(
+        "readiness",
+        help="Create a local metadata-only longitudinal follow-up readiness report",
+    )
+    readiness.add_argument("manifest", type=Path)
+    readiness.add_argument("--output", "-o", type=Path)
 
     api = commands.add_parser("serve", help="Run the source-read-only loopback agent API")
     api.add_argument("root", type=Path)
@@ -483,6 +491,13 @@ def main() -> None:
     elif args.command == "candidates":
         catalog = json.loads(args.manifest.read_text())
         _write_json(suggest_pairs(catalog), args.output)
+    elif args.command == "readiness":
+        try:
+            catalog = json.loads(args.manifest.read_text())
+            report = build_longitudinal_readiness(catalog)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
+            argument_parser.error(str(error))
+        _write_json(report, args.output)
     elif args.command == "serve":
         catalog, registry = build_catalog(args.root, include_hashes=not args.no_hashes)
         try:

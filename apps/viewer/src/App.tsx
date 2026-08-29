@@ -14,7 +14,6 @@ import {
   assessCompatibility,
   formatDicomDate,
   getLinkStrategy,
-  hasLongitudinalSourcePair,
   isConsultationSourcePair,
   mapLinkedIndex,
   parseDicomFiles,
@@ -54,6 +53,10 @@ import {
   publishViewerState,
   VIEWER_STATE_HEARTBEAT_MS,
 } from './viewerStateService';
+import {
+  readinessRequirementText,
+  summarizeLongitudinalReadiness,
+} from './longitudinalReadiness';
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
@@ -162,7 +165,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const baseline = series.find((item) => item.id === baselineId);
   const followup = series.find((item) => item.id === followupId);
   const mprSeries = series.find((item) => item.id === mprSeriesId);
-  const consultPrepMode = series.length > 0 && !hasLongitudinalSourcePair(series);
+  const longitudinalReadiness = useMemo(
+    () => summarizeLongitudinalReadiness(series),
+    [series],
+  );
+  const consultPrepMode =
+    series.length > 0 && longitudinalReadiness.candidatePairCount === 0;
   const compatibility = useMemo(
     () => assessCompatibility(baseline, followup),
     [baseline, followup],
@@ -1319,25 +1327,38 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               <article className="compatibility-card review">
                 <div className="card-heading">
                   <div>
-                    <span className="eyebrow">Neutral consultation context</span>
-                    <h2>Reference views only</h2>
+                    <span className="eyebrow">Follow-up readiness · metadata only</span>
+                    <h2>No same-modality follow-up pair</h2>
                   </div>
-                  <span className="unreviewed-badge">No temporal roles</span>
+                  <span className="unreviewed-badge">
+                    {longitudinalReadiness.candidatePairCount} candidates
+                  </span>
+                </div>
+                <div className="readiness-counts" aria-label="Local modality inventory">
+                  {longitudinalReadiness.modalityReadiness.map((item) => (
+                    <span key={item.modality}>
+                      <strong>{item.modality}</strong>{' '}
+                      {item.studyCount} {item.studyCount === 1 ? 'study' : 'studies'} ·{' '}
+                      {item.eligibleSeriesCount} eligible series
+                    </span>
+                  ))}
                 </div>
                 <ul>
+                  {longitudinalReadiness.missingData.map((requirement) => (
+                    <li key={requirement}>{readinessRequirementText(requirement)}</li>
+                  ))}
                   <li>
                     {isConsultationSourcePair(baseline, followup)
-                      ? 'The views use one matching opaque patient context and distinct source studies.'
-                      : 'Choose one MR and one CT from distinct studies with one matching opaque patient context.'}
+                      ? 'The selected MR and CT use one matching opaque patient context and distinct source studies, but they are consultation references—not a longitudinal pair.'
+                      : 'A consultation board may use one MR and one CT from distinct studies with one matching opaque patient context; those views still do not form a longitudinal pair.'}
                   </li>
                   <li>
-                    {baseline && followup && baseline.modality !== followup.modality
-                      ? `${baseline.modality} and ${followup.modality} answer different questions; their intensity values are not directly comparable.`
-                      : 'No chronological, anatomical, or same-lesion relationship is asserted.'}
+                    Even after a candidate appears, a person must confirm identity, clinical timepoint
+                    roles, sequence, contrast, coverage, artifact, and lesion/tissue definitions.
                   </li>
                   <li>
-                    Images are unregistered reference views. Source dates identify exams only and do
-                    not assign an earlier or later role.
+                    Current MR and CT images remain unregistered reference views; no chronological,
+                    anatomical, intensity, same-lesion, response, or treatment-effect claim is made.
                   </li>
                 </ul>
               </article>
@@ -1578,7 +1599,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       )}
 
       <footer>
-        <span>ScanView 0.4 · local-first prototype</span>
+        <span>ScanView 0.7 · local-first prototype</span>
         <span>Every automated result is unreviewed until a qualified clinician accepts it.</span>
       </footer>
     </main>

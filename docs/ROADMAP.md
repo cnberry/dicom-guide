@@ -511,6 +511,31 @@
    masks, measurements, or medical values. Covered bearer reads fail closed if the
    configured audit cannot append; the chain is not agent identity authentication.
 
+## Completed in the twenty-seventh milestone
+
+1. Added a strict v1 longitudinal-readiness artifact bound to the canonical SHA-256
+   of the exact local catalog. It reports aggregate MR/CT study, eligible-series,
+   valid-date, opaque patient-context, and metadata-candidate gates without source
+   descriptions, paths, pixels, direct identifiers, or an assertion of de-identification.
+2. Added matching human readiness logic and a visible Consult Prep card. The current
+   MRI+CT shape states that a future same-patient MR or CT exam is required and that
+   consultation reference views do not form a longitudinal pair.
+3. Tightened all agent candidate suggestions to require valid, distinct DICOM dates
+   in addition to same modality, distinct study, and one matching opaque patient
+   context. Every candidate remains unreviewed and never authorizes selection,
+   registration, lesion linkage, response, diagnosis, or a clinical conclusion.
+4. Added owner-only CLI output, authenticated `GET /v1/longitudinal-readiness`, strict
+   schema validation, a fixed privacy-minimized audit operation, bounded candidate
+   reporting, and adversarial Python/TypeScript coverage for missing dates,
+   cross-patient studies, localizers, malformed catalogs, and candidate truncation.
+5. Generated and schema-validated Mila's private local readiness report: 2 studies,
+   65 series, 53 eligible MR/CT series, 10,286 DICOM instances, one opaque patient
+   context, zero candidates, and the explicit missing requirement for a future
+   distinct same-modality study. The report remains outside Git with mode 0600.
+6. Released deterministic offline bundle v0.7.0 and passed exact-artifact macOS arm64
+   and Strawberry Linux x86_64 no-index install, runtime, readiness, authorization,
+   audit-resume/privacy, and tamper-refusal gates using synthetic DICOM only.
+
 ## Immediate
 
 1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound

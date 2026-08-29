@@ -9,6 +9,7 @@ remain sensitive medical information and are **not de-identified**.
 python -m pip install -e '.[test]'
 scanview-agent manifest '/path/to/copied/DICOM' --output manifest.json
 scanview-agent candidates manifest.json
+scanview-agent readiness manifest.json --output longitudinal-readiness.json
 scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM' \
@@ -77,9 +78,10 @@ For offline transfer and installation on macOS or Linux, run
 wheel, pinned pure-Python `pydicom` 3.0.2, hash-locked local requirements, and
 verifier/install/launch scripts. The installer invokes pip only with `--no-index` and
 `--require-hashes`, and every launch checks the bundle and installed runtime before
-indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.6.0 bundle has passed
-offline install, runtime checks, privacy-minimized bearer-access auditing, audit-
-tamper refusal, and loopback launch on both macOS arm64 and Strawberry Linux x86_64.
+indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.7.0 bundle has passed
+offline install, runtime checks, longitudinal-readiness generation, privacy-minimized
+bearer-access auditing, audit-tamper refusal, and loopback launch on both macOS arm64
+and Strawberry Linux x86_64.
 The earlier source-bound boundary-review, reviewed volume-comparison, and reviewed
 native-boundary display gates remain covered by the full regression suite and v0.5.0
 cross-platform package evidence;
@@ -99,6 +101,11 @@ and clinician questions with an empty interpretation list and `unreviewed` state
 An optional working lesion label is normalized and bounded but never treated as proof
 of lesion identity. Comparison validation omits that label, IDs, coordinates, and
 numeric values from its privacy-minimized summary.
+`readiness` and `GET /v1/longitudinal-readiness` produce the same metadata-only,
+catalog-hash-bound follow-up gate. The report counts eligible MR/CT studies and series,
+requires valid distinct dates and one matching opaque patient context, caps reported
+candidate pairs, excludes descriptions/pixels/paths, and leaves all clinical and
+derived-use permissions false.
 Visit-packet assembly also stays local. It accepts only validated key-image v2
 archives with one matching opaque patient context, distinct dated studies/series,
 explicit ordering, and one modality. It creates a static review page plus an

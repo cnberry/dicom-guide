@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.6.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.7.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -24,9 +24,10 @@ DICOM catalog is built. The launched agent interface is the same loopback bearer
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-exact v0.6.0 artifact has passed no-index install, runtime, privacy-minimized bearer-
-access audit, audit-tamper refusal, and loopback launch on macOS arm64 and Strawberry
-Linux x86_64. Synthetic source-bound SEG, qualified boundary review, reviewed volume-
+exact v0.7.0 artifact has passed no-index install, runtime, longitudinal-readiness,
+privacy-minimized bearer-access audit, audit-tamper refusal, and loopback launch on
+macOS arm64 and Strawberry Linux x86_64. Synthetic source-bound SEG, qualified
+boundary review, reviewed volume-
 comparison validation, and reviewed native-boundary display remain covered by the full
 regression suite and the v0.5.0 cross-platform release gate; signing/notarization
 remains pending.
@@ -56,6 +57,7 @@ cannot be joined automatically.
 `scanview-agent candidates` creates metadata-based pairing suggestions. It:
 
 - considers only multi-instance MR↔MR or CT↔CT stacks from different exams;
+- requires two valid, distinct DICOM acquisition dates;
 - requires one matching opaque patient context and excludes missing/mismatched ones;
 - excludes PR/SR, localizers/scouts, and very short series;
 - checks sequence terms, contrast, body part, matrix, orientation, TR/TE/TI/flip,
@@ -64,6 +66,23 @@ cannot be joined automatically.
 - never sets `auto_approved` to true.
 
 Zero candidates is valid and safer than cross-modality or object-type guessing.
+
+`scanview-agent readiness manifest.json --output readiness.json` creates a separate
+v1 metadata-only readiness report. The authenticated loopback equivalent is
+`GET /v1/longitudinal-readiness`. Both bind to the exact catalog JSON with SHA-256 and
+report aggregate study, eligible-series, date, opaque patient-context, and candidate
+counts separately for MR and CT. Up to 256 candidate pairs expose only opaque series
+IDs, score, fixed warnings, and `unreviewed`; descriptions and explanatory source
+terms are omitted from this report.
+
+Readiness states distinguish no studies, no eligible stacks, a missing distinct study,
+missing/invalid dates, unavailable matching patient context, same-date exams, and
+metadata candidates that still require human review. The current MRI+CT shape reports
+`no_same_modality_longitudinal_pair` and
+`future_distinct_study_same_modality_series`. Every report keeps candidate selection,
+registration, spatial comparison, lesion linking, response classification, treatment-
+effect conclusion, diagnosis, and clinical conclusion false. It is sensitive and
+`deidentified: false` even though direct identifier tags, paths, and pixels are absent.
 
 ## Measurement evidence packets
 
@@ -586,7 +605,8 @@ contain only sequence, whole-second UTC timestamp, fixed operation class,
 `bearer_authorized_request`, previous-event SHA-256, event SHA-256, and explicit
 local-only/no-content declarations. Fixed classes cover manifest, viewer state,
 comparison candidates, native-boundary summary, registration status, native DICOM
-instance requests, and bearer attempts at browser-only boundary/registration context
+instance requests, longitudinal readiness, and bearer attempts at browser-only
+boundary/registration context
 or pixels. An event proves that the configured bearer capability authorized a request;
 it does not claim response delivery or identify a person, process, model, or agent.
 

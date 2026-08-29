@@ -24,6 +24,7 @@ OPERATIONS = (
     "manifest_read",
     "viewer_state_read",
     "comparison_candidates_read",
+    "longitudinal_readiness_read",
     "native_boundary_summary_read",
     "registration_status_read",
     "native_dicom_instance_read",

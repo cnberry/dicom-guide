@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 01:10 PDT
+Last updated: 2026-08-29 01:38 PDT
 
 ## Data transfer
 
@@ -31,6 +31,11 @@ Last updated: 2026-08-29 01:10 PDT
   studies and all 65 series, with no missing context. Raw PatientID/PatientName values
   remain absent from catalog output. Candidate generation still returns zero because
   the only exams are different modalities.
+- The private catalog-hash-bound longitudinal-readiness report validates against its
+  v1 schema and reports 53 eligible MR/CT series, 10,286 instances, one opaque patient
+  context, zero candidates, and
+  `future_distinct_study_same_modality_series`. It contains no paths or pixels, grants
+  no derived or clinical permission, and is retained outside Git with mode 0600.
 
 ## Repository
 
@@ -212,6 +217,13 @@ Last updated: 2026-08-29 01:10 PDT
   replaced by a source-verified consultation packet. The existing live viewer-state
   bridge is also disabled because its v1 schema names timepoint roles; agents consume
   the neutral packet instead of receiving misleading baseline/follow-up state.
+- A matching longitudinal-readiness card now shows aggregate MR/CT study and eligible-
+  series counts, metadata-candidate count, and the exact missing gate. The Python
+  `readiness` command and authenticated loopback endpoint bind the same strict result
+  to the canonical catalog hash, cap candidate details at 256 opaque ID pairs, omit
+  descriptions/paths/pixels, and leave every selection, derived-use, diagnostic, and
+  clinical-conclusion permission false. Candidate generation now also fails closed on
+  missing, malformed, or identical DICOM acquisition dates.
 - Consultation packet v1 accepts exactly one MR and one CT view from distinct studies
   with one matching opaque patient context. Each neutral key-image sidecar uses a
   `view_a`/`view_b` slot instead of a timepoint role. The loopback assembler checks
@@ -237,7 +249,8 @@ Last updated: 2026-08-29 01:10 PDT
   patient-context gates are validated locally; the server persists no artifact.
 - Versioned measurement, key-image, consultation-key-image, consultation-packet,
   numeric-comparison, visit-packet,
-  comparison-review, navigation-intent, viewer-state, rigid-registration,
+  comparison-review, navigation-intent, viewer-state, longitudinal-readiness,
+  rigid-registration,
   registration-QA, reviewed-registration-display, source-bound manual ROI volume,
   manual boundary-review, reviewed manual ROI volume-comparison, reviewed native-
   boundary display, and agent-access-audit event
@@ -250,7 +263,7 @@ Last updated: 2026-08-29 01:10 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 25 contracts without breaking lightweight
+  UI-embedded wheel together with all 26 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -267,6 +280,33 @@ Last updated: 2026-08-29 01:10 PDT
 
 ## Verification
 
+- v0.7.0 longitudinal-readiness milestone: passing. The full Python suite reports 210
+  tests; the viewer reports 121 tests across 25 files; TypeScript typecheck,
+  production build, Python bytecode compilation, diff hygiene, and all 26 Draft
+  2020-12 schemas pass. Readiness coverage proves strict catalog shape and canonical
+  hash binding, current MRI+CT refusal, valid same-patient MR candidates, invalid/date-
+  missing/same-date/cross-patient/localizer refusal, fixed permission locks, bounded
+  256-pair reporting, owner-only CLI output, authenticated/no-store endpoint behavior,
+  and privacy-minimized bearer auditing. Production browser QA of the packaged UI
+  shows the current page title/version, zero-candidate card, future same-modality
+  requirement, explicit MR+CT consultation-reference limitation, and locked comparison.
+- Offline runtime bundle v0.7.0: passing on macOS arm64 and Strawberry Linux x86_64.
+  The retained owner-only 5,479,756-byte ZIP has nine fixed-timestamp members and
+  SHA-256 `4aa77dfe6f0d4b057d0b6f4b71054a12eb787735611b18bce1add7e68621e1cc`.
+  It contains the 3,084,032-byte ScanView wheel (SHA-256
+  `dd320993afa639ec3f65c8d2d8d883989734026cb885ccde68d2640050de4395`),
+  11 UI/worker/codec files (10,222,044 uncompressed bytes), all 26 schemas (240,034
+  bytes), and pinned `pydicom` 3.0.2. An independent second build was byte-identical.
+  Fresh extractions installed strictly from included wheels with package-index access
+  disabled and reported the embedded UI, all schemas, and both runtime-network and
+  external-DICOM-processing-API requirements false. On both platforms a synthetic
+  two-date MR fixture produced one unreviewed metadata candidate while a synthetic
+  MR+CT fixture produced zero and the future-same-modality requirement. Loopback
+  unauthenticated readiness returned 401 and bearer readiness returned 200; mode-0600
+  audit chains resumed across restart and contained no token, route, opaque ID, path,
+  or DICOM marker. Deliberate chain tampering failed verification and startup without
+  a traceback. Only 12 synthetic DICOM files and the patient-free ZIP went to
+  Strawberry; its staging tree was deleted, and no Mila data left this computer.
 - v0.6.0 privacy-minimized agent-access audit milestone: passing. The full Python
   suite reports 203 tests; the viewer reports 118 tests across 24 files; TypeScript
   typecheck, production build, Python bytecode compilation, diff hygiene, and all 25

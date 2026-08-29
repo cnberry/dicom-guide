@@ -176,10 +176,15 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
         "studies": [
             {
                 "id": "study_0123456789abcdef0123",
+                "acquisition_date": "20260101",
                 "series": [
                     {
                         "id": "series_0123456789abcdef0123",
+                        "patient_context_id": "patient_0123456789abcdef0123",
                         "modality": "MR",
+                        "series_description": "SYNTHETIC T1",
+                        "image_type": ["ORIGINAL", "PRIMARY"],
+                        "instance_count": 1,
                         "instances": [{"id": INSTANCE_ID, "bytes": source.stat().st_size}],
                     }
                 ],
@@ -213,6 +218,7 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
             ("/v1/manifest", HTTPStatus.OK),
             ("/v1/viewer-state", HTTPStatus.OK),
             ("/v1/comparison-candidates", HTTPStatus.OK),
+            ("/v1/longitudinal-readiness", HTTPStatus.OK),
             ("/v1/lesion-volume-comparison-display", HTTPStatus.OK),
             ("/v1/registration-qa", HTTPStatus.OK),
             (f"/v1/instances/{INSTANCE_ID}", HTTPStatus.OK),
@@ -237,12 +243,13 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
 
     summary = agent_access_audit_summary(audit_path)
     assert summary["valid"] is True
-    assert summary["event_count"] == 10
+    assert summary["event_count"] == 11
     events = [json.loads(line) for line in audit_path.read_text().splitlines()]
     assert [event["operation"] for event in events] == [
         "manifest_read",
         "viewer_state_read",
         "comparison_candidates_read",
+        "longitudinal_readiness_read",
         "native_boundary_summary_read",
         "registration_status_read",
         "native_dicom_instance_read",

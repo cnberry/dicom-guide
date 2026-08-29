@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from itertools import combinations
 from typing import Any
 
@@ -16,6 +17,16 @@ def _different_number(left: Any, right: Any, tolerance: float) -> bool:
     right_number = float(right)
     scale = max(abs(left_number), abs(right_number), 1.0)
     return abs(left_number - right_number) / scale > tolerance
+
+
+def _valid_dicom_date(value: Any) -> bool:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]{8}", value):
+        return False
+    try:
+        datetime.strptime(value, "%Y%m%d")
+    except ValueError:
+        return False
+    return True
 
 
 def _eligibility_reasons(series: dict[str, Any]) -> list[str]:
@@ -130,10 +141,13 @@ def suggest_pairs(catalog: dict[str, Any]) -> dict[str, Any]:
     for study in catalog.get("studies", []):
         for series in study.get("series", []):
             eligibility_reasons = _eligibility_reasons(series)
+            acquisition_date = study.get("acquisition_date")
+            if not _valid_dicom_date(acquisition_date):
+                eligibility_reasons.append("missing_or_invalid_acquisition_date")
             if eligibility_reasons:
                 excluded_series.append({"series_id": series["id"], "reasons": eligibility_reasons})
                 continue
-            dated_series.append((study.get("acquisition_date") or "", series))
+            dated_series.append((acquisition_date, series))
 
     candidates = []
     for (left_date, left), (right_date, right) in combinations(dated_series, 2):
@@ -156,6 +170,7 @@ def suggest_pairs(catalog: dict[str, Any]) -> dict[str, Any]:
         "limitations": [
             "These are metadata-based suggestions, not accepted clinical pairings.",
             "Pairs without one matching opaque patient context are excluded.",
+            "Both exams require valid, distinct DICOM acquisition dates.",
             "A person must confirm sequence, contrast, coverage, artifact, and acquisition compatibility.",
         ],
     }

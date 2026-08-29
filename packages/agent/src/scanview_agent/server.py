@@ -36,6 +36,7 @@ from .consultation_packets import (
     consultation_packet_from_transport,
     consultation_packet_summary,
 )
+from .longitudinal_readiness import build_longitudinal_readiness
 from .lesion_volume_comparisons import (
     MAX_TRANSPORT_BYTES as MAX_LESION_VOLUME_COMPARISON_TRANSPORT_BYTES,
     lesion_volume_comparison_from_transport,
@@ -88,6 +89,7 @@ def _agent_audit_operation(path: str) -> str | None:
         "/v1/manifest": "manifest_read",
         "/v1/viewer-state": "viewer_state_read",
         "/v1/comparison-candidates": "comparison_candidates_read",
+        "/v1/longitudinal-readiness": "longitudinal_readiness_read",
         "/v1/lesion-volume-comparison-display": "native_boundary_summary_read",
         "/v1/lesion-volume-comparison-display/context": (
             "browser_only_native_boundary_context_attempt"
@@ -533,6 +535,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/v1/comparison-candidates":
             self._send_json(suggest_pairs(self.server.catalog))
+            return
+        if path == "/v1/longitudinal-readiness":
+            try:
+                report = build_longitudinal_readiness(self.server.catalog)
+            except (KeyError, TypeError, ValueError):
+                self._send_json(
+                    {"error": "longitudinal_readiness_unavailable"},
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+                return
+            self._send_json(report)
             return
         if path == "/v1/lesion-volume-comparison-display":
             summary = self.server.lesion_volume_display_agent_summary
