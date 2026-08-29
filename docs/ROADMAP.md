@@ -771,19 +771,28 @@
 
 ## Next milestone
 
-1. Test source-SEG v2 against a real vendor-produced or clinical-system-exported
+1. Implement a distinct source-SEG longitudinal volume-pairing review artifact for
+   two independently accepted source-SEG review ZIPs. Keep manual/source evidence
+   lineages non-interchangeable; recursively revalidate both original SEG objects,
+   masks, source images, and exact chronology; require a separate qualified pairing
+   attestation; expose arithmetic only after acceptance; and keep response,
+   causality, registration, spatial change, diagnosis, conclusion, and sign-off
+   locked. Add schema, privacy-minimized summary, CLI, browser-session-only local
+   assembler, viewer form, adversarial tests, patient-free browser QA, and complete
+   offline-package gates. See the paused handoff in `docs/STATUS.md`.
+2. Test source-SEG v2 against a real vendor-produced or clinical-system-exported
    patient-free fixture in addition to highdicom and dcmqi, while retaining the
    conservative fail-closed profile.
-2. Restore authenticated Strawberry access and rerun the exact v0.14 source-SEG review,
+3. Restore authenticated Strawberry access and rerun the exact v0.14 source-SEG review,
    viewer-state, dcmqi, no-index-package, and loopback endpoint gates under Linux
    bubblewrap.
-3. Import a future same-modality Mila follow-up and complete explicit series pairing,
+4. Import a future same-modality Mila follow-up and complete explicit series pairing,
    separately reviewed ROI boundaries, same-lesion/tissue confirmation, and qualified
    pairing review. Keep the current MRI+CT media out of this longitudinal path.
-4. Add platform signing and notarization without weakening local-only runtime behavior.
-5. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
+5. Add platform signing and notarization without weakening local-only runtime behavior.
+6. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
    configuration.
-6. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
+7. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
 
 ## Registration milestone
 

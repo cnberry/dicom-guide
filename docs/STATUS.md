@@ -1,6 +1,49 @@
 # Status
 
-Last updated: 2026-08-29 06:31 PDT
+Last updated: 2026-08-29 06:42 PDT
+
+## Paused handoff
+
+- Work is paused at the user's request immediately after the v0.14.0 source DICOM
+  SEG boundary-review milestone. No source-SEG comparison code was started, no Mila
+  data was changed, and the repository remains at commit `187a060` apart from this
+  documentation-only handoff.
+- The completed local-only artifact is
+  `release/scanview-offline-0.14.0.zip` (owner-only, intentionally ignored by Git),
+  5,555,555 bytes, SHA-256
+  `6ac7e02e53887089f6e54f496d7f578936ff4388be5923cf376eba800a38a729`.
+  Its last full verification passed 262 Python tests, 141 viewer tests in 29 files,
+  TypeScript typecheck, production build, all 32 Draft 2020-12 schemas, two
+  byte-identical wheel/bundle builds, a fresh macOS no-index install, packaged CLI
+  and loopback authorization checks, and patient-free production-browser QA.
+- The next implementation slice was audited but deliberately not begun: a distinct
+  source-SEG longitudinal pairing contract. The existing
+  `scanview.lesion-volume-comparison-review` contract accepts only reviewed manual
+  ROI evidence and must remain unchanged. Accepted
+  `scanview.source-segmentation-review` archives currently expose structural
+  `eligible_for_future_pairing_review` only; no current assembler consumes them.
+- Restart with a new artifact family rather than weakening or relabeling the manual
+  contract. It should accept exactly two independently accepted source-SEG review
+  ZIPs, forbid manual/source mixing, recursively revalidate both original SEG objects,
+  masks, source images, and live catalog chronology, and require a separate qualified
+  person's same-lesion, same-reviewer-defined-tissue, acquisition/boundary
+  comparability, source-provenance limitation, registration-need, and fixed
+  attestation decisions.
+- Only an accepted pairing may disclose baseline/follow-up reviewed technical
+  volumes, absolute change, percent change, numeric direction, and elapsed days for
+  discussion. Source labels/codes/creator/algorithm/accuracy/clinical meaning must
+  not be promoted. Registration, cross-scan overlay, subtraction, voxelwise or
+  spatial boundary change, biological tumor burden, response classification,
+  treatment causality, diagnosis, clinical conclusion, and sign-off remain false.
+- Implement the new strict schema, privacy-minimized agent summary, non-overwriting
+  owner-only CLI create/validate commands, browser-session-only same-origin in-memory
+  loopback assembler, viewer import/pairing form, and adversarial tests. Then run the
+  complete Python/viewer/schema/build/package gates and patient-free browser QA before
+  a version bump or milestone claim.
+- Mila's copied media contains MRI and CT but no DICOM SEG and no same-modality
+  follow-up. It cannot enter this new longitudinal path today; never manufacture a
+  pairing from the current cross-modality exams. Strawberry Linux commissioning is
+  still pending because SSH authentication was refused; no patient data was sent.
 
 ## Data transfer
 

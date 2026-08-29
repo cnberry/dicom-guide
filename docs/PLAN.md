@@ -169,6 +169,15 @@ result into a medical conclusion.
   arithmetic-volume pairing transition are implemented. Spatial boundary-change
   localization, authenticated clinical sign-off, response assessment, and manual/
   semi-automatic component-specific tumor segmentation remain future work.
+- Paused next slice: add a separate source-SEG volume-pairing review contract that
+  consumes only two accepted `scanview.source-segmentation-review` archives. Do not
+  broaden the manual-ROI comparison contract or mix evidence lineages. Recursively
+  revalidate both source SEG/mask/source-image chains and live DICOM chronology;
+  require qualified self-attested same-lesion, reviewer-defined-tissue,
+  comparability, provenance-limit, and registration-need review before exposing
+  technical volume arithmetic for discussion. Response, causality, registration,
+  spatial change, diagnosis, conclusion, and sign-off remain locked. The exact
+  restart state and verification gates are recorded in `docs/STATUS.md`.
 
 ### Research only
 
