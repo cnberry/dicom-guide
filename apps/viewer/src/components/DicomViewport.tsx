@@ -8,6 +8,7 @@ import {
   type ViewportToolController,
 } from '../cornerstone';
 import { assessMprEligibility, getPatientOrientationLabels, type DicomSeries } from '../dicom';
+import type { MprPatientPoint } from '../mpr';
 import {
   createConsultationKeyImageArchive,
   createKeyImageArchive,
@@ -40,6 +41,7 @@ type Props = {
   onPresentationStateError?: (message: string) => void;
   interactionLocked?: boolean;
   simple?: boolean;
+  onPatientPointChange?: (point?: MprPatientPoint) => void;
 };
 
 type CanvasPresentationOverlay = {
@@ -103,6 +105,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     onPresentationStateError,
     interactionLocked = false,
     simple = false,
+    onPatientPointChange,
   }: Props,
   ref,
 ) {
@@ -114,6 +117,9 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
   presentationStateRef.current = presentationState;
   const presentationStateErrorRef = useRef(onPresentationStateError);
   presentationStateErrorRef.current = onPresentationStateError;
+  const patientPointChangeRef = useRef(onPatientPointChange);
+  patientPointChangeRef.current = onPatientPointChange;
+  const lastPointerUpdateRef = useRef(0);
   const [status, setStatus] = useState('Choose a series');
   const [keyImageState, setKeyImageState] = useState<'idle' | 'working' | 'saved' | 'error'>(
     'idle',
@@ -121,6 +127,13 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
   const [keyImageError, setKeyImageError] = useState('');
   const [sourceOverlay, setSourceOverlay] = useState<CanvasPresentationOverlay>();
   const presentationLocked = interactionLocked || Boolean(presentationState);
+
+  useEffect(
+    () => () => {
+      patientPointChangeRef.current?.(undefined);
+    },
+    [],
+  );
 
   useEffect(() => {
     const element = elementRef.current;
@@ -516,6 +529,25 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
       </div>
       <div
         className="dicom-viewport"
+        onPointerMove={(event) => {
+          const viewport = viewportRef.current;
+          if (!series || !viewport || presentationLocked) return;
+          if (event.timeStamp - lastPointerUpdateRef.current < 60) return;
+          lastPointerUpdateRef.current = event.timeStamp;
+          const rect = event.currentTarget.getBoundingClientRect();
+          try {
+            const world = viewport.canvasToWorld([
+              event.clientX - rect.left,
+              event.clientY - rect.top,
+            ]);
+            if (world.length === 3 && world.every(Number.isFinite)) {
+              patientPointChangeRef.current?.([...world] as MprPatientPoint);
+            }
+          } catch {
+            patientPointChangeRef.current?.(undefined);
+          }
+        }}
+        onPointerLeave={() => patientPointChangeRef.current?.(undefined)}
         onWheel={(event) => {
           if (!series || presentationLocked) return;
           event.preventDefault();

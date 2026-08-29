@@ -8,8 +8,16 @@ CT studies over time. It is being built for two audiences at once:
 
 The current default reads copied DICOM files locally, groups them into studies and
 series, and presents one selected series in a focused native Cornerstone3D viewer.
-The visible in-depth workflow is deliberately small: Window, Pan, Zoom, Reset, slice
-navigation, and an optional local axial/coronal/sagittal three-plane view.
+The workspace is split horizontally: an independently scrolling image area on the
+left and persistent agent chat on the right. The image area shows either one native
+pane or three vertically stacked axial/coronal/sagittal MPR panes. Controls remain
+deliberately small: Window, Pan, Zoom, Reset, slice navigation, and the three-plane
+entry point.
+
+The chat shell already tracks the exact local series, source image, stack position,
+view mode, and pointer/crosshair LPS location without copying a screenshot. Its
+composer is intentionally disabled and labeled **Connector next**: no OpenAI model
+or external service is currently connected, and no DICOM or pixel data is uploaded.
 
 **Compare over time** is a separate planned mode and is intentionally disabled. It
 will be enabled only after exact timepoint pairing, calibrated measurements,
@@ -34,9 +42,15 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 
 ## Current capabilities
 
-- Focused single-series interface with one native image pane and an optional minimal
-  three-plane MPR; no measurement, export, packet, readiness, SEG/GSPS, consultation,
-  or agent-state panels appear in the default workspace.
+- Focused split-screen single-series interface with one native image pane or three
+  vertically stacked MPR panes on the left and persistent agent chat on the right;
+  no measurement, export, packet, readiness, SEG/GSPS, consultation, or agent-state
+  panels appear in the default workspace.
+- Versioned, session-only chat context with exact opaque series/source identity,
+  stack position, view mode, and pointer/crosshair LPS coordinates. It contains no
+  pixels, source text, or direct identifiers; the friendly series description is a
+  local display label only. The composer stays disabled until the authenticated,
+  consented local connector is implemented.
 - Separate visible but locked time-comparison mode, with measurement and alignment
   requirements documented before implementation.
 - Local folder import; no upload, analytics, fonts, or telemetry.

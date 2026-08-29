@@ -1,26 +1,35 @@
 # Status
 
-Last updated: 2026-08-29 07:29 PDT
+Last updated: 2026-08-29 07:58 PDT
 
 ## Current handoff
 
-- The primary viewer is now a focused **In-depth review** workspace: one series
-  selector, one native DICOM pane, Window/Pan/Zoom/Reset, and an optional local
-  axial/coronal/sagittal three-plane view. The visible measurement, export, packet,
-  readiness, GSPS, SEG, agent-state, consultation-board, and other evidence sections
-  were removed from this primary surface. Their underlying local contracts remain in
-  the repository for deliberate future workflows.
+- The primary viewer is now a focused split-screen **In-depth review** workspace.
+  The independently scrolling left side shows either one native DICOM pane or three
+  vertically stacked axial/coronal/sagittal MPR panes. The persistent right side is
+  reserved for agent conversation and remains visible while the image stack scrolls.
+  The visible measurement, export, packet, readiness, GSPS, SEG, agent-state,
+  consultation-board, and other evidence sections remain outside this primary surface.
+- The viewer now derives a versioned, session-only agent context from the exact local
+  state: opaque series and source-instance IDs, stack position, view mode, and the
+  pointer or MPR crosshair in DICOM LPS millimeters. MPR context resolves the nearest
+  exact native source plane. It contains no pixels, source text, or direct identifiers;
+  the friendly series description is a local display label only. The chat
+  composer is deliberately disabled and labeled **Connector next** until a bounded
+  local connector can make that context available without creating a DICOM upload or
+  pretending that an OpenAI model is already connected.
 - **Compare over time** is visible as the second product mode but intentionally
   disabled. It will not be enabled by reusing the former approximate two-pane UI.
   The next design must begin with exact source/timepoint pairing, measurement-grade
   geometry and calibration, explicit target/tissue definitions, alignment state,
   repeatability/uncertainty, and qualified review before it exposes change arithmetic.
 - Production-browser QA used the existing local copied-scan service: it loaded 2
-  studies and 57 renderable series, displayed exactly one native pane, selected a
-  324-slice 3D MR series, opened and closed all three MPR planes, and confirmed that
-  no legacy workspace sections were present. No derivative or patient-specific
-  finding was saved to Git.
-- Current code verification passes TypeScript typecheck, 141 viewer tests in 29
+  studies and 57 renderable series, displayed the persistent split, updated precise
+  LPS context from the native-image pointer, selected a 324-slice 3D MR series,
+  rendered three vertically stacked MPR planes, resolved the crosshair to an exact
+  source image, and kept chat visible while only the left stack scrolled. No
+  derivative or patient-specific finding was saved to Git.
+- Current code verification passes TypeScript typecheck, 143 viewer tests in 30
   files, and the production build. The known Vite codec externalization and large-
   chunk messages remain build warnings, not failures.
 - The completed v0.14.0 local-only artifact remains
@@ -31,10 +40,13 @@ Last updated: 2026-08-29 07:29 PDT
 - Mila's copied media still contains MRI and CT but no DICOM SEG and no same-modality
   follow-up. It cannot support a truthful chemotherapy-response comparison today;
   never manufacture a time comparison from the current cross-modality exams.
-- Next implementation order: specify the comparison measurement protocol and strict
-  state machine; prototype a two-timepoint shell with comparison actions locked;
-  add exact calibrated measurements and repeatability records; then add alignment,
-  review, agent, adversarial, and cross-platform gates before enabling the mode.
+- Next implementation order: add the explicitly consented local agent connector and
+  exact source-query boundary behind the disabled composer; then specify the
+  comparison measurement protocol and strict state machine, prototype a locked
+  two-timepoint shell, and add calibrated measurements, repeatability, alignment,
+  review, adversarial, and cross-platform gates before enabling comparison. Local
+  rotatable 3D exploration is recorded in the backlog after the basic viewer and
+  chat boundary are stable; it is not part of the current implementation.
 
 ## Data transfer
 

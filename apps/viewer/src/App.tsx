@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
+import { AgentChatPanel } from './components/AgentChatPanel';
 import { MeasurementWorkspace } from './components/MeasurementWorkspace';
 import { MprPanel } from './components/MprPanel';
 import { LesionVolumeComparisonPanel } from './components/LesionVolumeComparisonPanel';
@@ -79,6 +80,8 @@ import {
   type ResolvedSourceSegmentationCatalog,
   type SourceSegment,
 } from './sourceSegmentations';
+import { buildAgentChatContext } from './agentChatContext';
+import type { MprPatientPoint } from './mpr';
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
@@ -156,6 +159,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const [mprSeriesId, setMprSeriesId] = useState<string>();
   const [synchronized, setSynchronized] = useState(true);
   const [activeTool, setActiveTool] = useState<ViewerTool>('window');
+  const [patientPoint, setPatientPoint] = useState<MprPatientPoint>();
   const [resetNonce, setResetNonce] = useState(0);
   const [importState, setImportState] = useState<ImportState>();
   const [importMessage, setImportMessage] = useState('No scan folder loaded');
@@ -595,6 +599,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setFollowupIndex(0);
       setBaselinePresentationState(undefined);
       setFollowupPresentationState(undefined);
+      setPatientPoint(undefined);
       if (focusedInterfaceEnabled) {
         setPresentationStateLoading(false);
         setPresentationStateMessage('Source presentation workflows are hidden in focused review.');
@@ -714,6 +719,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setBaselineId(undefined);
     setFollowupId(undefined);
     setMprSeriesId(undefined);
+    setPatientPoint(undefined);
     setLoadedSourceSegmentation(undefined);
     setSourceSegmentationCatalog(undefined);
     setSourceSegmentationLoading(false);
@@ -1431,6 +1437,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       : series.length
         ? `${studyCount} ${studyCount === 1 ? 'study' : 'studies'} · ${series.length} series · local only`
         : 'No folder open';
+    const agentChatContext = buildAgentChatContext({
+      series: baseline,
+      index: baselineIndex,
+      viewMode: mprSeries ? 'mpr' : 'native',
+      patientPoint,
+    });
 
     return (
       <main className="simple-app">
@@ -1479,82 +1491,95 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           <span>Comparison comes later, after alignment and measurement checks.</span>
         </div>
 
-        {series.length === 0 ? (
-          <div className="simple-empty">
-            <h2>Open a DICOM folder</h2>
-            <p>Images are read on this computer and are not uploaded.</p>
-            <button className="primary-action" onClick={openFolder}>
-              Open folder
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="simple-controls">
-              <SeriesSelect
-                label="Series"
-                value={baselineId}
-                series={series}
-                onChange={(id) => {
-                  const selected = series.find((item) => item.id === id);
-                  setBaselinePresentationState(undefined);
-                  setMprSeriesId(undefined);
-                  setBaselineId(id);
-                  setBaselineIndex(Math.floor((selected?.instances.length ?? 1) / 2));
-                  setMeasurementComparisonDraft(undefined);
-                }}
-              />
-              <div className="simple-tools" aria-label="Image tools">
-                {(
-                  [
-                    ['window', 'Window'],
-                    ['pan', 'Pan'],
-                    ['zoom', 'Zoom'],
-                  ] as const
-                ).map(([tool, label]) => (
-                  <button
-                    key={tool}
-                    className={activeTool === tool ? 'active' : ''}
-                    aria-pressed={activeTool === tool}
-                    onClick={() => setActiveTool(tool)}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <button onClick={() => setResetNonce((value) => value + 1)}>Reset</button>
+        <div className="simple-workspace">
+          <div className="image-workspace">
+            {series.length === 0 ? (
+              <div className="simple-empty">
+                <h2>Open a DICOM folder</h2>
+                <p>Images are read on this computer and are not uploaded.</p>
+                <button className="primary-action" onClick={openFolder}>
+                  Open folder
+                </button>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="simple-controls">
+                  <SeriesSelect
+                    label="Series"
+                    value={baselineId}
+                    series={series}
+                    onChange={(id) => {
+                      const selected = series.find((item) => item.id === id);
+                      setBaselinePresentationState(undefined);
+                      setMprSeriesId(undefined);
+                      setPatientPoint(undefined);
+                      setBaselineId(id);
+                      setBaselineIndex(Math.floor((selected?.instances.length ?? 1) / 2));
+                      setMeasurementComparisonDraft(undefined);
+                    }}
+                  />
+                  {!mprSeries && (
+                    <div className="simple-tools" aria-label="Image tools">
+                      {(
+                        [
+                          ['window', 'Window'],
+                          ['pan', 'Pan'],
+                          ['zoom', 'Zoom'],
+                        ] as const
+                      ).map(([tool, label]) => (
+                        <button
+                          key={tool}
+                          className={activeTool === tool ? 'active' : ''}
+                          aria-pressed={activeTool === tool}
+                          onClick={() => setActiveTool(tool)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <button onClick={() => setResetNonce((value) => value + 1)}>Reset</button>
+                    </div>
+                  )}
+                </div>
 
-            <div className="single-viewport-grid">
-              <DicomViewport
-                ref={baselineViewportRef}
-                id="baseline"
-                label="Series"
-                series={baseline}
-                index={baselineIndex}
-                onIndexChange={(index) => updateIndex('baseline', index)}
-                activeTool={activeTool}
-                resetNonce={resetNonce}
-                interactionLocked={false}
-                simple
-                onOpenMpr={() => {
-                  if (baseline) setMprSeriesId(baseline.id);
-                }}
-              />
-            </div>
-
-            {mprSeries && (
-              <MprPanel
-                series={mprSeries}
-                simple
-                onClose={() => setMprSeriesId(undefined)}
-              />
+                {mprSeries ? (
+                  <MprPanel
+                    series={mprSeries}
+                    simple
+                    onPatientPointChange={setPatientPoint}
+                    onClose={() => {
+                      setPatientPoint(undefined);
+                      setMprSeriesId(undefined);
+                    }}
+                  />
+                ) : (
+                  <div className="single-viewport-grid">
+                    <DicomViewport
+                      ref={baselineViewportRef}
+                      id="baseline"
+                      label="Series"
+                      series={baseline}
+                      index={baselineIndex}
+                      onIndexChange={(index) => {
+                        setPatientPoint(undefined);
+                        updateIndex('baseline', index);
+                      }}
+                      activeTool={activeTool}
+                      resetNonce={resetNonce}
+                      interactionLocked={false}
+                      simple
+                      onPatientPointChange={setPatientPoint}
+                      onOpenMpr={() => {
+                        setPatientPoint(undefined);
+                        if (baseline) setMprSeriesId(baseline.id);
+                      }}
+                    />
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-
-        <footer className="simple-footer">
-          Local review tool · not validated for diagnosis · discuss conclusions with a clinician
-        </footer>
+          </div>
+          <AgentChatPanel context={agentChatContext} seriesDescription={baseline?.description} />
+        </div>
       </main>
     );
   }

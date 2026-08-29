@@ -37,6 +37,7 @@ type Props = {
   onReadonlyError?: (message: string) => void;
   onClose: () => void;
   simple?: boolean;
+  onPatientPointChange?: (point?: MprPatientPoint) => void;
 };
 
 const orientationLabels: Array<{ id: MprOrientation; label: string }> = [
@@ -101,11 +102,14 @@ export function MprPanel({
   onReadonlyError,
   onClose,
   simple = false,
+  onPatientPointChange,
 }: Props) {
   const axialRef = useRef<HTMLDivElement>(null);
   const coronalRef = useRef<HTMLDivElement>(null);
   const sagittalRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<MprViewportController | undefined>(undefined);
+  const patientPointChangeRef = useRef(onPatientPointChange);
+  patientPointChangeRef.current = onPatientPointChange;
   const [activeTool, setActiveTool] = useState<MprTool>('crosshairs');
   const [patientPoint, setPatientPoint] = useState<MprPatientPoint>();
   const [status, setStatus] = useState('Building local volume from source slices…');
@@ -144,6 +148,17 @@ export function MprPanel({
   const [sourceReviewExportStatus, setSourceReviewExportStatus] = useState('');
   const eligibility = assessMprEligibility(series);
   const evidenceEligibility = assessLesionVolumeEligibility(series);
+
+  useEffect(() => {
+    patientPointChangeRef.current?.(patientPoint);
+  }, [patientPoint]);
+
+  useEffect(
+    () => () => {
+      patientPointChangeRef.current?.(undefined);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (

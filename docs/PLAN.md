@@ -18,15 +18,42 @@ result into a medical conclusion.
 
 ### Phase 1 — focused in-depth review (current)
 
+- Split the workspace into an independently scrolling image area on the left and a
+  persistent agent conversation area on the right.
 - Default to one explicitly selected series and one authoritative native DICOM pane.
 - Expose only Window, Pan, Zoom, Reset, slice navigation, and optional geometry-gated
-  axial/coronal/sagittal MPR.
+  axial/coronal/sagittal MPR. Native and MPR presentations are mutually exclusive;
+  the three MPR panes stack vertically in the image area.
+- Derive versioned agent context from exact opaque series/source identity, stack
+  position, view mode, and pointer or crosshair LPS coordinates without including
+  screenshots, pixels, paths, or direct identifiers.
 - Keep all source reading, decoding, and reconstruction local. The focused interface
   must perform no analytics, telemetry, cloud processing, or external API call.
 - Keep advanced evidence and agent contracts implemented but outside the primary
   viewer until each workflow earns a simple, deliberate entry point.
 - Present **Compare over time** as a distinct mode, disabled until the next phase's
   measurement and alignment gates are implemented and tested.
+
+### Phase 1B — consented agent conversation (next)
+
+- Keep the composer visibly disabled until the local connector is healthy; never
+  present placeholder text as a model response or imply that an agent is connected.
+- Add an explicit per-session opt-in that binds the conversation to the existing
+  authenticated loopback browser session. Keep messages bounded, memory-only,
+  revocable, and non-persistent by default.
+- Let the agent request exact source metadata and local pixel/geometry queries by
+  opaque instance reference through a narrow local tool boundary. Do not send DICOM
+  files, pixel arrays, screenshots, filesystem paths, or unnecessary identifiers to
+  an external service. DICOM reading and computation remain local even if a later
+  language-model conversation is enabled.
+- Show the person which series, source image, view, and LPS point are attached to each
+  message. Source changes or session expiry must invalidate stale references.
+- Separate agent observations, person statements, local computations, and clinical
+  conclusions in both the UI and the message contract. The agent may help formulate
+  questions but may not silently convert image context into a diagnosis or response
+  assessment.
+- Add adversarial authorization, stale-source, prompt-size, privacy, no-network-
+  fallback, and browser interaction tests before enabling Send.
 
 ### Phase 2 — accurate comparison over time (next)
 
@@ -184,6 +211,14 @@ result into a medical conclusion.
   measurement, and visit-packet contracts.
 
 ### Phase 4 — reviewed derivatives
+
+- Backlog: local rotatable 3D volume exploration for one explicitly selected,
+  geometry-qualified series, linked to the native/MPR patient-space point. Include
+  bounded local GPU/CPU rendering, crop and display controls, clear derived-view
+  labeling, and deterministic fallback. Do not merge or fuse multiple series into one
+  volume without an independently reviewed registration; measurements remain bound
+  to native/MPR geometry. This is deliberately after the basic viewer and agent
+  connector, not part of the current milestone.
 
 - Version-gated local Slicer/BRAINSFit/BRAINSResample rigid-registration execution and
   source-hashed, generated-pending-QA seven-file v2 bundles with an explicit binary
@@ -374,3 +409,12 @@ result into a medical conclusion.
     definitions, comparable methods and units, alignment state, uncertainty or
     repeatability evidence, and qualified review. Failed or missing gates withhold
     change arithmetic; no numeric change becomes a response or treatment conclusion.
+33. **Image-context honesty:** the persistent chat surface names the exact current
+    opaque series/source image, stack position, view, and LPS pointer or crosshair.
+    It sends no pixels, screenshots, paths, or direct identifiers, and Send remains
+    disabled unless an authenticated, consented, revocable connector is actually
+    available. Source changes and session expiry invalidate stale context.
+34. **3D exploration separation:** a future rotatable volume may reconstruct only one
+    validated series locally. It must remain labeled as a derived exploratory view,
+    cannot fuse series without reviewed registration, and cannot replace native/MPR
+    source geometry for measurement or clinical confirmation.
