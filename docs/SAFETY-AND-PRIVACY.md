@@ -119,16 +119,22 @@ quality-system, and regulatory review.
   patient file is created.
 - Live agent inspection is explicitly off by default. If a person opts in, the
   browser publishes at most 16 KiB of exact allowlisted JSON to the same-origin
-  loopback process: opaque current series/instance positions, tool/link state,
-  optional MPR series, and evidence counts. It never sends pixels, descriptive
-  metadata, dates, paths, measurement values/labels/geometry, or direct identifiers.
-  The server validates every reference against the local catalog, stores only the
-  latest state in memory, returns `no-store`, and requires the bearer token to read
-  it. Opt-out clears and revokes the ephemeral publisher; absent heartbeats expire
-  within 30 seconds. Opaque IDs remain sensitive and potentially linkable.
-- Consult Prep disables viewer-state v1 publication because that contract uses
-  baseline/follow-up pane names. Neutral agent evidence travels only in the explicit
-  consultation packet, preventing internal UI roles from becoming a chronology claim.
+  loopback process: neutral Image A/Image B positions, explicit workspace/role state,
+  tool/link state, optional MPR series, and evidence counts. It never sends pixels,
+  descriptive metadata, dates, paths, measurement values/labels/geometry, or direct
+  identifiers. Consult Prep uses fixed `reference`/`reference` roles and cannot report
+  a comparison draft; longitudinal review uses explicit `baseline`/`followup` roles.
+- When one supported source DICOM SEG is visibly open, viewer-state v2 may add only
+  the opaque SEG object/segment/referenced-series IDs and guarded catalog-content hash.
+  Mask bytes/hash, source text, labels/codes, algorithm fields, volume, clinical
+  meaning, and interpretation are absent. Fixed locks deny agent navigation from the
+  state, source mutation, mask reading, SEG interpretation, diagnosis, response, and
+  conclusion. The server revalidates the reference against the guarded source-SEG
+  catalog, clears it with `source_changed` after guarded input mutation, stores only
+  the latest state in memory, returns `no-store`, and requires the bearer token to
+  read it. Opt-out clears and revokes the ephemeral publisher; absent heartbeats
+  expire within 30 seconds. Opaque IDs and hashes remain sensitive and potentially
+  linkable; the state is explicitly not de-identified.
 - Longitudinal readiness is metadata-only and never turns a candidate into a pairing.
   It requires valid distinct DICOM dates, separate studies, eligible MR↔MR or CT↔CT
   stacks, and one matching opaque patient context. Its agent form omits descriptions,
@@ -441,7 +447,9 @@ resolvable intent is rejected as a whole and the ordinary local default view is 
 Live viewer state is not an observation, even when its opaque references are exact.
 It says what the interface is showing and which tool is selected; it does not prove
 that a lesion exists, that two series are comparable, that measurements are correct,
-or that a person reviewed the images.
+or that a person reviewed the images. An active source-SEG reference only identifies
+which exact guarded object/segment is displayed. It supplies neither the mask nor its
+source-carried meaning, accuracy, provenance interpretation, or clinical authority.
 
 Registration QA is a human authority boundary. Agents may inspect its minimized
 availability/review-status contract and validate a saved record, but they may not load

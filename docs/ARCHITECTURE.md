@@ -200,13 +200,18 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    consumes it once, clears it immediately, validates an exact allowlist and local
    catalog membership, then applies both requested panes atomically. Navigation does
    not alter compatibility, registration, or review state.
-   A separate visible opt-in publishes only opaque current pane positions, tool/link
-   state, optional MPR series, and evidence counts. The browser never publishes
-   pixels, descriptions, dates, measurement content, paths, or direct identifiers.
-   Opt-out rotates and revokes the tab publisher; page close clears it and a missing
-   heartbeat expires it within 30 seconds. Consult Prep disables this v1 bridge
-   because its pane fields use baseline/follow-up names; neutral agent evidence uses
-   the consultation packet instead.
+   A separate visible opt-in publishes only opaque Image A/Image B positions, explicit
+   workspace/role state, tool/link state, optional MPR series, and evidence counts.
+   Consult Prep uses neutral `reference`/`reference` roles and forbids comparison-draft
+   publication; longitudinal review uses `baseline`/`followup`. When a supported source
+   SEG is visibly open, v2 may additionally publish only its opaque object/segment/
+   series references and guarded catalog-content hash with every mask, interpretation,
+   mutation, diagnostic, and response permission false. It never publishes mask bytes,
+   source text, labels/codes, algorithms, volume, pixels, dates, measurement content,
+   paths, or direct identifiers. The server joins the reference to the guarded source-
+   SEG catalog and clears it if guarded input changes. Opt-out rotates and revokes the
+   tab publisher; page close clears it and a missing heartbeat expires it within 30
+   seconds.
    Single-series MPR additionally requires complete, regular patient-space geometry;
    its interpolated orthographic planes remain navigation-only derivatives and do
    not enter native key-image evidence. A Cornerstone crosshair controller moves one
@@ -424,7 +429,8 @@ catalog has no longitudinal pair --> Consult Prep --> explicit MR + CT selection
                                                            +--> clinician questions
 
 chronology / lesion pairing / registration / response assessment: unavailable
-viewer-state v1 publication: unavailable (timepoint-named schema)
+viewer-state v2: opt-in neutral reference/reference navigation context
+source SEG: optional opaque displayed-object reference; no mask/text/volume/meaning
 ```
 
 The hashes make partial edits evident but do not authenticate a clinician. Signed
@@ -448,7 +454,7 @@ is not an MVP feature and is never allowed between CT and MRI.
   `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
   payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
   and `--require-hashes`; every launch verifies the bundle and probes installed
-  versions, UI, all 30 schemas, consultation contracts, agent consultation-plan,
+  versions, UI, all 31 schemas, consultation contracts, agent consultation-plan,
   source-segmentation validation, manual ROI review/comparison, native-boundary
   display, agent-access
   audit, and longitudinal-readiness support

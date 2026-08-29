@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 05:13 PDT
+Last updated: 2026-08-29 05:45 PDT
 
 ## Data transfer
 
@@ -163,11 +163,14 @@ Last updated: 2026-08-29 05:13 PDT
   browser applies all targets or none, clears the fragment immediately, and visibly
   states that pairing remains unreviewed. URL fragments never reach the local server.
 - People can now explicitly opt in to a memory-only local viewer-state bridge for
-  bearer-authorized agents. It publishes only exact opaque pane positions, tool/link
-  state, optional MPR series, and evidence counts; catalog validation, 30-second
-  expiry, visible opt-out, publisher revocation, `no-store`, and default-off behavior
-  are enforced. It contains no pixels, descriptions, dates, measurement content,
-  paths, or direct identifiers.
+  bearer-authorized agents. V2 publishes only exact opaque Image A/Image B positions,
+  explicit neutral or longitudinal view roles, tool/link state, optional MPR series,
+  and evidence counts. A visibly active supported source SEG may add only its opaque
+  object/segment/series references and guarded catalog-content hash; no mask bytes,
+  source text, label/code, algorithm, volume, accuracy, or interpretation is included.
+  Manifest/source-SEG catalog validation, guarded-source invalidation, 30-second
+  expiry, visible opt-out, publisher revocation, `no-store`, fixed-false clinical and
+  mutation permissions, and default-off behavior are enforced.
 - Launch/serve can now opt into an owner-only privacy-minimized bearer-access audit.
   Each covered sensitive bearer GET appends and fsyncs one strict operation-class
   event before routing. Events are sequence/hash chained across validated restarts and
@@ -313,7 +316,7 @@ Last updated: 2026-08-29 05:13 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 30 contracts without breaking lightweight
+  UI-embedded wheel together with all 31 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -330,6 +333,38 @@ Last updated: 2026-08-29 05:13 PDT
 
 ## Verification
 
+- v0.13.0 viewer-state v2/source-SEG milestone: passing on macOS arm64. The full
+  Python suite reports 259 tests; the viewer reports 136 tests across 28 files;
+  TypeScript typecheck, production build, Python bytecode compilation, diff hygiene,
+  and all 31 Draft 2020-12 schemas pass. Adversarial coverage rejects role/workspace,
+  source-SEG object/segment/series/hash, active-MPR, privacy, permission, catalog, and
+  changed-source mismatches.
+- Patient-free production-browser QA used one generated sparse 24-source/
+  11-frame SEG. Consult Prep exposed neutral `reference`/`reference` roles; the native
+  stack plus axial/coronal/sagittal read-only MPR produced four canvases. After explicit
+  opt-in, the bearer response carried only the allowed opaque SEG reference and
+  guarded catalog hash with all safety locks; label, source text, mask hash/bytes,
+  technical volume, and interpretation were absent. Opt-out immediately returned
+  `not_shared`.
+- Offline runtime bundle v0.13.0: passing on macOS arm64. The retained owner-only
+  5,540,314-byte ZIP has nine fixed-timestamp members and SHA-256
+  `76f3f3bd921dcde675c8487575c1b9d2bea74316e64877af1c22361cedb63780`.
+  It contains the 3,143,044-byte ScanView wheel (SHA-256
+  `987b88372edacc6e234c77dbbc01ca3cc0428b88518c539fcc93c8cba3e1ce0d`),
+  11 UI/worker/codec files (10,291,372 uncompressed bytes), all 31 schemas (293,469
+  bytes), and pinned pydicom 3.0.2. A second independent build was byte-identical.
+  A fresh exact-artifact extraction installed with `PIP_NO_INDEX=1`, reported version
+  0.13.0, embedded UI, 31 schemas, and both runtime-network and external-DICOM-
+  processing-API requirements false; dcmqi, highdicom, and NumPy were absent.
+- The exact packaged macOS gate created and validated an owner-only synthetic source-
+  SEG catalog, returned 401/200 plus `no-store` for catalog authorization, refused
+  bearer mask access with 403, published exact viewer-state v2 SEG context without
+  clinical/mask fields, returned `source_changed` after guarded-source mutation, and
+  then refused the source-SEG catalog with 409. The server bound only to loopback.
+- Strawberry Linux v0.13 commissioning is pending: `strawberry.local` still resolves
+  and answers on SSH, but the configured credentials were refused again on 2026-08-29.
+  No password, host configuration, or remote state was changed; no v0.13 software or
+  patient data was transferred. The exact v0.11 Linux gate remains passing.
 - v0.12.0 independent dcmqi interoperability milestone: passing on macOS arm64. The
   full Python suite reports 258 tests; the viewer reports 135 tests across 28 files;
   TypeScript typecheck, production build, Python bytecode compilation, diff hygiene,
@@ -917,9 +952,10 @@ Last updated: 2026-08-29 05:13 PDT
   a request; privileged host users can still replace or delete the file. Organization-
   authenticated identity and signed medical-record audit integration remain future work.
 - Signed/notarized macOS/Linux release packaging remains pending. The wheel, offline
-  bundle, and source-checkout launcher are working and verified on macOS; the same
-  offline bundle now passes on Strawberry Ubuntu 26.04 x86_64. It still requires host
-  Python 3.11+ and is not yet signed.
+  bundle, and source-checkout launcher are working and verified on macOS; the earlier
+  exact v0.11 bundle passes on Strawberry Ubuntu 26.04 x86_64, while current v0.13
+  commissioning awaits restored SSH authentication. It still requires host Python
+  3.11+ and is not yet signed.
 - Registration generation, local QA, accepted-review opacity/swipe display, an
   authenticated official macOS engine, an official-source/checksum-verified Linux
   engine, real-engine synthetic execution on both platforms, and mandatory pixel-level

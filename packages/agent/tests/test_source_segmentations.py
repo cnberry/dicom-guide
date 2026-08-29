@@ -31,6 +31,7 @@ from scanview_agent.source_segmentations import (
     source_segmentation_summary,
 )
 from scanview_agent.server import create_server
+from scanview_agent.viewer_state import VIEWER_STATE_MEDIA_TYPE, VIEWER_STATE_PERMISSIONS
 
 
 def _code(value: str, meaning: str, scheme: str = "DCM") -> Dataset:
@@ -642,10 +643,12 @@ def _http(
     port: int,
     path: str,
     *,
+    method: str = "GET",
+    body: bytes | None = None,
     headers: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, str], bytes]:
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-    connection.request("GET", path, headers=headers or {})
+    connection.request(method, path, body=body, headers=headers or {})
     response = connection.getresponse()
     body = response.read()
     result = response.status, dict(response.getheaders()), body
@@ -701,8 +704,103 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
         assert len(mask) == 18
         assert sum(mask) == 2
 
+        referenced_series_id = state["referenced_series"]["series_id"]
+        manifest_series = next(
+            series
+            for study in catalog["studies"]
+            for series in study["series"]
+            if series["id"] == referenced_series_id
+        )
+        view_instance = manifest_series["instances"][0]["id"]
+        publication = {
+            "schema_version": "2.0.0",
+            "sharing": True,
+            "publisher_id": "publisher_0123456789abcdef0123456789abcdef",
+            "workspace_mode": "consult_prep",
+            "view_roles": {"view_a": "reference", "view_b": "reference"},
+            "review_status": "unreviewed",
+            "active_tool": "window",
+            "slice_link": "unpaired",
+            "view_a": {
+                "series_id": referenced_series_id,
+                "instance_id": view_instance,
+                "stack_position": 1,
+                "stack_count": len(manifest_series["instances"]),
+            },
+            "view_b": None,
+            "mpr_series_id": referenced_series_id,
+            "source_segmentation_display": {
+                "segmentation_id": state["segmentation_id"],
+                "segment_number": segment["segment_number"],
+                "referenced_series_id": referenced_series_id,
+                "catalog_content_sha256": artifact["catalog_content_sha256"],
+                "display_status": "read_only_native_grid",
+                "mask_pixels_shared": False,
+                "creator_identity_authenticated": False,
+                "segment_accuracy_verified": False,
+                "source_segment_clinical_meaning": "not_assessed",
+                "scanview_interpretation_added": False,
+            },
+            "measurement_count": 0,
+            "comparison_draft_present": False,
+            "permissions": VIEWER_STATE_PERMISSIONS,
+            "privacy": {
+                "local_only": True,
+                "contains_pixels": False,
+                "contains_direct_identifiers": False,
+                "contains_source_text": False,
+                "contains_measurement_values": False,
+                "contains_segmentation_mask": False,
+                "contains_opaque_source_references": True,
+                "contains_sensitive_segmentation_reference": True,
+                "contains_hashes": True,
+                "deidentified": False,
+                "persisted": False,
+            },
+        }
+        status, _, body = _http(
+            server.server_port,
+            "/v1/viewer-state",
+            method="POST",
+            body=json.dumps(publication).encode(),
+            headers={
+                "Cookie": cookie,
+                "Content-Type": VIEWER_STATE_MEDIA_TYPE,
+                "Origin": f"http://127.0.0.1:{server.server_port}",
+            },
+        )
+        assert status == 200
+        assert json.loads(body)["schema_version"] == "2.0.0"
+        status, headers, body = _http(
+            server.server_port,
+            "/v1/viewer-state",
+            headers={"Authorization": "Bearer local-agent-token"},
+        )
+        assert status == 200
+        assert headers["Cache-Control"] == "no-store"
+        live_state = json.loads(body)
+        assert live_state["available"] is True
+        assert live_state["state"]["source_segmentation_display"] == (
+            publication["source_segmentation_display"]
+        )
+        assert "segment_label" not in body.decode()
+        assert "computed_volume" not in body.decode()
+        assert "mask_sha256" not in body.decode()
+
         changed_source = registry[state["referenced_series"]["ordered_instance_ids"][0]]
         changed_source.write_bytes(changed_source.read_bytes() + b"changed")
+        status, _, body = _http(
+            server.server_port,
+            "/v1/viewer-state",
+            headers={"Authorization": "Bearer local-agent-token"},
+        )
+        assert status == 200
+        assert json.loads(body) == {
+            "schema_version": "2.0.0",
+            "available": False,
+            "reason": "source_changed",
+            "expires_after_seconds": 30,
+        }
         status, _, body = _http(
             server.server_port,
             "/v1/source-segmentations",

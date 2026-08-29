@@ -243,7 +243,6 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const presentationStateActive = Boolean(
     baselinePresentationState || followupPresentationState,
   );
-  const sourceSegmentationActive = Boolean(loadedSourceSegmentation) || sourceSegmentationOpening;
   const visitPacketUsesLoopback = Boolean(
     baseline?.sourceKind === 'loopback-service' && followup?.sourceKind === 'loopback-service',
   );
@@ -301,17 +300,28 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     consultationBoardState === 'working';
   const viewerStatePublication = useMemo(
     () => {
-      if (consultPrepMode || presentationStateActive || sourceSegmentationActive) return undefined;
+      if (presentationStateActive || sourceSegmentationOpening) return undefined;
       return buildViewerStatePublication({
         publisherId: agentPublisherId,
+        workspaceMode: consultPrepMode ? 'consult_prep' : 'longitudinal_review',
         activeTool,
         synchronized: effectiveSynchronized,
         linkStrategy,
-        baseline,
-        baselineIndex,
-        followup,
-        followupIndex,
+        viewA: baseline,
+        viewAIndex: baselineIndex,
+        viewB: followup,
+        viewBIndex: followupIndex,
         mprSeries,
+        sourceSegmentation: loadedSourceSegmentation
+          ? {
+              segmentationId: loadedSourceSegmentation.state.segmentation_id,
+              segmentNumber: loadedSourceSegmentation.segment.segment_number,
+              referencedSeriesId:
+                loadedSourceSegmentation.state.referenced_series.series_id,
+              catalogContentSha256:
+                sourceSegmentationCatalog?.catalog.catalog_content_sha256 ?? '',
+            }
+          : undefined,
         measurementCount: visibleMeasurements.length,
         comparisonDraftPresent: Boolean(measurementComparisonDraft),
       });
@@ -327,8 +337,10 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       linkStrategy,
       measurementComparisonDraft,
       mprSeries,
+      loadedSourceSegmentation,
       presentationStateActive,
-      sourceSegmentationActive,
+      sourceSegmentationCatalog,
+      sourceSegmentationOpening,
       effectiveSynchronized,
       visibleMeasurements.length,
     ],
@@ -406,13 +418,21 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setAgentStateMessage(
       presentationStateActive
         ? 'Live agent state is unavailable while a source-carried GSPS presentation is active because the current state schema does not encode GSPS provenance.'
-        : sourceSegmentationActive
-          ? 'Live agent state is unavailable while a source-carried DICOM SEG mask is open because the current state schema does not encode SEG provenance.'
+        : sourceSegmentationOpening
+          ? 'Live agent state is unavailable while the source-carried DICOM SEG mask is still being fetched and verified.'
+        : loadedSourceSegmentation
+          ? 'Agent viewer state is off by default. Viewer-state v2 can share the active opaque SEG object and segment references locally, but never its mask pixels, label, volume, or interpretation.'
         : consultPrepMode
-        ? 'Live agent state is unavailable in Consult Prep because the current state schema uses timepoint roles. Use the neutral consultation packet for agent evidence.'
+        ? 'Agent viewer state is off by default. Viewer-state v2 shares neutral Image A/Image B roles in Consult Prep and makes no chronology claim.'
         : 'Agent viewer state is off by default. Enable it to share only expiring opaque positions locally.',
     );
-  }, [agentStateSharing, consultPrepMode, presentationStateActive, sourceSegmentationActive]);
+  }, [
+    agentStateSharing,
+    consultPrepMode,
+    loadedSourceSegmentation,
+    presentationStateActive,
+    sourceSegmentationOpening,
+  ]);
 
   useEffect(() => {
     agentPublisherIdRef.current = agentPublisherId;
@@ -438,10 +458,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setAgentStateMessage(
         presentationStateActive
           ? 'Agent viewer state stopped because the active source-carried GSPS presentation is not represented by the current state schema.'
-          : sourceSegmentationActive
-            ? 'Agent viewer state stopped because the active source-carried DICOM SEG mask is not represented by the current state schema.'
-          : consultPrepMode
-          ? 'Agent viewer state stopped because Consult Prep does not publish timepoint-role state. Use the neutral consultation packet instead.'
+          : sourceSegmentationOpening
+            ? 'Agent viewer state stopped while the source-carried DICOM SEG mask is being fetched and verified.'
           : 'Agent viewer state stopped: it is available only through the authenticated local launcher.',
       );
       const revokedPublisherId = agentPublisherId;
@@ -469,7 +487,11 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         await queued;
         if (effectActive && published) {
           setAgentStateMessage(
-            'Sharing opaque viewer state with bearer-authorized local agents · memory-only · expires within 30 seconds.',
+            loadedSourceSegmentation
+              ? 'Sharing opaque viewer positions and the active source SEG object/segment reference with bearer-authorized local agents · no mask pixels, source text, volume, or interpretation · expires within 30 seconds.'
+              : consultPrepMode
+                ? 'Sharing neutral Image A/Image B positions with bearer-authorized local agents · no chronology implied · memory-only · expires within 30 seconds.'
+                : 'Sharing opaque viewer state with bearer-authorized local agents · memory-only · expires within 30 seconds.',
           );
         }
       } catch (error) {
@@ -492,8 +514,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     agentPublisherId,
     agentStateSharing,
     consultPrepMode,
+    loadedSourceSegmentation,
     presentationStateActive,
-    sourceSegmentationActive,
+    sourceSegmentationOpening,
     viewerStatePublication,
   ]);
 
@@ -769,8 +792,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setAgentStateMessage(
         presentationStateActive
           ? 'Clear source-carried GSPS states before sharing viewer state; the current state schema does not encode GSPS provenance.'
-          : sourceSegmentationActive
-            ? 'Close the source-carried DICOM SEG mask before sharing viewer state; the current state schema does not encode SEG provenance.'
+          : sourceSegmentationOpening
+            ? 'Wait until the source-carried DICOM SEG mask finishes local verification before sharing viewer state.'
           : 'Agent viewer state requires scans opened through the authenticated local launcher.',
       );
       return;
@@ -1561,10 +1584,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                       ? 'Opt in to an expiring, privacy-minimized state for bearer-authorized local agents'
                       : presentationStateActive
                       ? 'Unavailable until source-carried GSPS states are cleared'
-                      : sourceSegmentationActive
-                        ? 'Unavailable until the source-carried DICOM SEG mask is closed'
-                      : consultPrepMode
-                      ? 'Live agent state is unavailable because its current schema uses longitudinal pane roles; use a consultation packet instead'
+                      : sourceSegmentationOpening
+                        ? 'Unavailable until the source-carried DICOM SEG mask finishes local verification'
                     : 'Available only through the authenticated local launcher'
                 }
                 onClick={toggleAgentStateSharing}
@@ -2203,7 +2224,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       )}
 
       <footer>
-        <span>ScanView 0.12 · local-first prototype</span>
+        <span>ScanView 0.13 · local-first prototype</span>
         <span>Every automated result is unreviewed until a qualified clinician accepts it.</span>
       </footer>
     </main>

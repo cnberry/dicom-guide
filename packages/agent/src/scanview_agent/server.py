@@ -78,6 +78,7 @@ from .visit_packets import (
 )
 from .viewer_state import (
     MAX_VIEWER_STATE_BYTES,
+    SCHEMA_VERSION as VIEWER_STATE_SCHEMA_VERSION,
     VIEWER_STATE_MEDIA_TYPE,
     VIEWER_STATE_TTL_SECONDS,
     available_viewer_state_response,
@@ -438,6 +439,14 @@ class ScanViewServer(ThreadingHTTPServer):
                 self.viewer_state_received_at = None
                 self.viewer_state_received_monotonic = None
                 return unavailable_viewer_state_response("stale")
+            if (
+                self.viewer_state.get("source_segmentation_display") is not None
+                and not self.source_segmentation_inputs_unchanged()
+            ):
+                self.viewer_state = None
+                self.viewer_state_received_at = None
+                self.viewer_state_received_monotonic = None
+                return unavailable_viewer_state_response("source_changed")
             return available_viewer_state_response(
                 self.viewer_state,
                 received_at=self.viewer_state_received_at,
@@ -1359,14 +1368,28 @@ class Handler(BaseHTTPRequestHandler):
                 removed = self.server.clear_viewer_state(publisher_id)
                 self._send_json(
                     {
-                        "schema_version": "1.0.0",
+                        "schema_version": VIEWER_STATE_SCHEMA_VERSION,
                         "accepted": True,
                         "sharing": False,
                         "removed": removed,
                     }
                 )
                 return
-            state = validate_viewer_state(value, self.server.catalog)
+            if (
+                isinstance(value, dict)
+                and value.get("source_segmentation_display") is not None
+                and not self.server.source_segmentation_inputs_unchanged()
+            ):
+                self._send_json(
+                    {"error": "source_segmentation_inputs_changed"},
+                    HTTPStatus.CONFLICT,
+                )
+                return
+            state = validate_viewer_state(
+                value,
+                self.server.catalog,
+                self.server.source_segmentation_catalog,
+            )
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
             self._send_json(
                 {"error": "invalid_viewer_state", "detail": str(error)},
@@ -1381,7 +1404,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(
             {
-                "schema_version": "1.0.0",
+                "schema_version": VIEWER_STATE_SCHEMA_VERSION,
                 "accepted": True,
                 "sharing": True,
                 "expires_after_seconds": int(VIEWER_STATE_TTL_SECONDS),

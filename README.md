@@ -102,8 +102,9 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Automatic **Consult preparation workspace** when the loaded catalog has no valid
   dated same-modality longitudinal source pair. It uses neutral Image A/Image B roles,
   disables approximate linking and lesion-pair arithmetic, and never presents MRI+CT
-  as a response pair. Live viewer-state v1 is disabled in this mode because it uses
-  timepoint field names; agents use the neutral consultation packet instead.
+  as a response pair. Viewer-state v2 remains available with explicit
+  `reference`/`reference` roles and no comparison draft, so agents can follow the
+  person's current neutral views without inventing chronology.
 - A strict longitudinal-readiness report binds to the exact local catalog hash and
   gives agents and people the same MR/CT study, eligible-series, date, patient-context,
   and metadata-candidate gates. The human card states what follow-up input is missing;
@@ -137,9 +138,13 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   instances through a one-use URL fragment. Targets are checked against the local
   catalog, the fragment is removed immediately, and pairing remains unreviewed.
 - Explicit opt-in viewer-state sharing lets a bearer-authorized local agent read the
-  current opaque series/instance positions, active tool, link mode, MPR series, and
-  evidence counts. It is off by default, memory-only, pixel/PHI-free, and expires
-  within 30 seconds without a browser heartbeat.
+  current opaque Image A/Image B positions, declared workspace/roles, active tool,
+  link mode, MPR series, and evidence counts. When a supported source DICOM SEG is
+  visibly open, the state may also carry only its opaque object/segment/series
+  references and catalog-content hash with fixed read-only/unverified declarations.
+  It never carries SEG mask bytes, source text, labels/codes, algorithm fields,
+  volume, or interpretation. Sharing is off by default, memory-only, explicitly not
+  de-identified, and expires within 30 seconds without a browser heartbeat.
 - Optional fail-closed bearer-access auditing: `--agent-audit-log` records only a
   fixed sensitive-operation class, authorization outcome, sequence, UTC timestamp,
   and SHA-256 chain anchors in one owner-only local JSONL file. It never records
@@ -213,8 +218,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.12.0.zip
-cd scanview-offline-0.12.0
+unzip release/scanview-offline-0.13.0.zip
+cd scanview-offline-0.13.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -229,6 +234,19 @@ Building the bundle may download the pinned dependency unless `--pydicom-wheel` 
 supplied, but installation, viewing, indexing, comparison, and evidence generation
 are offline. The integrity manifest is corruption evidence, not publisher signing or
 clinical authentication. Output is non-overwriting.
+
+The retained owner-only v0.13.0 ZIP is 5,540,314 bytes with SHA-256
+`76f3f3bd921dcde675c8487575c1b9d2bea74316e64877af1c22361cedb63780`.
+It was built twice byte-identically and passed a fresh no-index install, 31-schema
+runtime check, owner-only synthetic source-SEG CLI validation, loopback catalog
+authorization, bearer mask refusal, exact viewer-state v2 source-SEG reference
+publication, forbidden clinical/mask-field absence, and guarded-source invalidation on
+macOS arm64. The exact runtime contains neither dcmqi, highdicom, nor NumPy and
+requires no network or external DICOM-processing API. Production-browser QA rendered
+one native stack plus three read-only SEG MPR canvases and proved immediate opt-out
+revocation. Strawberry Linux v0.13 commissioning is pending because its configured SSH
+credentials were refused again on 2026-08-29; no software or patient data was
+transferred.
 
 The retained owner-only v0.12.0 ZIP is 5,535,669 bytes with SHA-256
 `71712961f15de19aea17a48d315099fde60b5f564458ef29c062f8fc6c4fa614`.
@@ -588,15 +606,30 @@ curl --fail --silent \
 ```
 
 Do not put the bearer token in shared scripts, shell history, screenshots, or logs.
-The response conforms to `schemas/scanview-viewer-state-v1.schema.json`. It contains
-opaque local series/instance IDs and stack positions, tool/link state, an optional
-opaque MPR series ID, measurement count, and whether a comparison draft exists. It
-never contains pixels, descriptions, dates, measurement values/geometry/labels,
-paths, or direct patient identifiers. Every posted field is checked against the
-local manifest. Turning sharing off clears and revokes that tab's ephemeral publisher;
-closing the page also clears it, and missed cleanup still expires within 30 seconds.
-This state is navigation context, not an imaging observation, pairing decision,
-clinical review, or medical conclusion.
+The response conforms to `schemas/scanview-viewer-state-v2.schema.json`. It contains
+opaque local Image A/Image B series/instance IDs and stack positions, the declared
+`consult_prep` or `longitudinal_review` workspace and its exact reference or timepoint
+roles, tool/link state, an optional opaque MPR series ID, measurement count, and
+whether a longitudinal comparison draft exists. Consult Prep requires neutral
+`reference`/`reference` roles and forbids a comparison draft.
+
+If a supported source DICOM SEG is visibly open on the active native MPR grid, the
+state may additionally include only the opaque SEG object ID, segment number,
+referenced series ID, and source-SEG catalog-content SHA-256. Fixed flags say the
+display is read-only, no mask pixels are shared, creator identity and accuracy are
+not verified, clinical meaning is not assessed, and ScanView added no interpretation.
+The server joins that reference to the separately guarded source-SEG catalog and
+returns `source_changed` after any guarded input changes. It never includes pixels,
+mask bytes/hash, source descriptions/text, labels/codes, algorithm fields, dates,
+volume, measurement values/geometry/labels, paths, or direct patient identifiers.
+
+Every posted field is checked against the local manifest and, when applicable, the
+guarded source-SEG catalog. All navigation, source mutation, SEG mask reading or
+interpretation, diagnosis, response-classification, and clinical-conclusion
+permissions are fixed false. Turning sharing off clears and revokes that tab's
+ephemeral publisher; closing the page also clears it, and missed cleanup still expires
+within 30 seconds. This state is navigation context, not an imaging observation,
+pairing decision, clinical review, or medical conclusion.
 
 ## Save and reopen a measurement draft
 

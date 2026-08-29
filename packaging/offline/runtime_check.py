@@ -18,10 +18,11 @@ from scanview_agent.lesion_volume_display import DISPLAY_ARTIFACT_TYPE as NATIVE
 from scanview_agent.longitudinal_readiness import ARTIFACT_TYPE as READINESS_ARTIFACT_TYPE
 from scanview_agent.presentation_states import ARTIFACT_TYPE as PRESENTATION_STATE_ARTIFACT_TYPE
 from scanview_agent.source_segmentations import ARTIFACT_TYPE as SOURCE_SEGMENTATION_ARTIFACT_TYPE
+from scanview_agent.viewer_state import SCHEMA_VERSION as VIEWER_STATE_SCHEMA_VERSION
 
 
 def main() -> None:
-    if version("scanview-agent") != "0.12.0" or version("pydicom") != "3.0.2":
+    if version("scanview-agent") != "0.13.0" or version("pydicom") != "3.0.2":
         raise SystemExit("installed ScanView runtime versions are invalid")
     if ARTIFACT_TYPE != "clinician_consultation_packet":
         raise SystemExit("installed ScanView consultation contract is unavailable")
@@ -45,17 +46,19 @@ def main() -> None:
         raise SystemExit("installed ScanView presentation-state contract is unavailable")
     if SOURCE_SEGMENTATION_ARTIFACT_TYPE != "scanview.source-segmentation-catalog":
         raise SystemExit("installed ScanView source-segmentation contract is unavailable")
+    if VIEWER_STATE_SCHEMA_VERSION != "2.0.0":
+        raise SystemExit("installed ScanView viewer-state contract is unavailable")
     if not _viewer_dist(None).joinpath("index.html").is_file():
         raise SystemExit("installed ScanView UI is unavailable")
     schemas = list(files("scanview_agent").joinpath("schemas").iterdir())
     schema_count = len([path for path in schemas if path.name.endswith(".json")])
-    if schema_count != 30:
+    if schema_count != 31:
         raise SystemExit("installed ScanView schemas are incomplete")
     print(
         json.dumps(
             {
                 "valid": True,
-                "scanview_agent": "0.12.0",
+                "scanview_agent": "0.13.0",
                 "pydicom": "3.0.2",
                 "embedded_ui": True,
                 "schema_count": schema_count,

@@ -684,6 +684,32 @@
    public key was refused on 2026-08-29. No patient data was transferred; the earlier
    exact v0.11 Linux gate remains passing.
 
+## Completed in the thirty-third milestone
+
+1. Replaced the timepoint-named viewer-state v1 publication path with v2 neutral
+   Image A/Image B targets plus strict workspace and view-role declarations. Consult
+   Prep now shares `reference`/`reference` navigation context without implying
+   chronology; longitudinal review retains explicit `baseline`/`followup` roles.
+2. Added an optional active source-SEG display reference containing only the exact
+   opaque object, segment, and referenced-series IDs plus guarded source-SEG catalog
+   content SHA-256. Mask bytes/hash, source text, segment label/codes, algorithm,
+   technical volume, accuracy claims, and interpretation are never published.
+3. Required the server to join that reference to one supported segment in the exact
+   guarded source-SEG v2 catalog and active MPR series. Changed SEG or referenced
+   source bytes now fail publication or clear an available state as `source_changed`.
+4. Added fixed-false navigation-from-state, mutation, mask-read, SEG-interpretation,
+   diagnosis, response, and clinical-conclusion permissions plus explicit sensitive-
+   reference/hash privacy declarations. Off-by-default consent, same-origin bounded
+   publication, bearer-only reading, `no-store`, publisher revocation, and 30-second
+   memory TTL remain unchanged.
+5. Added adversarial Python, TypeScript, schema, and integrated synthetic source-SEG
+   server tests. Production-browser QA rendered the native stack plus three read-only
+   MPR canvases, published only the allowed opaque SEG reference, proved forbidden
+   clinical/mask fields absent, and immediately revoked the state on opt-out.
+6. Bumped the local-only offline distribution to v0.13.0 with 31 embedded schemas.
+   Exact artifact hashes and platform commissioning evidence are recorded in
+   `docs/STATUS.md`; no patient data enters release or interoperability testing.
+
 ## Immediate
 
 1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
@@ -720,8 +746,9 @@
 1. Test source-SEG v2 against a real vendor-produced or clinical-system-exported
    patient-free fixture in addition to highdicom and dcmqi, while retaining the
    conservative fail-closed profile.
-2. Restore authenticated Strawberry access and rerun the exact v0.12 dcmqi,
-   no-index-package, and loopback endpoint gates under Linux bubblewrap.
+2. Restore authenticated Strawberry access and rerun the exact v0.13 viewer-state,
+   source-SEG, dcmqi, no-index-package, and loopback endpoint gates under Linux
+   bubblewrap.
 3. Import a future same-modality Mila follow-up and complete explicit series pairing,
    separately reviewed ROI boundaries, same-lesion/tissue confirmation, and qualified
    pairing review. Keep the current MRI+CT media out of this longitudinal path.

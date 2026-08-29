@@ -106,6 +106,19 @@ V0.12 adds a second independent writer/reader gate with NCI/QIICR dcmqi 1.5.6
 revision `60d63dc`. Both converters run inside OS-enforced external-network isolation,
 and the exact dcmqi, ScanView, and reference dense masks must agree. dcmqi is an
 optional test dependency only and is not included in the offline runtime.
+V0.13 adds viewer-state v2: neutral Image A/Image B roles work in Consult Prep, while
+longitudinal workspaces explicitly declare baseline/followup. A visibly active source
+SEG may contribute only its opaque object/segment/series references and guarded
+catalog hash; mask bytes, source text, labels, algorithms, volume, and interpretation
+remain outside the live state. All navigation, mutation, mask-read, diagnostic,
+response, and clinical permissions are fixed false.
+The deterministic owner-only v0.13.0 ZIP was built twice byte-identically. A fresh
+macOS arm64 no-index install passed the
+31-schema runtime and exact packaged source-SEG/viewer-state v2 authorization,
+forbidden-field, revocation, and changed-source gates. The runtime contains neither
+dcmqi, highdicom, nor NumPy and requires no runtime network or external DICOM API.
+Current Strawberry commissioning is pending SSH authentication; the exact v0.11
+Linux gate remains passing and no patient data was transferred.
 The earlier source-bound boundary-review, reviewed volume-comparison, and reviewed
 native-boundary display gates remain covered by the full regression suite and v0.5.0
 cross-platform package evidence;
@@ -296,13 +309,17 @@ navigation state is stored server-side.
 
 The unified viewer also has an explicit **Agent state** opt-in. While enabled, it
 publishes a strict, memory-only summary to `POST /v1/viewer-state`; a bearer-authorized
-agent reads it with `GET /v1/viewer-state`. The summary contains only opaque catalog
-series/instance positions, tool/link state, optional MPR series, and evidence counts.
-It contains no pixels, descriptions, dates, measurement values/labels/geometry,
-paths, or direct identifiers. The server independently checks catalog membership,
-serves it with `no-store`, and expires it after 30 seconds without a heartbeat.
-Opt-out revokes that ephemeral publisher so an in-flight older update cannot restore
-sharing. This is transient navigation context, not observation or clinical review.
+agent reads it with `GET /v1/viewer-state`. V2 contains only opaque Image A/Image B
+positions, explicit neutral or longitudinal roles, tool/link state, optional MPR
+series, and evidence counts. If a supported source SEG is visibly open it may also
+contain only that object's opaque segment/series references and guarded catalog hash.
+It contains no pixels, SEG mask, source text, labels/codes, algorithms, volume, dates,
+measurement values/labels/geometry, paths, direct identifiers, or interpretation.
+The server independently checks manifest and source-SEG catalog membership, serves
+the state with `no-store`, expires it after 30 seconds without a heartbeat, and
+clears it when guarded source input changes. Opt-out revokes that ephemeral publisher
+so an in-flight older update cannot restore sharing. This is transient navigation
+context, not observation, mask access, clinical review, diagnosis, or response.
 
 Rigid registration also stays local. `registration-doctor` looks for the required 3D
 Slicer 5.12.3 computed revision 34627/runtime repository revision `9034c71`

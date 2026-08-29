@@ -34,17 +34,19 @@ const localSeries = (seed: string, count = 2): DicomSeries => ({
 
 const publication = (
   linkStrategy: LinkStrategy = 'patient-position',
-  followup: DicomSeries | undefined = localSeries('2'),
+  viewB: DicomSeries | undefined = localSeries('2'),
+  workspaceMode: 'consult_prep' | 'longitudinal_review' = 'longitudinal_review',
 ) =>
   buildViewerStatePublication({
     publisherId,
+    workspaceMode,
     activeTool: 'length',
     synchronized: true,
     linkStrategy,
-    baseline: localSeries('1'),
-    baselineIndex: 1,
-    followup,
-    followupIndex: 0,
+    viewA: localSeries('1'),
+    viewAIndex: 1,
+    viewB,
+    viewBIndex: 0,
     mprSeries: localSeries('1'),
     measurementCount: 3,
     comparisonDraftPresent: true,
@@ -59,49 +61,69 @@ describe('privacy-minimized local viewer state', () => {
     const result = publication();
 
     expect(result).toEqual({
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       sharing: true,
       publisher_id: publisherId,
+      workspace_mode: 'longitudinal_review',
+      view_roles: { view_a: 'baseline', view_b: 'followup' },
       review_status: 'unreviewed',
       active_tool: 'length',
       slice_link: 'patient_position',
-      baseline: {
+      view_a: {
         series_id: `series_${'1'.repeat(20)}`,
         instance_id: `instance_${'1'.repeat(19)}1`,
         stack_position: 2,
         stack_count: 2,
       },
-      followup: {
+      view_b: {
         series_id: `series_${'2'.repeat(20)}`,
         instance_id: `instance_${'2'.repeat(19)}0`,
         stack_position: 1,
         stack_count: 2,
       },
       mpr_series_id: `series_${'1'.repeat(20)}`,
+      source_segmentation_display: null,
       measurement_count: 3,
       comparison_draft_present: true,
+      permissions: {
+        agent_navigation_from_state_authorized: false,
+        source_mutation_authorized: false,
+        source_segmentation_mask_read_authorized: false,
+        source_segmentation_interpretation_authorized: false,
+        diagnosis_authorized: false,
+        response_classification_authorized: false,
+        clinical_conclusion_authorized: false,
+      },
       privacy: {
         local_only: true,
         contains_pixels: false,
         contains_direct_identifiers: false,
+        contains_source_text: false,
+        contains_measurement_values: false,
+        contains_segmentation_mask: false,
+        contains_opaque_source_references: true,
+        contains_sensitive_segmentation_reference: false,
+        contains_hashes: false,
+        deidentified: false,
         persisted: false,
       },
     });
-    expect(JSON.stringify(result)).not.toMatch(/SECRET|20260828|BRAIN|imageUrl|measurement.*value/i);
+    expect(JSON.stringify(result)).not.toMatch(/SECRET|20260828|BRAIN|imageUrl|"value":/i);
   });
 
   it('labels unpaired, independent, physical, and approximate slice behavior explicitly', () => {
     const baseline = localSeries('1');
-    const build = (synchronized: boolean, linkStrategy: LinkStrategy, followup?: DicomSeries) =>
+    const build = (synchronized: boolean, linkStrategy: LinkStrategy, viewB?: DicomSeries) =>
       buildViewerStatePublication({
         publisherId,
+        workspaceMode: 'longitudinal_review',
         activeTool: 'window',
         synchronized,
         linkStrategy,
-        baseline,
-        baselineIndex: 0,
-        followup,
-        followupIndex: 0,
+        viewA: baseline,
+        viewAIndex: 0,
+        viewB,
+        viewBIndex: 0,
         measurementCount: 0,
         comparisonDraftPresent: false,
       })?.slice_link;
@@ -112,24 +134,81 @@ describe('privacy-minimized local viewer state', () => {
     expect(build(true, 'normalized', localSeries('2'))).toBe('approximate_index');
   });
 
+  it('publishes neutral Consult Prep roles and an exact read-only source SEG reference', () => {
+    const result = buildViewerStatePublication({
+      publisherId,
+      workspaceMode: 'consult_prep',
+      activeTool: 'window',
+      synchronized: false,
+      linkStrategy: 'normalized',
+      viewA: localSeries('1'),
+      viewAIndex: 0,
+      viewB: localSeries('2'),
+      viewBIndex: 1,
+      mprSeries: localSeries('1'),
+      sourceSegmentation: {
+        segmentationId: `instance_${'f'.repeat(20)}`,
+        segmentNumber: 7,
+        referencedSeriesId: `series_${'1'.repeat(20)}`,
+        catalogContentSha256: 'b'.repeat(64),
+      },
+      measurementCount: 0,
+      comparisonDraftPresent: false,
+    });
+
+    expect(result?.workspace_mode).toBe('consult_prep');
+    expect(result?.view_roles).toEqual({ view_a: 'reference', view_b: 'reference' });
+    expect(result?.source_segmentation_display).toEqual({
+      segmentation_id: `instance_${'f'.repeat(20)}`,
+      segment_number: 7,
+      referenced_series_id: `series_${'1'.repeat(20)}`,
+      catalog_content_sha256: 'b'.repeat(64),
+      display_status: 'read_only_native_grid',
+      mask_pixels_shared: false,
+      creator_identity_authenticated: false,
+      segment_accuracy_verified: false,
+      source_segment_clinical_meaning: 'not_assessed',
+      scanview_interpretation_added: false,
+    });
+    expect(result?.permissions.source_segmentation_mask_read_authorized).toBe(false);
+    expect(result?.privacy).toMatchObject({
+      contains_sensitive_segmentation_reference: true,
+      contains_hashes: true,
+      contains_segmentation_mask: false,
+      deidentified: false,
+    });
+    expect(JSON.stringify(result)).not.toMatch(/segment_label|computed_volume|mask_sha256|SECRET/);
+  });
+
   it('refuses browser-folder, malformed, out-of-stack, and excessive-count state', () => {
     const browserSeries = { ...localSeries('1'), sourceKind: 'browser-folder' as const };
     const inputs = [
-      { baseline: browserSeries },
-      { baseline: { ...localSeries('1'), id: 'series_bad' } },
-      { baseline: localSeries('1'), baselineIndex: 2 },
-      { baseline: localSeries('1'), measurementCount: 10_001 },
+      { viewA: browserSeries },
+      { viewA: { ...localSeries('1'), id: 'series_bad' } },
+      { viewA: localSeries('1'), viewAIndex: 2 },
+      { viewA: localSeries('1'), measurementCount: 10_001 },
+      { workspaceMode: 'consult_prep' as const, comparisonDraftPresent: true },
+      {
+        mprSeries: localSeries('2'),
+        sourceSegmentation: {
+          segmentationId: `instance_${'f'.repeat(20)}`,
+          segmentNumber: 1,
+          referencedSeriesId: `series_${'1'.repeat(20)}`,
+          catalogContentSha256: 'b'.repeat(64),
+        },
+      },
     ];
 
     for (const overrides of inputs) {
       const validInput = {
         publisherId,
+        workspaceMode: 'longitudinal_review' as const,
         activeTool: 'window' as const,
         synchronized: true,
         linkStrategy: 'patient-position' as const,
-        baseline: localSeries('1'),
-        baselineIndex: 0,
-        followupIndex: 0,
+        viewA: localSeries('1'),
+        viewAIndex: 0,
+        viewBIndex: 0,
         measurementCount: 0,
         comparisonDraftPresent: false,
       };
@@ -171,7 +250,7 @@ describe('privacy-minimized local viewer state', () => {
     expect(clearUrl).toBe('/v1/viewer-state');
     expect(clearOptions.keepalive).toBe(true);
     expect(JSON.parse(String(clearOptions.body))).toEqual({
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       sharing: false,
       publisher_id: publisherId,
     });

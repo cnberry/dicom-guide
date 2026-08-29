@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-viewer-state-v2.schema.json",
+  "title": "ScanView expiring local viewer state v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "available"],
+  "properties": {
+    "schema_version": { "const": "2.0.0" },
+    "available": { "type": "boolean" },
+    "received_at": { "type": "string", "format": "date-time" },
+    "age_seconds": { "type": "number", "minimum": 0 },
+    "expires_in_seconds": { "type": "number", "minimum": 0, "maximum": 30 },
+    "reason": { "enum": ["not_shared", "stale", "source_changed"] },
+    "expires_after_seconds": { "const": 30 },
+    "state": { "$ref": "#/$defs/state" }
+  },
+  "oneOf": [
+    {
+      "properties": { "available": { "const": true } },
+      "required": ["received_at", "age_seconds", "expires_in_seconds", "state"],
+      "not": {
+        "anyOf": [
+          { "required": ["reason"] },
+          { "required": ["expires_after_seconds"] }
+        ]
+      }
+    },
+    {
+      "properties": { "available": { "const": false } },
+      "required": ["reason", "expires_after_seconds"],
+      "not": {
+        "anyOf": [
+          { "required": ["received_at"] },
+          { "required": ["age_seconds"] },
+          { "required": ["expires_in_seconds"] },
+          { "required": ["state"] }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["series_id", "instance_id", "stack_position", "stack_count"],
+      "properties": {
+        "series_id": {
+          "type": "string",
+          "pattern": "^series_[0-9a-f]{20}$"
+        },
+        "instance_id": {
+          "type": "string",
+          "pattern": "^instance_[0-9a-f]{20}$"
+        },
+        "stack_position": { "type": "integer", "minimum": 1 },
+        "stack_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "sourceSegmentationDisplay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segmentation_id",
+        "segment_number",
+        "referenced_series_id",
+        "catalog_content_sha256",
+        "display_status",
+        "mask_pixels_shared",
+        "creator_identity_authenticated",
+        "segment_accuracy_verified",
+        "source_segment_clinical_meaning",
+        "scanview_interpretation_added"
+      ],
+      "properties": {
+        "segmentation_id": {
+          "type": "string",
+          "pattern": "^instance_[0-9a-f]{20}$"
+        },
+        "segment_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "referenced_series_id": {
+          "type": "string",
+          "pattern": "^series_[0-9a-f]{20}$"
+        },
+        "catalog_content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "display_status": { "const": "read_only_native_grid" },
+        "mask_pixels_shared": { "const": false },
+        "creator_identity_authenticated": { "const": false },
+        "segment_accuracy_verified": { "const": false },
+        "source_segment_clinical_meaning": { "const": "not_assessed" },
+        "scanview_interpretation_added": { "const": false }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_navigation_from_state_authorized",
+        "source_mutation_authorized",
+        "source_segmentation_mask_read_authorized",
+        "source_segmentation_interpretation_authorized",
+        "diagnosis_authorized",
+        "response_classification_authorized",
+        "clinical_conclusion_authorized"
+      ],
+      "properties": {
+        "agent_navigation_from_state_authorized": { "const": false },
+        "source_mutation_authorized": { "const": false },
+        "source_segmentation_mask_read_authorized": { "const": false },
+        "source_segmentation_interpretation_authorized": { "const": false },
+        "diagnosis_authorized": { "const": false },
+        "response_classification_authorized": { "const": false },
+        "clinical_conclusion_authorized": { "const": false }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "local_only",
+        "contains_pixels",
+        "contains_direct_identifiers",
+        "contains_source_text",
+        "contains_measurement_values",
+        "contains_segmentation_mask",
+        "contains_opaque_source_references",
+        "contains_sensitive_segmentation_reference",
+        "contains_hashes",
+        "deidentified",
+        "persisted"
+      ],
+      "properties": {
+        "local_only": { "const": true },
+        "contains_pixels": { "const": false },
+        "contains_direct_identifiers": { "const": false },
+        "contains_source_text": { "const": false },
+        "contains_measurement_values": { "const": false },
+        "contains_segmentation_mask": { "const": false },
+        "contains_opaque_source_references": { "const": true },
+        "contains_sensitive_segmentation_reference": { "type": "boolean" },
+        "contains_hashes": { "type": "boolean" },
+        "deidentified": { "const": false },
+        "persisted": { "const": false }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "sharing",
+        "publisher_id",
+        "workspace_mode",
+        "view_roles",
+        "review_status",
+        "active_tool",
+        "slice_link",
+        "view_a",
+        "view_b",
+        "mpr_series_id",
+        "source_segmentation_display",
+        "measurement_count",
+        "comparison_draft_present",
+        "permissions",
+        "privacy"
+      ],
+      "properties": {
+        "schema_version": { "const": "2.0.0" },
+        "sharing": { "const": true },
+        "publisher_id": {
+          "type": "string",
+          "pattern": "^publisher_[0-9a-f]{32}$"
+        },
+        "workspace_mode": {
+          "enum": ["consult_prep", "longitudinal_review"]
+        },
+        "view_roles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["view_a", "view_b"],
+          "properties": {
+            "view_a": { "enum": ["reference", "baseline"] },
+            "view_b": { "enum": ["reference", "followup"] }
+          }
+        },
+        "review_status": { "const": "unreviewed" },
+        "active_tool": {
+          "enum": ["window", "pan", "zoom", "length", "bidirectional", "roi"]
+        },
+        "slice_link": {
+          "enum": ["unpaired", "independent", "patient_position", "approximate_index"]
+        },
+        "view_a": { "$ref": "#/$defs/target" },
+        "view_b": {
+          "oneOf": [{ "$ref": "#/$defs/target" }, { "type": "null" }]
+        },
+        "mpr_series_id": {
+          "oneOf": [
+            { "type": "string", "pattern": "^series_[0-9a-f]{20}$" },
+            { "type": "null" }
+          ]
+        },
+        "source_segmentation_display": {
+          "oneOf": [
+            { "$ref": "#/$defs/sourceSegmentationDisplay" },
+            { "type": "null" }
+          ]
+        },
+        "measurement_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "comparison_draft_present": { "type": "boolean" },
+        "permissions": { "$ref": "#/$defs/permissions" },
+        "privacy": { "$ref": "#/$defs/privacy" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "workspace_mode": { "const": "consult_prep" } },
+            "required": ["workspace_mode"]
+          },
+          "then": {
+            "properties": {
+              "view_roles": {
+                "const": { "view_a": "reference", "view_b": "reference" }
+              },
+              "comparison_draft_present": { "const": false }
+            }
+          },
+          "else": {
+            "properties": {
+              "view_roles": {
+                "const": { "view_a": "baseline", "view_b": "followup" }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source_segmentation_display": { "type": "object" }
+            },
+            "required": ["source_segmentation_display"]
+          },
+          "then": {
+            "properties": {
+              "mpr_series_id": {
+                "type": "string",
+                "pattern": "^series_[0-9a-f]{20}$"
+              },
+              "privacy": {
+                "properties": {
+                  "contains_sensitive_segmentation_reference": { "const": true },
+                  "contains_hashes": { "const": true }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "contains_sensitive_segmentation_reference": { "const": false },
+                  "contains_hashes": { "const": false }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

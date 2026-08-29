@@ -25,6 +25,8 @@ INSTANCE_A2 = "instance_1123456789abcdef0123"
 SERIES_B = "series_2123456789abcdef0123"
 INSTANCE_B = "instance_2123456789abcdef0123"
 PUBLISHER = "publisher_0123456789abcdef0123456789abcdef"
+SEGMENTATION = "instance_f123456789abcdef0123"
+CATALOG_SHA256 = "b" * 64
 
 
 def catalog() -> dict:
@@ -58,34 +60,100 @@ def catalog() -> dict:
 
 def state() -> dict:
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "sharing": True,
         "publisher_id": PUBLISHER,
+        "workspace_mode": "longitudinal_review",
+        "view_roles": {"view_a": "baseline", "view_b": "followup"},
         "review_status": "unreviewed",
         "active_tool": "length",
         "slice_link": "patient_position",
-        "baseline": {
+        "view_a": {
             "series_id": SERIES_A,
             "instance_id": INSTANCE_A2,
             "stack_position": 2,
             "stack_count": 2,
         },
-        "followup": {
+        "view_b": {
             "series_id": SERIES_B,
             "instance_id": INSTANCE_B,
             "stack_position": 1,
             "stack_count": 1,
         },
         "mpr_series_id": None,
+        "source_segmentation_display": None,
         "measurement_count": 2,
         "comparison_draft_present": False,
+        "permissions": {
+            "agent_navigation_from_state_authorized": False,
+            "source_mutation_authorized": False,
+            "source_segmentation_mask_read_authorized": False,
+            "source_segmentation_interpretation_authorized": False,
+            "diagnosis_authorized": False,
+            "response_classification_authorized": False,
+            "clinical_conclusion_authorized": False,
+        },
         "privacy": {
             "local_only": True,
             "contains_pixels": False,
             "contains_direct_identifiers": False,
+            "contains_source_text": False,
+            "contains_measurement_values": False,
+            "contains_segmentation_mask": False,
+            "contains_opaque_source_references": True,
+            "contains_sensitive_segmentation_reference": False,
+            "contains_hashes": False,
+            "deidentified": False,
             "persisted": False,
         },
     }
+
+
+def source_segmentation_catalog() -> dict:
+    return {
+        "schema_version": "2.0.0",
+        "catalog_content_sha256": CATALOG_SHA256,
+        "segmentations": [
+            {
+                "segmentation_id": SEGMENTATION,
+                "display_status": "supported_read_only",
+                "referenced_series": {"series_id": SERIES_A},
+                "segments": [{"segment_number": 7}],
+            }
+        ],
+    }
+
+
+def source_segmentation_state() -> dict:
+    result = state()
+    result.update(
+        {
+            "workspace_mode": "consult_prep",
+            "view_roles": {"view_a": "reference", "view_b": "reference"},
+            "slice_link": "independent",
+            "mpr_series_id": SERIES_A,
+            "source_segmentation_display": {
+                "segmentation_id": SEGMENTATION,
+                "segment_number": 7,
+                "referenced_series_id": SERIES_A,
+                "catalog_content_sha256": CATALOG_SHA256,
+                "display_status": "read_only_native_grid",
+                "mask_pixels_shared": False,
+                "creator_identity_authenticated": False,
+                "segment_accuracy_verified": False,
+                "source_segment_clinical_meaning": "not_assessed",
+                "scanview_interpretation_added": False,
+            },
+            "measurement_count": 0,
+            "comparison_draft_present": False,
+            "privacy": {
+                **result["privacy"],
+                "contains_sensitive_segmentation_reference": True,
+                "contains_hashes": True,
+            },
+        }
+    )
+    return result
 
 
 def request(
@@ -105,10 +173,10 @@ def request(
 
 
 def test_viewer_state_validator_requires_exact_catalog_position_and_privacy() -> None:
-    assert validate_viewer_state(state(), catalog())["baseline"]["stack_position"] == 2
+    assert validate_viewer_state(state(), catalog())["view_a"]["stack_position"] == 2
 
     wrong_position = state()
-    wrong_position["baseline"] = {**wrong_position["baseline"], "stack_position": 1}
+    wrong_position["view_a"] = {**wrong_position["view_a"], "stack_position": 1}
     with pytest.raises(ValueError, match="exact local instance"):
         validate_viewer_state(wrong_position, catalog())
 
@@ -121,6 +189,37 @@ def test_viewer_state_validator_requires_exact_catalog_position_and_privacy() ->
     extra["patient_name"] = "must not be accepted"
     with pytest.raises(ValueError, match="unsupported or missing"):
         validate_viewer_state(extra, catalog())
+
+
+def test_viewer_state_v2_neutral_source_segmentation_reference_is_exact_and_locked() -> None:
+    value = source_segmentation_state()
+    validated = validate_viewer_state(value, catalog(), source_segmentation_catalog())
+    assert validated == value
+    assert validated["view_roles"] == {"view_a": "reference", "view_b": "reference"}
+    assert validated["source_segmentation_display"]["segment_number"] == 7
+    assert validated["permissions"]["source_segmentation_mask_read_authorized"] is False
+
+    mutations = [
+        ("segment_number", 8, "guarded catalog"),
+        ("referenced_series_id", SERIES_B, "active MPR series"),
+        ("catalog_content_sha256", "c" * 64, "unavailable or changed"),
+        ("mask_pixels_shared", True, "safety declarations"),
+    ]
+    for field, replacement, message in mutations:
+        invalid = source_segmentation_state()
+        invalid["source_segmentation_display"] = {
+            **invalid["source_segmentation_display"],
+            field: replacement,
+        }
+        with pytest.raises(ValueError, match=message):
+            validate_viewer_state(invalid, catalog(), source_segmentation_catalog())
+
+    chronology_claim = source_segmentation_state()
+    chronology_claim["view_roles"] = {"view_a": "baseline", "view_b": "followup"}
+    with pytest.raises(ValueError, match="workspace mode"):
+        validate_viewer_state(
+            chronology_claim, catalog(), source_segmentation_catalog()
+        )
 
 
 def test_opt_in_viewer_state_http_lifecycle_is_local_authenticated_and_atomic() -> None:
@@ -139,7 +238,7 @@ def test_opt_in_viewer_state_http_lifecycle_is_local_authenticated_and_atomic() 
         assert status == HTTPStatus.OK
         assert headers["Cache-Control"] == "no-store"
         assert json.loads(body) == {
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "available": False,
             "reason": "not_shared",
             "expires_after_seconds": 30,
@@ -197,13 +296,13 @@ def test_opt_in_viewer_state_http_lifecycle_is_local_authenticated_and_atomic() 
         assert "patient_name" not in body.decode()
         repository_root = Path(__file__).parents[3]
         schema = json.loads(
-            (repository_root / "schemas" / "scanview-viewer-state-v1.schema.json").read_text()
+            (repository_root / "schemas" / "scanview-viewer-state-v2.schema.json").read_text()
         )
         Draft202012Validator.check_schema(schema)
         Draft202012Validator(schema, format_checker=FormatChecker()).validate(response)
 
         invalid = state()
-        invalid["baseline"] = {**invalid["baseline"], "instance_id": INSTANCE_B}
+        invalid["view_a"] = {**invalid["view_a"], "instance_id": INSTANCE_B}
         status, _, _ = request(
             port,
             "POST",
@@ -215,7 +314,7 @@ def test_opt_in_viewer_state_http_lifecycle_is_local_authenticated_and_atomic() 
         assert server.viewer_state == state()
 
         wrong_clear = {
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "sharing": False,
             "publisher_id": "publisher_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         }
@@ -272,7 +371,7 @@ def test_viewer_state_expires_without_browser_heartbeat() -> None:
     response = server.viewer_state_response()
 
     assert response == {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "available": False,
         "reason": "stale",
         "expires_after_seconds": 30,

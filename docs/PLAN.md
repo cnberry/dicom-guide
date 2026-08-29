@@ -296,3 +296,11 @@ result into a medical conclusion.
     spacing, hash, and bounds guard proves exact mapping; explicit `NO`,
     `REORIENTED_ONLY`, or any other value must fail closed. dcmqi must not enter the
     offline runtime or process Mila data.
+29. **Neutral agent display-state separation:** viewer-state v2 must name generic
+    Image A/Image B targets and declare either neutral `reference`/`reference` Consult
+    Prep roles or explicit longitudinal `baseline`/`followup` roles. An active source-
+    SEG display may expose only exact opaque object/segment/series references and its
+    guarded catalog-content hash—never mask bytes/hash, source text, labels/codes,
+    algorithms, volume, accuracy, or interpretation. All navigation-from-state,
+    mutation, mask-read, SEG-interpretation, diagnosis, response, and conclusion
+    permissions stay false; opt-out, TTL, and guarded-source change revoke the state.

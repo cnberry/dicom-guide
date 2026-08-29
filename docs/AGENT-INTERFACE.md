@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.12.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.13.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -19,7 +19,7 @@ sh launch.sh '/safe/local/DICOM/root' --no-open
 ```
 
 Installation invokes pip with `--no-index --require-hashes`; every launch rechecks
-the bundle and installed versions, UI, all 30 schemas, consultation contracts, agent
+the bundle and installed versions, UI, all 31 schemas, consultation contracts, agent
 consultation-plan, GSPS, and source-SEG contracts before any DICOM catalog is built. The launched agent
 interface is the same loopback bearer-
 authorized API documented below. Build-time dependency retrieval is separate from
@@ -73,6 +73,21 @@ NumPy and declared no runtime network or external DICOM-processing API requireme
 The optional dcmqi writer/reader gate runs outside the package in an OS-isolated,
 patient-free environment. Strawberry Linux commissioning is pending because its
 configured SSH public key was refused on 2026-08-29; no patient data was transferred.
+
+The owner-only v0.13.0 artifact is 5,540,314 bytes with SHA-256
+`76f3f3bd921dcde675c8487575c1b9d2bea74316e64877af1c22361cedb63780`.
+Its second build was byte-identical. A fresh macOS arm64 extraction passed
+verification, no-index installation, the embedded 31-schema runtime, owner-only
+synthetic source-SEG creation/validation, 401/200 catalog authorization with
+`no-store`, bearer mask refusal, exact viewer-state v2 source-SEG publication without
+mask/clinical fields, and `source_changed`/409 refusal after guarded-source mutation.
+The 3,143,044-byte wheel has SHA-256
+`987b88372edacc6e234c77dbbc01ca3cc0428b88518c539fcc93c8cba3e1ce0d`.
+The installed artifact contained neither dcmqi, highdicom, nor NumPy and declared no
+runtime network or external DICOM-processing API requirement. Production-browser QA
+also passed with four visible canvases and immediate opt-out revocation. Strawberry
+Linux v0.13 commissioning is pending because the configured SSH credentials were
+refused again on 2026-08-29; no software or patient data was transferred.
 
 ## Local artifacts
 
@@ -554,10 +569,10 @@ descriptions, and measurement values.
 The unified viewer sends the two neutral in-memory key-image ZIPs to the exact-origin
 loopback endpoint and receives the validated packet with `no-store`; the server writes
 no patient file. A valid packet is still sensitive, unreviewed derived evidence and
-must be checked against the clinical imaging system by a clinician. Live viewer-state
-publication is deliberately unavailable in Consult Prep because viewer-state v1 uses
-baseline/follow-up fields; an agent must not infer timepoint roles from the internal
-pane implementation.
+must be checked against the clinical imaging system by a clinician. Viewer-state v2
+uses neutral Image A/Image B fields plus explicit `reference`/`reference` roles in
+Consult Prep. It permits transient navigation awareness without turning internal pane
+order into chronology, comparison, or evidence.
 
 ## Clinician consultation-board archives
 
@@ -756,25 +771,41 @@ curl --fail --silent \
   http://127.0.0.1:8765/v1/viewer-state
 ```
 
-Keep that token out of shared scripts, shell history, screenshots, and logs. The v1
-response is defined by `schemas/scanview-viewer-state-v1.schema.json`. When available,
+Keep that token out of shared scripts, shell history, screenshots, and logs. The v2
+response is defined by `schemas/scanview-viewer-state-v2.schema.json`. When available,
 `state` contains exactly:
 
-- opaque baseline and optional follow-up series/instance IDs with exact one-based
+- a required opaque Image A target and optional Image B target with exact one-based
   stack position/count;
+- `consult_prep` with `reference`/`reference` roles, or `longitudinal_review` with
+  `baseline`/`followup` roles;
 - active tool and explicit `unpaired`, `independent`, `patient_position`, or
   `approximate_index` slice-link state;
 - an optional opaque MPR series ID;
-- measurement count and whether an in-memory comparison draft is present;
-- `unreviewed` status and fixed local-only/no-pixels/no-direct-identifiers/no-persistence
-  declarations.
+- measurement count and whether an in-memory comparison draft is present; Consult
+  Prep requires that flag to be false;
+- an optional active source-SEG display reference containing only opaque SEG object,
+  segment, and referenced-series IDs plus the exact guarded catalog-content SHA-256;
+- `unreviewed` status, fixed local-only privacy declarations, and fixed-false
+  navigation/mutation/mask/interpretation/diagnosis/response/conclusion permissions.
 
-It excludes pixels, rendered images, descriptions, dates, modality/anatomy labels,
-measurement values/labels/geometry, LPS coordinates, source paths, DICOM UIDs, and
-direct identifiers. Resolve opaque IDs through the separately authorized manifest
-only when the task requires it; do not print sensitive catalog metadata by default.
-Every position/count/reference is independently checked against the current local
-manifest before publication becomes visible.
+The optional source-SEG block fixes display status to `read_only_native_grid`, mask
+sharing to false, creator identity and accuracy verification to false, clinical
+meaning to `not_assessed`, and ScanView interpretation to false. It must join to one
+supported object/segment in the separately guarded source-SEG v2 catalog, and its
+referenced series must equal the active MPR series. If any guarded SEG or source image
+changes, publication fails closed or a previously available state becomes
+`source_changed` and is cleared.
+
+Viewer-state v2 excludes pixels, rendered images, SEG mask bytes and mask hashes,
+source text, segment labels/codes, algorithm fields, technical volume, descriptions,
+dates, modality/anatomy labels, measurement values/labels/geometry, LPS coordinates,
+source paths, DICOM UIDs, and direct identifiers. Its opaque references and optional
+catalog hash remain sensitive; `deidentified` is fixed false. Resolve them through
+separately authorized catalogs only when the task requires it, and do not print
+sensitive catalog metadata by default. Every position/count/reference is independently
+checked against the current local manifest and guarded source-SEG catalog before
+publication becomes visible.
 
 The browser heartbeats every 10 seconds. The server keeps one latest state only in
 memory and returns its receipt time, age, and remaining lifetime with `no-store`.
@@ -784,10 +815,11 @@ restore it; a later opt-in uses a new ID. Page close also attempts immediate cle
 Multiple tabs are last-valid-publication-wins, and a tab can clear only its own current
 publication.
 
-This endpoint reports transient UI/navigation context. It is not a source-image
-observation, pairing approval, registration result, measurement validation, clinical
-review, diagnosis, or response conclusion. Agents needing evidentiary output must use
-the source-linked measurement/key-image/review contracts.
+This endpoint reports transient UI/navigation context. Even the source-SEG reference
+only says which locally guarded object/segment is displayed; it is not mask access,
+an image observation, a finding, pairing approval, registration result, measurement
+validation, clinical review, diagnosis, or response conclusion. Agents needing
+evidentiary output must use the source-linked measurement/key-image/review contracts.
 
 ## Optional bearer-access audit
 
