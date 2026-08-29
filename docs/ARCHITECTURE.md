@@ -249,7 +249,16 @@ is not an MVP feature and is never allowed between CT and MRI.
 
 ## Packaging path
 
-- Today: Vite static app plus a Python 3.11+ same-origin local launcher; a staged
-  release builder embeds both into a self-contained wheel without modifying source.
-- Next: signed/notarized macOS and Linux release artifacts; optional Orthanc.
-- Later: Tauri/Electron or a packaged runtime after macOS and Linux smoke tests.
+- Today: Vite static app plus a Python 3.11+ same-origin local launcher. A staged
+  release builder embeds the UI, codecs, and contracts into the ScanView wheel. A
+  second non-overwriting builder combines that wheel with pinned pure-Python
+  `pydicom` 3.0.2 into a deterministic macOS/Linux ZIP. `bundle.json` hashes every
+  payload; `requirements.lock` hashes both wheels; installation uses only `--no-index`
+  and `--require-hashes`; every launch verifies the bundle and probes installed
+  versions, UI, schemas, and consultation contract before cataloging DICOM.
+- Trust boundary: the offline manifest detects payload corruption but is not publisher
+  authentication. Python 3.11+ is supplied by the host and is not covered by the
+  bundle. The builder may fetch the pinned wheel; installation and runtime do not.
+- Next: execute the same artifact on Linux x86_64, then produce signed/notarized macOS
+  and Linux distributions; optional Orthanc remains separate.
+- Later: Tauri/Electron or a packaged interpreter after both platform smoke tests.

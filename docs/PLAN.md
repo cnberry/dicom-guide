@@ -65,6 +65,10 @@ result into a medical conclusion.
   the authenticated loopback service; publications are memory-only, validated
   against the catalog, revoked on opt-out, and expire after 30 seconds.
 - Same-origin loopback launcher for the UI, catalog, and protected native instances.
+- Deterministic macOS/Linux offline runtime bundle with the embedded UI/contracts,
+  pinned pure-Python DICOM dependency, exact payload manifest, hash-locked no-index
+  installer, and per-launch runtime checks. Python 3.11+ is an explicit prerequisite;
+  Linux execution and publisher signing remain pending.
 
 ### Phase 2 — robust local archive and tools
 
@@ -139,3 +143,7 @@ result into a medical conclusion.
     computed change, lesion linkage, intensity comparison, registration claim, or
     response assessment. The artifact proves its exact local DICOM source bytes while
     keeping clinical interpretation explicitly absent.
+16. **Offline distribution:** a transferable macOS/Linux bundle installs only pinned,
+    hashed local wheels with package-index access disabled, verifies its payload and
+    installed runtime before launch, and requires no external DICOM-processing API.
+    Platform execution and publisher signatures are separate, explicit release gates.

@@ -47,12 +47,19 @@ scanview-agent validate-registration-review registration-review.json \
   --registration-bundle '/safe/local/registration-job'
 ```
 
-Use `scripts/build_release.py` from the repository root to produce a self-contained
+Use `scripts/build_release.py` from the repository root to produce an installable
 wheel with the built UI under `scanview_agent/ui` and all versioned contracts under
 `scanview_agent/schemas`. A regular agent-only wheel stays lightweight and reads
 schemas from the source checkout. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
 and the API from one loopback origin. It establishes an
 HttpOnly browser session, while agents continue to use the printed bearer token.
+For offline transfer and installation on macOS or Linux, run
+`scripts/build_offline_bundle.py`. Its non-overwriting ZIP includes the embedded-asset
+wheel, pinned pure-Python `pydicom` 3.0.2, hash-locked local requirements, and
+verifier/install/launch scripts. The installer invokes pip only with `--no-index` and
+`--require-hashes`, and every launch checks the bundle and installed runtime before
+indexing DICOM. Python 3.11+ remains a prerequisite; publisher signing and Linux
+execution verification remain separate gates.
 The server has no source-write or delete endpoint. The unified viewer's derivative
 POSTs accept exact bounded transports: two timepoint key-image bundles for a visit
 packet, one neutral MRI plus one neutral CT key-image bundle for a consultation

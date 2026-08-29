@@ -115,7 +115,8 @@ viewer, and serves the same opaque manifest and native instances to people and
 agents. A one-time URL establishes an HttpOnly local browser session and then
 redirects to a clean URL. DICOM bytes never leave this computer.
 
-To create a self-contained installable wheel without modifying the source tree:
+To create an installable wheel with the UI and contracts embedded, without modifying
+the source tree:
 
 ```bash
 pnpm build
@@ -125,6 +126,29 @@ pnpm build
 The release builder stages the viewer, workers, codecs, and all versioned JSON Schemas
 inside the wheel. A regular agent-only wheel remains lightweight and can still run `manifest`,
 `candidates`, and `serve`; pass `--ui-dist` to `launch` when using that form.
+
+For a transferable macOS/Linux package whose installation and runtime require no
+package index or external DICOM-processing API:
+
+```bash
+pnpm build
+.venv/bin/python scripts/build_offline_bundle.py --output-dir release
+unzip release/scanview-offline-0.1.0.zip
+cd scanview-offline-0.1.0
+python3 verify.py
+PIP_NO_INDEX=1 sh install.sh
+sh launch.sh '/absolute/path/to/copied/DICOM'
+```
+
+The offline builder packages the embedded-asset ScanView wheel plus pinned pure-Python
+`pydicom` 3.0.2, a hash-locked requirements file, a standard-library verifier, and
+local install/launch checks. The installer uses `--no-index` and `--require-hashes`;
+every launch rechecks the extracted payload, installed versions, UI, schemas, and
+consultation contract before indexing DICOM. Python 3.11+ remains a prerequisite.
+Building the bundle may download the pinned dependency unless `--pydicom-wheel` is
+supplied, but installation, viewing, indexing, comparison, and evidence generation
+are offline. The integrity manifest is corruption evidence, not publisher signing or
+clinical authentication. Output is non-overwriting.
 
 ## Run the folder-picker viewer
 

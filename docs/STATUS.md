@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 18:02 PDT
+Last updated: 2026-08-28 18:16 PDT
 
 ## Data transfer
 
@@ -173,9 +173,10 @@ Last updated: 2026-08-28 18:02 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  self-contained wheel together with all 16 contracts without breaking lightweight
-  agent-only builds;
-  signing/notarization and Linux execution remain pending.
+  UI-embedded wheel together with all 16 contracts without breaking lightweight
+  agent-only builds. A deterministic offline builder now combines it with pinned
+  pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
+  runtime checks; signing/notarization and Linux execution remain pending.
 - Browser sessions use a one-time local redirect and SameSite, HttpOnly cookie;
   service-backed measurement IDs join directly to the agent manifest while legacy
   folder-import drafts remain supported.
@@ -187,7 +188,7 @@ Last updated: 2026-08-28 18:02 PDT
 
 ## Verification
 
-- Python agent tests: 128 passing, including cross-patient and legacy-context
+- Python agent tests: 133 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -207,7 +208,8 @@ Last updated: 2026-08-28 18:02 PDT
   same-descriptor reviewed-volume streaming, consultation MR/CT/patient/study gates,
   live source hash/position binding, hostile nested/final ZIP refusal, strict JSON,
   output permissions/no-overwrite, presentation/source-anchor tamper detection, and
-  consultation endpoint auth/origin/media enforcement.
+  consultation endpoint auth/origin/media enforcement, deterministic offline-bundle
+  shape, pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
 - Viewer tests: 80 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
@@ -226,12 +228,25 @@ Last updated: 2026-08-28 18:02 PDT
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- Self-contained staged Python wheel build: passing; the 2,909,473-byte wheel contains the
+- UI-embedded staged Python wheel build: passing; the 2,909,473-byte wheel contains the
   registration host/runner/review/display module, viewer-state server module, viewer
   entry point, all 11 built UI/worker/codec files (9,882,460 bytes uncompressed), and
   all 16 JSON Schemas (122,332 bytes). A fresh isolated installation resolved its
   embedded UI and schemas without the source checkout; temporary release, installation,
   and installer-log artifacts were moved to recoverable Trash.
+- Offline runtime bundle build and macOS arm64 smoke test: passing. The deterministic
+  5,303,071-byte ZIP contains nine fixed-timestamp members: `bundle.json` plus eight
+  hash-manifested payloads, including the 2,909,473-byte embedded ScanView wheel and
+  pinned 2,376,822-byte `pydicom` 3.0.2 wheel. A fresh extraction verified, installed
+  with `PIP_NO_INDEX=1`, `--no-index`, and `--require-hashes`, then rechecked both
+  versions, the embedded UI, and all 16 schemas. A second build from the same wheels
+  was byte-identical. Its packaged launcher indexed one
+  synthetic MR instance and served health/manifest over loopback with direct identifiers
+  excluded and deidentification explicitly false. No local Linux container or VM is
+  available, so Linux execution is still unverified. One patient-free verified ZIP is
+  retained in the ignored local `release/` directory; synthetic sources, extracted
+  runtimes, staging directories, and the duplicate build were moved to recoverable
+  Trash.
 - Registration execution test: synthetic version-gated-engine success and failure
   paths pass, including required expected-launcher hash, strict engine report, parsed
   scalar NRRDs/fixed-space geometry, finite proper-rigid transform, owner-only modes,
@@ -391,8 +406,9 @@ Last updated: 2026-08-28 18:02 PDT
   measurement.
 - Bearer reads of live viewer state do not yet have an append-only access audit.
   Any future audit must exclude tokens, payloads, and patient content.
-- Signed/notarized macOS/Linux release packaging remains pending; the self-contained
-  wheel and source checkout launcher are working and verified on macOS.
+- Signed/notarized macOS/Linux release packaging remains pending. The wheel, offline
+  bundle, and source-checkout launcher are working and verified on macOS; the offline
+  bundle still requires host Python 3.11+ and has not executed on Linux.
 - Registration generation, local QA, and accepted-review opacity/swipe display exist,
   but there is no installed required engine, trusted full-engine signature/checksum
   verification, real same-modality patient run, or qualified real-case decision. There

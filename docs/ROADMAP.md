@@ -278,6 +278,24 @@
    loopback export, strict schemas, hostile archive/JSON/source-tamper tests, and a
    real-copy visual smoke test with no retained patient derivative.
 
+## Completed in the nineteenth milestone
+
+1. Added a deterministic, non-overwriting offline runtime ZIP builder for macOS and
+   Linux. It accepts only pinned `py3-none-any` wheels and packages the embedded UI,
+   workers, codecs, 16 contracts, and `pydicom` 3.0.2 without patient data.
+2. Added an exact eight-payload SHA-256 manifest, two-wheel hash-locked requirements,
+   strict standard-library verifier, `pip --no-index --require-hashes` installer, and
+   loopback launcher. Every launch also probes installed versions, embedded UI,
+   schema count, and the neutral consultation contract before cataloging DICOM.
+3. Added deterministic-shape, tamper, extra-file, unsafe/platform-wheel, and
+   non-overwrite tests. A fresh macOS arm64 extraction installed entirely from the
+   bundle with `PIP_NO_INDEX=1`, then the packaged launcher indexed and served one
+   synthetic MR instance over loopback. No Linux runtime exists on this host, so Linux
+   execution remains pending rather than inferred from the pure-Python wheel tags.
+4. Kept trust claims narrow: the bundle requires host Python 3.11+, its build may fetch
+   pinned dependencies, and its manifest is corruption evidence—not code signing,
+   host-interpreter attestation, clinical validation, or medical-record identity.
+
 ## Immediate
 
 1. Use the consultation packet only to prepare questions with Mila's clinicians;
@@ -291,8 +309,8 @@
    logs that may contain patient context.
 4. Repeat production packaging and real-codec smoke tests on Linux without exposing
    metadata or screenshots.
-5. Produce signed/notarized macOS/Linux release artifacts around the self-contained
-   Python wheel.
+5. Produce signed/notarized macOS/Linux release artifacts around the verified offline
+   bundle, and evaluate whether to include a separately authenticated interpreter.
 6. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
 7. Design an append-only, privacy-minimized local audit for bearer access to live
@@ -307,7 +325,8 @@
 3. Add explicit compatibility/QA badges to the local clinician visit packet and
    comparison-review page.
 4. Extend append-only audit records from review decisions to local evidence access.
-5. Package and smoke-test on macOS Apple Silicon and Linux x86_64.
+5. Smoke-test the same offline artifact on Linux x86_64, then add platform signing and
+   notarization without weakening local-only runtime behavior.
 6. Prototype a source-bound 2–8 image consultation evidence board with explicit
    clinician-selected labels, while retaining the no-comparison/no-interpretation
    default and exact DICOM provenance.

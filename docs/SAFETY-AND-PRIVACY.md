@@ -24,6 +24,14 @@ quality-system, and regulatory review.
 - The app makes no external runtime network request; unified-workspace traffic stays
   on the loopback origin.
 - DICOM processing never depends on an external API; the CSP blocks external origins.
+- The transferable offline bundle contains the embedded ScanView wheel and pinned
+  pure-Python `pydicom` wheel. Installation uses `pip --no-index --require-hashes`,
+  and every launch verifies manifested payload bytes plus installed versions, UI,
+  schemas, and consultation support before cataloging a source. The build step may
+  retrieve the pinned dependency, but no patient data is present or processed during
+  that retrieval; installation and runtime need no package service. The unsigned
+  manifest detects corruption only and does not authenticate the publisher or host
+  Python interpreter.
 - The API binds to loopback and requires a random bearer token; the unified browser
   uses a SameSite, HttpOnly session cookie established by a one-time local redirect.
 - The derivative POSTs are not external DICOM-processing dependencies. They accept

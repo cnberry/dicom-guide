@@ -4,6 +4,28 @@ ScanView gives local agents a read-only, versioned contract so they do not need 
 scrape filenames or guess at DICOM series descriptions. This interface never calls
 an external API and never grants source mutation.
 
+## Offline agent distribution
+
+`scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
+`scanview-offline-0.1.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
+manifest, hash-locked requirements, and verifier/install/launch entry points. After
+extraction, an agent or person can run:
+
+```bash
+python3 verify.py
+PIP_NO_INDEX=1 sh install.sh
+sh launch.sh '/safe/local/DICOM/root' --no-open
+```
+
+Installation invokes pip with `--no-index --require-hashes`; every launch rechecks
+the bundle and installed versions, UI, schemas, and consultation contract before any
+DICOM catalog is built. The launched agent interface is the same loopback bearer-
+authorized API documented below. Build-time dependency retrieval is separate from
+runtime DICOM processing and contains no patient data. The unsigned hash manifest is
+corruption evidence only, not publisher or clinical identity authentication. Linux
+execution remains a release gate until the artifact is run on a Linux host.
+
 ## Local artifacts
 
 `scanview-agent manifest` creates a sensitive JSON catalog containing:
