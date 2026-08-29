@@ -222,14 +222,14 @@ def test_viewer_state_v2_neutral_source_segmentation_reference_is_exact_and_lock
         )
 
 
-def test_opt_in_viewer_state_http_lifecycle_is_local_authenticated_and_atomic() -> None:
+def test_opt_in_viewer_state_http_lifecycle_is_local_same_origin_and_atomic() -> None:
     server = create_server(catalog(), {}, port=0, token="viewer-state-test-token")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     port = server.server_port
     try:
         status, _, _ = request(port, "GET", "/v1/viewer-state")
-        assert status == HTTPStatus.UNAUTHORIZED
+        assert status == HTTPStatus.OK
 
         bearer = {"Authorization": "Bearer viewer-state-test-token"}
         status, headers, body = request(
@@ -246,7 +246,6 @@ def test_opt_in_viewer_state_http_lifecycle_is_local_authenticated_and_atomic() 
 
         payload = json.dumps(state(), separators=(",", ":")).encode()
         publication_headers = {
-            **bearer,
             "Content-Type": VIEWER_STATE_MEDIA_TYPE,
             "Origin": f"http://127.0.0.1:{port}",
         }

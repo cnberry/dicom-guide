@@ -367,7 +367,7 @@ def test_consultation_board_cli_assembles_and_privacy_validates_live_sources(
     assert validated["longitudinal_comparison_authorized"] is False
 
 
-def test_consultation_endpoint_enforces_auth_origin_media_type_and_live_sources(
+def test_consultation_endpoint_enforces_origin_media_type_and_live_sources(
     tmp_path: Path,
 ) -> None:
     _, catalog, registry, view_a, view_b = _fixture(tmp_path)
@@ -392,12 +392,11 @@ def test_consultation_endpoint_enforces_auth_origin_media_type_and_live_sources(
             port,
             transport,
             headers={
-                "Origin": f"http://127.0.0.1:{port}",
                 "Content-Type": "application/vnd.scanview.consultation-input+zip",
             },
         )
-        assert status == HTTPStatus.UNAUTHORIZED
-        assert json.loads(body) == {"error": "unauthorized"}
+        assert status == HTTPStatus.FORBIDDEN
+        assert json.loads(body) == {"error": "same_origin_required"}
 
         status, _, body = _post(
             port,
@@ -461,14 +460,13 @@ def test_consultation_board_endpoint_is_same_origin_source_bound_and_no_store(
             port,
             transport,
             headers={
-                "Origin": f"http://127.0.0.1:{port}",
                 "Content-Type": "application/vnd.scanview.consultation-board-input+zip",
             },
             path="/v1/consultation-boards",
         )
-        assert status == HTTPStatus.UNAUTHORIZED
+        assert status == HTTPStatus.FORBIDDEN
         assert response_headers["Cache-Control"] == "no-store"
-        assert json.loads(body) == {"error": "unauthorized"}
+        assert json.loads(body) == {"error": "same_origin_required"}
 
         status, response_headers, body = _post(
             port,

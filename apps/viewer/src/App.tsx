@@ -518,7 +518,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           ? 'Agent viewer state stopped because the active source-carried GSPS presentation is not represented by the current state schema.'
           : sourceSegmentationOpening
             ? 'Agent viewer state stopped while the source-carried DICOM SEG mask is being fetched and verified.'
-          : 'Agent viewer state stopped: it is available only through the authenticated local launcher.',
+          : 'Agent viewer state stopped: the local ScanView service is unavailable.',
       );
       const revokedPublisherId = agentPublisherId;
       setAgentPublisherId(createViewerStatePublisherId());
@@ -628,11 +628,11 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       if (!catalog) {
         setPresentationStateLoading(false);
         setPresentationStateMessage(
-          'Source-carried GSPS states are available only through the authenticated local launcher.',
+          'Source-carried GSPS states are unavailable until the local ScanView service is running.',
         );
         setSourceSegmentationLoading(false);
         setSourceSegmentationMessage(
-          'Source-carried DICOM SEG masks are available only through the authenticated local launcher.',
+          'Source-carried DICOM SEG masks are unavailable until the local ScanView service is running.',
         );
         setSourceReady(true);
         return;
@@ -776,12 +776,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setSourceSegmentationLoading(false);
     setSourceSegmentationOpening(false);
     setSourceSegmentationMessage(
-      'Source-carried DICOM SEG masks are available only through the authenticated local launcher.',
+      'Source-carried DICOM SEG masks require the local ScanView service.',
     );
     setPresentationStateCatalog(undefined);
     setPresentationStateLoading(false);
     setPresentationStateMessage(
-      'Source-saved views are available only through the authenticated local launcher.',
+      'Source-saved views require the local ScanView service.',
     );
     setBaselinePresentationState(undefined);
     setFollowupPresentationState(undefined);
@@ -864,7 +864,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           ? 'Clear source-carried GSPS states before sharing viewer state; the current state schema does not encode GSPS provenance.'
           : sourceSegmentationOpening
             ? 'Wait until the source-carried DICOM SEG mask finishes local verification before sharing viewer state.'
-          : 'Agent viewer state requires scans opened through the authenticated local launcher.',
+          : 'Agent viewer state requires the local ScanView service.',
       );
       return;
     }
@@ -1120,7 +1120,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     sourceSegmentationAbortRef.current = controller;
     setSourceSegmentationOpening(true);
     setSourceSegmentationMessage(
-      'Fetching, rehashing, and checking the browser-session-only dense binary mask locally…',
+      'Fetching, rehashing, and checking the loopback-only dense binary mask locally…',
     );
     try {
       const loaded = await loadSourceSegmentationMask(resolved, segment, controller.signal);
@@ -2017,7 +2017,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                       ? 'Unavailable until source-carried GSPS states are cleared'
                       : sourceSegmentationOpening
                         ? 'Unavailable until the source-carried DICOM SEG mask finishes local verification'
-                    : 'Available only through the authenticated local launcher'
+                    : 'Available only while the local ScanView service is running'
                 }
                 onClick={toggleAgentStateSharing}
               >

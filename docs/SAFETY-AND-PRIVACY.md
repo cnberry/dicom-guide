@@ -13,10 +13,10 @@
   `REORIENTED_ONLY`, or any other value is refused. Unsupported or changed objects
   display no partial mask. Passing this profile is not full DICOM conformance
   certification.
-- Bearer agents may read the authenticated sensitive catalog but cannot fetch dense
-  mask bytes. Masks require the HttpOnly browser session. Both permission classes are
-  explicit and bearer operations can be recorded without IDs, paths, labels, geometry,
-  hashes, volumes, pixels, or masks in the optional privacy-minimized audit.
+- The sensitive catalog and dense mask bytes are available only from the loopback
+  service, without browser login. Bearer operations can still be recorded without IDs,
+  paths, labels, geometry, hashes, volumes, pixels, or masks in the optional privacy-
+  minimized audit.
 - The browser independently validates catalog structure, counts, technical volume,
   physical plane order, exact local series membership, mask headers, SHA-256, binary
   values, and foreground count. Whole mask slabs are aligned to Cornerstone's physical
@@ -106,8 +106,8 @@ quality-system, and regulatory review.
   that retrieval; installation and runtime need no package service. The unsigned
   manifest detects corruption only and does not authenticate the publisher or host
   Python interpreter.
-- The API binds to loopback and requires a random bearer token; the unified browser
-  uses a SameSite, HttpOnly session cookie established by a one-time local redirect.
+- The API binds to loopback. Browser viewing needs no login; agent control commands
+  require a random bearer token, and browser writes require the exact local Origin.
 - The derivative POSTs are not external DICOM-processing dependencies. They accept
   only exact bounded ZIP transports from the exact loopback origin. Visit input has
   two derived timepoint key-image ZIPs; consultation input has one neutral MR and one
@@ -160,8 +160,8 @@ quality-system, and regulatory review.
   They must bind to the stable content of the exact local catalog, contain 2–8
   distinct exact source instances, share one opaque patient context, span both MR and
   CT and at least two studies, and preserve fixed false permissions. The browser sends
-  a bounded strict plan only to its same-origin browser-session endpoint; bearer access
-  alone is refused, validation returns `no-store`, and the server persists no plan.
+  a bounded strict plan only to its same-origin endpoint; validation returns
+  `no-store`, and the server persists no plan.
 - A valid plan does not authenticate its software author or establish source relevance,
   chronology, alignment, lesion identity, diagnosis, response, treatment effect, or a
   conclusion. The viewer never auto-opens or auto-captures an item. A person must
@@ -231,8 +231,8 @@ quality-system, and regulatory review.
 - Reviewed native-boundary display is a separate startup mode and creates no new
   patient artifact. It recursively validates that accepted five-file comparison,
   both nested reviews, both DICOM SEG masks, and every source byte before holding two
-  exact binary masks in memory. Agents receive only a privacy-minimized status;
-  context and mask bytes require the HttpOnly browser session. The browser independently
+  exact binary masks in memory. Context and mask bytes remain loopback-only but need no
+  browser login. The browser independently
   rehashes, recounts, and verifies binary masks before render. Each mask is displayed
   only on its own native grid, is locked against editing/export, and opens at its own
   centroid. Normalized-grid mirroring is off by default and is explicitly not
@@ -270,10 +270,9 @@ quality-system, and regulatory review.
   third-party errors could contain patient context; a timeout terminates the process
   group before cleanup.
 - Registration QA is an explicit exception for inspecting an otherwise display-locked
-  derivative. It runs only in a visibly watermarked, separately cookie-authenticated
-  human workflow on loopback. The bearer agent interface receives no NRRD URLs or
-  pixels and cannot submit a decision. Possession of the browser capability is not
-  proof a person is present. The browser verifies each allowlisted volume's byte count
+  derivative. It runs only in a visibly watermarked local browser workflow on
+  loopback. Decision submission requires the exact local Origin. Opening the browser
+  is not proof a person is present. The browser verifies each allowlisted volume's byte count
   and SHA-256 before parsing it locally; the review request contains observations and
   physical landmark points, never volume bytes or filesystem paths.
 - A registration-QA decision is a separate sensitive JSON derivative. It never changes
@@ -292,10 +291,9 @@ quality-system, and regulatory review.
 - Reviewed registration display requires the exact saved owner-only, unlinked accepted
   record and its live seven-file v2 bundle at server startup. It rechecks the review,
   bundle directory, and all seven evidence-file identities and metadata before each
-  reviewed response. The browser session can fetch
-  only fixed reference, registered-moving, and the separate technical sampling-support
-  NRRDs; bearer agents receive only a
-  minimized authorization summary. Rejected, invalid, linked, missing, mismatched, or
+  reviewed response. The loopback display can fetch only fixed reference, registered-
+  moving, and the separate technical sampling-support NRRDs. Rejected, invalid,
+  linked, missing, mismatched, or
   tampered inputs leave registered pixels inaccessible while ordinary DICOM remains
   usable. Supplying a review suppresses the pending-QA routes.
 - The reviewed surface provides opacity and swipe only. Both displayed image NRRDs are

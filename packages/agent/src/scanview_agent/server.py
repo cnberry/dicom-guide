@@ -13,12 +13,11 @@ import threading
 import time
 import webbrowser
 from datetime import datetime, timezone
-from http.cookies import SimpleCookie
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import urlparse
 
 from .agent_access_audit import AgentAccessAudit
 from .agent_consultation_plans import (
@@ -150,13 +149,6 @@ def _agent_audit_operation(path: str) -> str | None:
     return None
 
 
-def _distinct_token(excluded: set[str]) -> str:
-    while True:
-        candidate = secrets.token_urlsafe(24)
-        if candidate not in excluded:
-            return candidate
-
-
 def _absolute_without_resolving_links(path: Path) -> Path:
     return Path(os.path.abspath(os.fspath(path.expanduser())))
 
@@ -281,8 +273,7 @@ def _registration_agent_summary(
         "external_api_required": False,
         "source_manifest_sha256": context["source"]["manifest_sha256"],
         "next_action": (
-            "Open the separate browser-capability QA preview; bearer API access "
-            "cannot approve registration."
+            "Open the local browser QA preview; agent control cannot approve registration."
         ),
     }
 
@@ -293,8 +284,6 @@ class ScanViewServer(ThreadingHTTPServer):
     source_root: Path | None
     instance_guards: dict[str, dict[str, Any]]
     token: str
-    browser_bootstrap_token: str
-    browser_session_token: str
     ui_dist: Path | None
     viewer_state_lock: threading.Lock
     viewer_state: dict[str, Any] | None
@@ -539,23 +528,6 @@ class Handler(BaseHTTPRequestHandler):
             supplied, f"Bearer {self.server.token}"
         )
 
-    def _authorized(self) -> bool:
-        return self._bearer_authorized() or self._browser_authorized()
-
-    def _browser_authorized(self) -> bool:
-        cookie = SimpleCookie()
-        try:
-            cookie.load(self.headers.get("Cookie", ""))
-        except ValueError:
-            return False
-        session = cookie.get("scanview_session")
-        return bool(
-            session
-            and secrets.compare_digest(
-                session.value, self.server.browser_session_token
-            )
-        )
-
     def _audit_bearer_get(self, path: str) -> bool:
         operation = _agent_audit_operation(path)
         return operation is None or self._audit_bearer_operation(operation)
@@ -637,31 +609,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
         return True
 
-    def _establish_browser_session(self, path: str, query: str) -> bool:
-        if path != "/" or not query:
-            return False
-        supplied_values = parse_qs(query, keep_blank_values=True).get("session", [])
-        if len(supplied_values) != 1 or not secrets.compare_digest(
-            supplied_values[0], self.server.browser_bootstrap_token
-        ):
-            return False
-        self.send_response(HTTPStatus.SEE_OTHER)
-        self.send_header("Location", "/")
-        cookie = SimpleCookie()
-        cookie["scanview_session"] = self.server.browser_session_token
-        cookie["scanview_session"]["httponly"] = True
-        cookie["scanview_session"]["samesite"] = "Strict"
-        cookie["scanview_session"]["path"] = "/"
-        self.send_header("Set-Cookie", cookie.output(header="").strip())
-        self._security_headers()
-        self.end_headers()
-        return True
-
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
-        if self._establish_browser_session(path, parsed.query):
-            return
         if self._send_static(path):
             return
         if path == "/v1/health":
@@ -672,9 +622,6 @@ class Handler(BaseHTTPRequestHandler):
                     "ui_available": self.server.ui_dist is not None,
                 }
             )
-            return
-        if not self._authorized():
-            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
             return
         if not self._audit_bearer_get(path):
             return
@@ -739,11 +686,6 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(summary)
             return
         if path == "/v1/lesion-volume-comparison-display/context":
-            if not self._browser_authorized():
-                self._send_json(
-                    {"error": "browser_session_required"}, HTTPStatus.FORBIDDEN
-                )
-                return
             if self.server.lesion_volume_comparison is None:
                 self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
                 return
@@ -783,9 +725,6 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(summary)
             return
         if path == "/v1/registration-qa/preview":
-            if not self._browser_authorized():
-                self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
-                return
             if self.server.registration_context is None:
                 self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
                 return
@@ -798,9 +737,6 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/v1/reviewed-registration/display":
-            if not self._browser_authorized():
-                self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
-                return
             if self.server.reviewed_registration_context is None:
                 if self.server.registration_review is not None:
                     self._send_json(
@@ -877,9 +813,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/v1/lesion-volume-comparisons" and self.server.source_root is None:
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
-            return
-        if not self._authorized():
-            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
             return
         if not self._same_origin():
             self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
@@ -993,11 +926,6 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def _handle_agent_consultation_plan_post(self) -> None:
-        if not self._browser_authorized():
-            self._send_json(
-                {"error": "browser_session_required"}, HTTPStatus.FORBIDDEN
-            )
-            return
         if not self._same_origin():
             self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
             return
@@ -1057,11 +985,6 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def _send_lesion_volume_display_mask(self, role: str) -> None:
-        if not self._browser_authorized():
-            self._send_json(
-                {"error": "browser_session_required"}, HTTPStatus.FORBIDDEN
-            )
-            return
         if role not in {"baseline", "followup"}:
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
             return
@@ -1101,11 +1024,6 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def _send_source_segmentation_mask(self, suffix: str) -> None:
-        if not self._browser_authorized():
-            self._send_json(
-                {"error": "browser_session_required"}, HTTPStatus.FORBIDDEN
-            )
-            return
         parts = suffix.split("/")
         if (
             len(parts) != 3
@@ -1276,9 +1194,6 @@ class Handler(BaseHTTPRequestHandler):
         ):
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
             return
-        if not self._browser_authorized():
-            self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
-            return
         descriptor = -1
         headers_sent = False
         try:
@@ -1330,9 +1245,6 @@ class Handler(BaseHTTPRequestHandler):
                 os.close(descriptor)
 
     def _handle_registration_review_post(self) -> None:
-        if not self._browser_authorized():
-            self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
-            return
         if not self._same_origin():
             self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
             return
@@ -1419,12 +1331,6 @@ class Handler(BaseHTTPRequestHandler):
             return
 
     def _handle_source_segmentation_review_post(self) -> None:
-        if not self._browser_authorized():
-            self._send_json(
-                {"error": "browser_session_required"},
-                HTTPStatus.FORBIDDEN,
-            )
-            return
         if not self._same_origin():
             self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
             return
@@ -1496,9 +1402,6 @@ class Handler(BaseHTTPRequestHandler):
             return
 
     def _handle_viewer_state_post(self) -> None:
-        if not self._authorized():
-            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
-            return
         if not self._same_origin():
             self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
             return
@@ -1596,11 +1499,8 @@ class Handler(BaseHTTPRequestHandler):
             return None
 
     def _handle_viewer_control_command_post(self) -> None:
-        if not self._authorized():
-            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
-            return
         if not self._bearer_authorized():
-            self._send_json({"error": "bearer_agent_required"}, HTTPStatus.FORBIDDEN)
+            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
             return
         if not self._audit_bearer_operation("viewer_control_command"):
             return
@@ -1627,12 +1527,6 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def _handle_viewer_control_observation_post(self) -> None:
-        if not self._authorized():
-            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
-            return
-        if not self._browser_authorized():
-            self._send_json({"error": "browser_session_required"}, HTTPStatus.FORBIDDEN)
-            return
         if not self._same_origin():
             self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
             return
@@ -1849,10 +1743,6 @@ def create_server(
     server.source_root = resolved_source_root
     server.instance_guards = instance_guards
     server.token = token or secrets.token_urlsafe(24)
-    server.browser_bootstrap_token = _distinct_token({server.token})
-    server.browser_session_token = _distinct_token(
-        {server.token, server.browser_bootstrap_token}
-    )
     server.ui_dist = resolved_ui
     server.viewer_state_lock = threading.Lock()
     server.viewer_state = None
@@ -1930,16 +1820,13 @@ def serve(
     print(f"ScanView local source-read-only API: {base_url}")
     print(f"Bearer token: {server.token}")
     if server.ui_dist:
-        session_url = (
-            f"{base_url}/?session={quote(server.browser_bootstrap_token, safe='')}"
-            f"{navigation_fragment or ''}"
-        )
-        print(f"ScanView local workspace: {session_url}")
+        workspace_url = f"{base_url}/{navigation_fragment or ''}"
+        print(f"ScanView local workspace: {workspace_url}")
         if open_browser:
-            webbrowser.open(session_url)
+            webbrowser.open(workspace_url)
     if server.registration_review is not None:
         registration_notice = (
-            "Reviewed-registration display is browser-session-only and bound to "
+            "Reviewed-registration display is loopback-only and bound to "
             "the startup-validated review."
             if server.reviewed_registration_context is not None
             else "Reviewed-registration display is locked; ordinary DICOM remains available."
@@ -1948,7 +1835,7 @@ def serve(
         registration_notice = "Registration QA preview is human-session-only."
     if server.lesion_volume_comparison is not None:
         registration_notice = (
-            "Reviewed native-boundary comparison is browser-session-only, "
+            "Reviewed native-boundary comparison is loopback-only, "
             "unregistered, and bound to startup-validated local evidence."
             if server.lesion_volume_display_context is not None
             else "Reviewed native-boundary comparison display is locked; ordinary DICOM remains available."

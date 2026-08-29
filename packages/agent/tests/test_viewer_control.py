@@ -228,15 +228,7 @@ def test_loopback_control_separates_bearer_command_from_browser_observation(
 
         status, body = post(port, "/v1/viewer-control/observation", observation(), bearer)
         assert status == HTTPStatus.FORBIDDEN
-        assert body == {"error": "browser_session_required"}
-
-        connection = HTTPConnection("127.0.0.1", port, timeout=5)
-        connection.request("GET", f"/?session={server.browser_bootstrap_token}")
-        session_response = connection.getresponse()
-        assert session_response.status == HTTPStatus.SEE_OTHER
-        cookie = dict(session_response.getheaders())["Set-Cookie"].split(";", 1)[0]
-        session_response.read()
-        connection.close()
+        assert body == {"error": "same_origin_required"}
 
         browser_observation = {**observation(), "applied_revision": 1}
         status, body = post(
@@ -244,7 +236,6 @@ def test_loopback_control_separates_bearer_command_from_browser_observation(
             "/v1/viewer-control/observation",
             browser_observation,
             {
-                "Cookie": cookie,
                 "Host": f"127.0.0.1:{port}",
                 "Origin": f"http://127.0.0.1:{port}",
                 "Content-Type": MEDIA_TYPE,

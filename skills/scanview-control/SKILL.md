@@ -1,6 +1,6 @@
 ---
 name: scanview-control
-description: Inspect and control a running local ScanView DICOM workspace through its authenticated loopback API. Use when Codex needs to identify MRI/CT series, read the exact active source image and pinned DICOM LPS point, switch between native and three-plane MPR views, select an exact series/instance, change display tools, reset the view, or retrieve one exact DICOM instance for strictly local analysis without screenshots or external DICOM processing.
+description: Inspect and control a running local ScanView DICOM workspace through its loopback API. Use when Codex needs to identify MRI/CT series, read the exact active source image and pinned DICOM LPS point, switch between native and three-plane MPR views, select an exact series/instance, change display tools, reset the view, or retrieve one exact DICOM instance for strictly local analysis without screenshots or external DICOM processing.
 ---
 
 # ScanView Control
@@ -9,7 +9,7 @@ Treat ScanView as the visualization surface and the Codex conversation as the hu
 
 ## Connect
 
-1. Confirm `scanview-agent launch` is running and the viewer is open in the Codex side panel.
+1. Confirm `scanview-agent launch` is running and open its clean loopback URL in any local browser. Browser viewing needs no login or session cookie.
 2. Obtain the loopback base URL and bearer token from the current launcher output or user-provided context. Never inspect browser storage, print the token, put it in a URL, or commit it.
 3. Pass the token with `--token` or the `SCANVIEW_AGENT_TOKEN` environment variable to `scripts/scanview_control.py`. Run metadata or DICOM retrieval through the repository's `.venv/bin/python`, whose local ScanView installation includes `pydicom`; never substitute a remote parser.
 4. Read [references/api.md](references/api.md) before composing a raw request or interpreting a control response.

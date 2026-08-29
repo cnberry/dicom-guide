@@ -204,13 +204,7 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
     port = server.server_port
     bearer = {"Authorization": f"Bearer {token}"}
     try:
-        assert request(port, "/v1/manifest")[0] == HTTPStatus.UNAUTHORIZED
-        status, headers, _ = request(
-            port, f"/?session={server.browser_bootstrap_token}"
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        browser = {"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
-        assert request(port, "/v1/manifest", headers=browser)[0] == HTTPStatus.OK
+        assert request(port, "/v1/manifest")[0] == HTTPStatus.OK
         assert server.agent_access_audit is not None
         assert server.agent_access_audit.event_count == 0
 
@@ -226,17 +220,17 @@ def test_configured_server_audits_only_privacy_minimized_bearer_operation_classe
             (f"/v1/instances/{INSTANCE_ID}", HTTPStatus.OK),
             (
                 f"/v1/source-segmentations/{INSTANCE_ID}/masks/1",
-                HTTPStatus.FORBIDDEN,
+                HTTPStatus.NOT_FOUND,
             ),
             (
                 "/v1/lesion-volume-comparison-display/context",
-                HTTPStatus.FORBIDDEN,
+                HTTPStatus.NOT_FOUND,
             ),
             (
                 "/v1/lesion-volume-comparison-display/masks/baseline",
-                HTTPStatus.FORBIDDEN,
+                HTTPStatus.NOT_FOUND,
             ),
-            ("/v1/registration-qa/preview", HTTPStatus.FORBIDDEN),
+            ("/v1/registration-qa/preview", HTTPStatus.NOT_FOUND),
             ("/v1/registration-qa/files/fixed.nrrd", HTTPStatus.NOT_FOUND),
         ]
         for path, expected in cases:
@@ -298,12 +292,7 @@ def test_configured_audit_change_fails_bearer_access_closed_without_blocking_bro
         assert status == HTTPStatus.SERVICE_UNAVAILABLE
         assert json.loads(body) == {"error": "agent_access_audit_unavailable"}
 
-        status, headers, _ = request(
-            port, f"/?session={server.browser_bootstrap_token}"
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        browser = {"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
-        assert request(port, "/v1/manifest", headers=browser)[0] == HTTPStatus.OK
+        assert request(port, "/v1/manifest")[0] == HTTPStatus.OK
     finally:
         server.shutdown()
         server.server_close()

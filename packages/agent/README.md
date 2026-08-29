@@ -86,11 +86,11 @@ Use `scripts/build_release.py` from the repository root to produce an installabl
 wheel with the built UI under `scanview_agent/ui` and all versioned contracts under
 `scanview_agent/schemas`. A regular agent-only wheel stays lightweight and reads
 schemas from the source checkout. `launch` serves an embedded or explicitly supplied `--ui-dist` bundle
-and the API from one loopback origin. It establishes an
-HttpOnly browser session, while agents continue to use the printed bearer token.
-The focused viewer also exposes a memory-only control bridge: bearer agents issue
-exact catalog-validated navigation/display commands, and the separate same-origin
-browser session reports the resulting rendered state. Codex should use the repository
+and the API from one loopback origin. Any local browser can open the printed clean URL
+without a login or session cookie, while agents continue to use the printed bearer
+token for control commands. The focused viewer also exposes a memory-only control
+bridge: bearer agents issue exact catalog-validated navigation/display commands, and
+the same-origin browser reports the resulting rendered state. Codex should use the repository
 workflow in `skills/scanview-control/SKILL.md`; it authorizes no source mutation,
 measurement, diagnosis, response classification, or external DICOM processing.
 For offline transfer and installation on macOS or Linux, run
@@ -200,9 +200,9 @@ accuracy, tissue meaning, diagnosis, and response are not asserted.
 The top-level Common Instance Reference may list the complete guarded source series
 when empty SEG planes are omitted; every encoded frame must still resolve through that
 set and its exact source plane.
-The sensitive catalog is bearer-readable and audited as `source_segmentations_read`;
-dense mask bytes require the HttpOnly browser session, and bearer attempts are denied
-and audited separately. The browser rehashes/recounts the mask and aligns slice slabs
+The sensitive catalog and dense mask bytes are available on the loopback service
+without browser login; bearer catalog reads can be audited as
+`source_segmentations_read`. The browser rehashes/recounts the mask and aligns slice slabs
 by independently derived physical source order before read-only MPR display. No
 external API is called.
 
@@ -245,10 +245,10 @@ content SHA-256 that excludes only the catalog's volatile top-level generation t
 `validate-consultation-plan` independently rebuilds that plan from the exact catalog.
 Both artifacts remain sensitive and `deidentified: false`.
 
-The unified viewer validates a pasted plan through browser-session-only
+The unified viewer validates a pasted plan through same-origin
 `POST /v1/agent-consultation-plans/validate` before exposing deliberate “Open in
 Image A/B” controls. The endpoint is exact-origin, exact-media-type, bounded, local,
-and `no-store`; a bearer token alone cannot call it. A valid plan authorizes exact
+and `no-store`. A valid plan authorizes exact
 native-source navigation only. Agent identity is unverified, headings are unreviewed,
 and automatic opening/capture, source mutation, chronology, registration, lesion
 linkage, response, treatment effect, diagnosis, and clinical conclusion remain false.
@@ -372,13 +372,13 @@ modules, parameters, parsed output geometry/rigidity, the complete uint8 `{0,1}`
 payload and recomputed support counts, private permissions, source provenance, and the
 invariant that the generated bundle stays `generated_pending_qa` and `unreviewed`.
 
-`review-registration` serves a separate, watermarked, browser-capability QA workspace
+`review-registration` serves a separate, watermarked, local-browser QA workspace
 from loopback. It shows derived fixed/moving reference, registered, and technical
 sampling-support boundary views in all three planes with
 opacity, swipe, checkerboard, edges, landmarks, and physical-point residual tools.
-Agents can read only a privacy-minimized status; bearer authentication alone cannot
-fetch NRRDs or submit a decision. This is a separate browser capability, not proof a
-person is present. A downloaded self-attested JSON record anchors every byte of the unchanged
+The clean loopback URL can fetch the allowlisted NRRDs; decision submission still
+requires the exact local Origin. This browser context is not proof a person is present.
+A downloaded self-attested JSON record anchors every byte of the unchanged
 seven-file bundle. A qualified self-attested acceptance requires a trained clinician or
 medical physicist, every checklist item, full three-plane/four-mode coverage, three
 aligned qualitative landmarks, and at least three spatially distributed 3-D landmark
@@ -406,11 +406,10 @@ scanview-agent launch '/safe/local/DICOM/root' \
   --registration-review '/safe/local/registration-review.json'
 ```
 
-The browser-only reviewed surface exposes fixed reference, registered-moving, and the
+The local reviewed surface exposes fixed reference, registered-moving, and the
 separate technical sampling-support NRRD and implements opacity/swipe. It verifies all
 three files before rendering, samples the mask with nearest-neighbor semantics, and
-uses the fixed pixel wherever support is zero. A bearer agent sees a minimized
-authorization summary but cannot fetch these pixels. Rejected, tampered, linked,
+uses the fixed pixel wherever support is zero. Rejected, tampered, linked,
 mismatched, missing, non-binary, or non-owner-only inputs keep the ordinary DICOM
 viewer available and every registered pixel locked. Startup hashes plus per-response
 review/bundle identity and metadata freshness checks relock the surface if any

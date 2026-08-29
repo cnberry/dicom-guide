@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 10:45 PDT
+Last updated: 2026-08-29 16:14 PDT
 
 ## Current handoff
 
@@ -31,8 +31,13 @@ Last updated: 2026-08-29 10:45 PDT
   linked crop is stored independently of canvas size and reapplied after side-panel
   resizing. It is reversible camera state only: DICOM pixels and source geometry are
   unchanged. **Reset** clears it and restores all three full-volume cameras.
-- A versioned local viewer-control API now separates bearer-agent commands from
-  browser-session observations. Codex can select an exact catalog series/instance,
+- The local browser surface now opens directly at its clean loopback URL in Chrome,
+  the Codex side panel, or another local browser. Browser bootstrap tokens, secret
+  query parameters, and session cookies are removed. Loopback GETs serve the catalog
+  and guarded source pixels directly; browser writes retain exact-Origin checks, and
+  agent-issued viewer-control commands remain bearer protected.
+- A versioned local viewer-control API separates bearer-agent commands from
+  same-origin browser observations. Codex can select an exact catalog series/instance,
   choose native or MPR, set the display tool, reset, and focus a DICOM LPS point. The
   browser returns the exact applied command revision, render status, stack position,
   nearest native source, and pinned/crosshair point. State is memory-only with a
@@ -67,9 +72,14 @@ Last updated: 2026-08-29 10:45 PDT
   649-pixel-high panes with the explicit `Linked crop · all 3 panes` state. Crop aspect
   and bounded fit math now have direct regression coverage; resize reapplies the stored
   center/field size rather than preserving stale canvas-scale camera state.
+- Clean-URL QA after the authorization cleanup fetched `/v1/manifest` without a cookie
+  or bearer, loaded all 57 renderable series in a fresh browser tab, selected the
+  221-image FLAIR MPR series, and rendered all three 649-pixel-high panes at 1280×720.
+  The live service was restarted on `127.0.0.1:8765`; no patient screenshot or token
+  was saved to the repository.
 - Current code verification passes TypeScript typecheck, 148 viewer tests in 30
-  files, the production build, the full Python agent suite, six focused viewer-
-  control tests, and skill CLI help. The known Vite codec
+  files, the production build, and the full Python agent suite under the clean-URL
+  loopback model. The known Vite codec
   externalization and large-chunk messages remain build warnings, not failures.
 - The completed v0.14.0 local-only artifact remains
   `release/scanview-offline-0.14.0.zip` (owner-only and ignored by Git), 5,555,555

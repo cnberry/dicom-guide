@@ -47,7 +47,7 @@ def post(
     return result
 
 
-def test_unified_server_establishes_private_browser_session_and_serves_dicom(
+def test_unified_server_serves_clean_loopback_workspace_and_dicom(
     tmp_path: Path,
 ) -> None:
     ui_dist = tmp_path / "ui"
@@ -74,41 +74,19 @@ def test_unified_server_establishes_private_browser_session_and_serves_dicom(
     thread.start()
     port = server.server_port
     try:
-        assert server.browser_bootstrap_token != server.token
-        assert server.browser_session_token != server.token
-        assert server.browser_session_token != server.browser_bootstrap_token
         status, headers, body = request(port, "/")
         assert status == HTTPStatus.OK
         assert body.startswith(b"<!doctype html>")
         assert "default-src 'self'" in headers["Content-Security-Policy"]
+        assert "Set-Cookie" not in headers
 
         status, _, body = request(port, "/v1/manifest")
-        assert status == HTTPStatus.UNAUTHORIZED
-        assert json.loads(body) == {"error": "unauthorized"}
-
-        status, forged_headers, _ = request(
-            port, "/?session=test-session-token"
-        )
-        assert status == HTTPStatus.OK
-        assert "Set-Cookie" not in forged_headers
-
-        status, headers, _ = request(
-            port, f"/?session={server.browser_bootstrap_token}"
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        assert headers["Location"] == "/"
-        assert "HttpOnly" in headers["Set-Cookie"]
-        assert "SameSite=Strict" in headers["Set-Cookie"]
-        cookie = headers["Set-Cookie"].split(";", 1)[0]
-
-        status, _, body = request(port, "/v1/manifest", headers={"Cookie": cookie})
         assert status == HTTPStatus.OK
         assert json.loads(body)["schema_version"] == "1.0.0"
 
         status, headers, body = request(
             port,
             f"/v1/instances/{instance_id}",
-            headers={"Cookie": cookie},
         )
         assert status == HTTPStatus.OK
         assert headers["Content-Type"] == "application/dicom"
@@ -155,13 +133,14 @@ def test_local_server_assembles_source_recursive_lesion_volume_comparison(
         "Content-Type": "application/vnd.scanview.lesion-volume-comparison-input+zip",
     }
     try:
-        status, _, body = post(
+        status, response_headers, body = post(
             port,
             "/v1/lesion-volume-comparisons",
             transport.getvalue(),
             headers={key: value for key, value in headers.items() if key != "Authorization"},
         )
-        assert status == HTTPStatus.UNAUTHORIZED
+        assert status == HTTPStatus.OK
+        assert response_headers["Content-Type"] == "application/zip"
 
         wrong_origin = {**headers, "Origin": "http://example.invalid"}
         status, _, body = post(
@@ -195,7 +174,7 @@ def test_local_server_assembles_source_recursive_lesion_volume_comparison(
 
 
 @pytest.mark.parametrize("mutated_input", ["comparison", "native_source"])
-def test_reviewed_native_boundary_display_is_cached_guarded_and_browser_only(
+def test_reviewed_native_boundary_display_is_cached_guarded_and_loopback_available(
     tmp_path: Path, mutated_input: str,
 ) -> None:
     baseline, followup, pairing_request, source_root = _pair(tmp_path)
@@ -234,7 +213,7 @@ def test_reviewed_native_boundary_display_is_cached_guarded_and_browser_only(
         assert summary["source_validated"] is True
         assert summary["native_spaces"] == 2
         assert summary["registered"] is False
-        assert summary["browser_session_required_for_pixels"] is True
+        assert summary["browser_session_required_for_pixels"] is False
         assert summary["external_api_required"] is False
         assert summary["response_classification"] is False
         assert "Synthetic Pairing Reviewer" not in body.decode()
@@ -246,27 +225,14 @@ def test_reviewed_native_boundary_display_is_cached_guarded_and_browser_only(
             "/v1/lesion-volume-comparison-display/context",
             headers=bearer,
         )
-        assert status == HTTPStatus.FORBIDDEN
-        assert json.loads(body) == {"error": "browser_session_required"}
+        assert status == HTTPStatus.OK
+        context = json.loads(body)
         status, _, body = request(
             port,
             "/v1/lesion-volume-comparison-display/masks/baseline",
             headers=bearer,
         )
-        assert status == HTTPStatus.FORBIDDEN
-
-        status, headers, _ = request(
-            port, f"/?session={server.browser_bootstrap_token}"
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        browser = {"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
-        status, _, body = request(
-            port,
-            "/v1/lesion-volume-comparison-display/context",
-            headers=browser,
-        )
         assert status == HTTPStatus.OK
-        context = json.loads(body)
         schema = json.loads(
             (
                 Path(__file__).parents[3]
@@ -288,7 +254,6 @@ def test_reviewed_native_boundary_display_is_cached_guarded_and_browser_only(
             status, mask_headers, mask = request(
                 port,
                 f"/v1/lesion-volume-comparison-display/masks/{role}",
-                headers=browser,
             )
             descriptor = context["timepoints"][role]["mask"]
             assert status == HTTPStatus.OK
@@ -311,7 +276,6 @@ def test_reviewed_native_boundary_display_is_cached_guarded_and_browser_only(
         status, _, body = request(
             port,
             "/v1/lesion-volume-comparison-display/context",
-            headers=browser,
         )
         assert status == HTTPStatus.LOCKED
         assert json.loads(body) == {"error": "native_boundary_display_inputs_changed"}
@@ -401,7 +365,7 @@ def test_static_server_refuses_asset_path_traversal(tmp_path: Path) -> None:
         thread.join(timeout=5)
 
 
-def test_registration_qa_preview_is_browser_only_and_review_is_idempotent(
+def test_registration_qa_preview_is_loopback_available_and_review_is_idempotent(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -463,45 +427,17 @@ def test_registration_qa_preview_is_browser_only_and_review_is_idempotent(
         assert agent_summary["display_unlocked"] is False
         assert str(bundle) not in body.decode()
 
-        status, _, body = request(port, "/v1/registration-qa/preview", headers=bearer)
-        assert status == HTTPStatus.FORBIDDEN
-        assert json.loads(body) == {"error": "browser_session_required"}
-
-        forged_browser = {"Cookie": "scanview_session=qa-session-token"}
         status, _, body = request(
             port,
             "/v1/registration-qa/preview",
-            headers=forged_browser,
-        )
-        assert status == HTTPStatus.UNAUTHORIZED
-        assert json.loads(body) == {"error": "unauthorized"}
-
-        status, headers, _ = request(
-            port, f"/?session={server.browser_bootstrap_token}"
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        cookie = headers["Set-Cookie"].split(";", 1)[0]
-        assert server.browser_session_token in cookie
-        assert "qa-session-token" not in cookie
-        browser = {"Cookie": cookie}
-
-        status, _, body = request(
-            port,
-            "/v1/registration-qa/preview",
-            headers=browser,
         )
         assert status == HTTPStatus.OK
+        browser: dict[str, str] = {}
         preview = json.loads(body)
         assert preview["qa_preview_only"] is True
         assert preview["watermark"] == "UNAPPROVED REGISTRATION — QA ONLY"
         assert str(bundle) not in body.decode()
 
-        status, _, _ = request(
-            port,
-            "/v1/registration-qa/files/fixed.nrrd",
-            headers=bearer,
-        )
-        assert status == HTTPStatus.FORBIDDEN
         status, volume_headers, volume = request(
             port,
             "/v1/registration-qa/files/fixed.nrrd",
@@ -528,7 +464,6 @@ def test_registration_qa_preview_is_browser_only_and_review_is_idempotent(
             "/v1/registration-reviews",
             payload,
             headers={
-                "Cookie": cookie,
                 "Origin": "http://example.invalid",
                 "Host": f"127.0.0.1:{port}",
                 "Content-Type": "application/vnd.scanview.registration-review-input+json",
@@ -537,7 +472,6 @@ def test_registration_qa_preview_is_browser_only_and_review_is_idempotent(
         assert status == HTTPStatus.FORBIDDEN
 
         review_headers = {
-            "Cookie": cookie,
             "Origin": f"http://127.0.0.1:{port}",
             "Host": f"127.0.0.1:{port}",
             "Content-Type": "application/vnd.scanview.registration-review-input+json",
@@ -614,7 +548,7 @@ def test_registration_qa_preview_is_browser_only_and_review_is_idempotent(
         thread.join(timeout=5)
 
 
-def test_accepted_reviewed_registration_is_cached_and_browser_only(
+def test_accepted_reviewed_registration_is_cached_and_loopback_available(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -686,26 +620,7 @@ def test_accepted_reviewed_registration_is_cached_and_browser_only(
         assert str(bundle) not in body.decode()
         assert str(review) not in body.decode()
 
-        status, _, body = request(
-            port,
-            "/v1/reviewed-registration/display",
-            headers=bearer,
-        )
-        assert status == HTTPStatus.FORBIDDEN
-        assert json.loads(body) == {"error": "browser_session_required"}
-        status, _, body = request(
-            port,
-            "/v1/reviewed-registration/files/fixed.nrrd",
-            headers=bearer,
-        )
-        assert status == HTTPStatus.FORBIDDEN
-        assert json.loads(body) == {"error": "browser_session_required"}
-
-        status, headers, _ = request(
-            port, f"/?session={server.browser_bootstrap_token}"
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        browser = {"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
+        browser: dict[str, str] = {}
 
         status, context_headers, body = request(
             port,
@@ -852,11 +767,7 @@ def test_rejected_or_tampered_review_keeps_dicom_but_all_registration_pixels_loc
             assert str(bundle) not in body.decode()
             assert str(review) not in body.decode()
 
-            status, headers, _ = request(
-                port, f"/?session={server.browser_bootstrap_token}"
-            )
-            assert status == HTTPStatus.SEE_OTHER
-            browser = {"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
+            browser: dict[str, str] = {}
 
             status, _, body = request(
                 port,
@@ -917,12 +828,7 @@ def test_reviewed_registration_relocks_when_any_live_evidence_changes(
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        status, headers, _ = request(
-            server.server_port,
-            f"/?session={server.browser_bootstrap_token}",
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        browser = {"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
+        browser: dict[str, str] = {}
         changed = bundle / changed_filename
         changed.write_bytes(changed.read_bytes() + b" ")
 

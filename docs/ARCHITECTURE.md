@@ -15,8 +15,8 @@ guarded local manifest + exact SEG/source SHA-256
               ├── catalog-wide decode and dense-mask budgets
               └── unsupported object fails closed as a whole
                          │
-                         ├── sensitive catalog → bearer/browser, no-store
-                         └── dense 0/1 mask → HttpOnly browser session only
+                         ├── sensitive catalog → loopback, no-store
+                         └── dense 0/1 mask → clean loopback URL
                                       │
                          independent hash/count/order validation
                                       │
@@ -226,13 +226,13 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    every source must be single-frame with consistent matrix, spacing, orientation,
    regular projected spacing, and no in-plane drift. The binary labelmap is stored on
    the native grid; rendered MPR pixels are never exported as measurement evidence.
-4. **Local API:** binds to loopback only, uses an ephemeral bearer token for agents
-   and an HttpOnly same-origin session for the browser, returns only opaque IDs and
-   an allowlisted metadata contract, and has no source write/delete API. Its
+4. **Local API:** binds to loopback only. Browser viewing uses the clean URL without
+   login; agent control uses an ephemeral bearer token. The service returns opaque IDs
+   and an allowlisted metadata contract and has no source write/delete API. Its
    viewer-control bridge keeps one latest command and observation in memory. Bearer
    agents may select an exact live-catalog source, native/MPR view, allowed display
-   tool, optional finite LPS point, and reset. Only the browser session may publish
-   the applied observation; its five-second freshness gate prevents Codex from
+   tool, optional finite LPS point, and reset. Only the exact same-origin browser may
+   publish the applied observation; its five-second freshness gate prevents Codex from
    claiming a stale view. Native targets remain instance-exact, while MPR reports the
    exact nearest native slice at the rendered patient-space point. The bridge grants
    no mutation, measurement, diagnostic, response, or clinical-conclusion authority.
@@ -248,8 +248,7 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    it with `no-store`, and persists nothing. Service-backed measurement IDs join
    directly to the manifest; legacy folder IDs remain accepted.
    Source-SEG review creation is a separate human-authority route. It requires the
-   HttpOnly browser session, exact same Origin, a 32 KiB strict JSON media type, and
-   the current guarded catalog hash; bearer authorization alone is refused. The
+   exact same Origin, a 32 KiB strict JSON media type, and the current guarded catalog hash. The
    request carries only an opaque SEG/segment reference and bounded reviewer
    declaration. The service reopens the original SEG and every referenced source,
    reconstructs the native mask, assembles the five-file sensitive ZIP in memory,
@@ -258,29 +257,27 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    available for agent workflows.
    The viewer-state POST is a distinct bounded session-control route, not a source or
    derivative write. It independently validates exact catalog positions, retains one
-   latest publication under a lock, marks it `unreviewed`, and serves it only to an
-   authenticated local GET with `no-store`. Publisher revocation closes opt-out races;
+   latest publication under a lock, marks it `unreviewed`, and serves it only on
+   loopback with `no-store`. Publisher revocation closes opt-out races;
    the in-memory TTL is a fallback, not a consent substitute.
    Optional bearer auditing is a separate local persistence boundary. It records only
    fixed operation classes and authorization, never request targets or response
    content. The owner-only single-link JSONL file is opened without following the
    final symlink, exclusively locked, application-appended, fsynced, and hash-chained
    across restarts. Covered bearer reads are fail-closed on audit error. Browser
-   sessions do not use the bearer and are outside this log. The hash chain detects
+   requests without the bearer are outside this log. The hash chain detects
    modification but neither authenticates the bearer holder nor supplies an OS
    immutable/append-only guarantee.
-   Registration QA is a separately mounted mode: a bearer-authorized agent receives
-   only a minimized status, while preview context, the four allowlisted NRRDs, and
-   decision submission require the distinct HttpOnly browser session; the POST also
-   requires exact Origin. This separates bearer-agent authority but does not prove a person is present.
+   Registration QA is a separately mounted mode. Preview context and the four
+   allowlisted NRRDs are loopback-readable without login; decision submission requires
+   exact Origin. This does not prove a person is present.
    The server returns one validated decision JSON in memory and does not persist it.
    A launch that also supplies a saved review enters a distinct reviewed-display mode.
    The server validates the owner-only, unlinked review against the exact live bundle,
    rechecks every evidence-file identity and metadata on access, suppresses pending-QA
    authority, and exposes only fixed-reference, registered-moving, and the separate
-   technical sampling-support NRRD to the browser session. Rejected or invalid review input falls back to
-   ordinary DICOM with every registered route locked. Bearer access gets only a
-   privacy-minimized authorization summary.
+   technical sampling-support NRRD to the local display. Rejected or invalid review
+   input falls back to ordinary DICOM with every registered route locked.
 5. **Derivatives:** a manual ROI volume export is a new sensitive three-file draft,
    not a source mutation. It binds a DICOM SEG-format object to ordered source
    byte/SHA anchors and a v1 sidecar. The browser computes a native-grid marked-voxel
@@ -316,7 +313,7 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    manifested review page. Computed and interpretation arrays stay empty; source
    dates have no timepoint meaning. A separate agent consultation-plan artifact binds
    2–8 exact opaque series/instance pairs and bounded discussion headings to the stable
-   content of one catalog. A browser-session-only same-origin validator rebuilds the
+   content of one catalog. A same-origin validator rebuilds the
    plan from the live catalog before the viewer exposes deliberate per-item navigation.
    The viewer never auto-opens or captures a proposal, and the plan grants no identity,
    relevance, chronology, registration, lesion, response, treatment-effect, diagnostic,
@@ -423,7 +420,7 @@ accepted volume-comparison archive + exact local source root
                          |
                          +--> recursive startup validation and guarded source identities
                                       |
-                                      +--> browser-session-only context + two binary masks
+                                      +--> loopback context + two binary masks
                                                    |
                                                    +--> native baseline MPR + read-only mask
                                                    +--> native follow-up MPR + read-only mask

@@ -6,7 +6,7 @@
 - Agent authorization: `Authorization: Bearer <launcher token>`.
 - Control media type: `application/vnd.scanview.viewer-control+json`.
 - Responses use `Cache-Control: no-store`.
-- The browser uses a separate HttpOnly session; a bearer cannot publish browser observations.
+- Browser GETs need no login because the server binds only to loopback. Browser POSTs require the exact local Origin.
 - The bundled helper disables environment proxies and HTTP redirects so a local request cannot fall through to another origin.
 
 ## Read health and sources
@@ -85,13 +85,12 @@ reconstruction or coordinate clamping.
 
 ## Browser observation route
 
-`POST /v1/viewer-control/observation` is for the ScanView browser only. It requires the distinct HttpOnly browser session, exact loopback Origin, and the control media type. Agents must not attempt to forge it.
+`POST /v1/viewer-control/observation` is for the ScanView browser only. It requires the exact loopback Origin and the control media type. Agents must not attempt to forge it.
 
 ## Failure handling
 
-- `401`: token/cookie missing or invalid.
-- `403 bearer_agent_required`: attempted command with only a browser session.
-- `403 browser_session_required`: attempted observation with a bearer.
+- `401`: bearer token missing or invalid for an agent command.
+- `403 same_origin_required`: a browser write did not come from the exact loopback Origin.
 - `415`: wrong media type.
 - `422`: malformed, stale, mismatched, out-of-catalog, or safety-invalid command/observation.
 - `viewer_connected: false`: open/reload the viewer and wait for a fresh browser heartbeat.

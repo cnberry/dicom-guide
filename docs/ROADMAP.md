@@ -865,6 +865,21 @@
    build, and live 1280×720 copied-scan QA with three 649-pixel-high MPR panes and an
    explicit linked-crop state. DICOM pixels and geometry remain unchanged.
 
+## Completed in the forty-second milestone
+
+1. Removed browser bootstrap tokens, secret query URLs, and HttpOnly session cookies
+   from the loopback viewer. The printed clean URL now opens the same local DICOM
+   workspace directly in Chrome, the Codex side panel, or another local browser.
+2. Kept the meaningful boundaries: the server still refuses non-loopback binds,
+   source mutation remains absent, browser writes require the exact local Origin, and
+   agent-issued viewer-control commands still require the launcher bearer token.
+3. Made guarded catalog, DICOM, MPR-volume, source-SEG mask, and local reviewed-display
+   GETs available without browser login. Source-change, hash, geometry, size, and
+   allowlist validation remain unchanged.
+4. Updated the focused viewer messages, control skill, primary documentation, and
+   Python regression suite for the clean-URL model. No external API or patient-data
+   upload path was added.
+
 ## Immediate
 
 1. Use **In-depth review** for one series at a time. Treat the three-plane view as a
@@ -923,7 +938,7 @@
    masks, source images, and exact chronology; require a separate qualified pairing
    attestation; expose arithmetic only after acceptance; and keep response,
    causality, registration, spatial change, diagnosis, conclusion, and sign-off
-   locked. Add schema, privacy-minimized summary, CLI, browser-session-only local
+   locked. Add schema, privacy-minimized summary, CLI, same-origin local
    assembler, viewer form, adversarial tests, patient-free browser QA, and complete
    offline-package gates. See the current handoff in `docs/STATUS.md`.
 4. Test source-SEG v2 against a real vendor-produced or clinical-system-exported

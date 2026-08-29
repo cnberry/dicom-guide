@@ -252,7 +252,7 @@ def test_readiness_cli_writes_owner_only_report(
     assert output.stat().st_mode & 0o777 == 0o600
 
 
-def test_loopback_readiness_is_authenticated_no_store_and_schema_valid() -> None:
+def test_loopback_readiness_needs_no_browser_login_and_is_schema_valid() -> None:
     catalog = _catalog(
         _study(1, "20260101", _series(1)),
         _study(2, "20260201", _series(2)),
@@ -262,7 +262,7 @@ def test_loopback_readiness_is_authenticated_no_store_and_schema_valid() -> None
     thread.start()
     try:
         assert _request(server.server_port, "/v1/longitudinal-readiness")[0] == (
-            HTTPStatus.UNAUTHORIZED
+            HTTPStatus.OK
         )
         status, headers, body = _request(
             server.server_port,

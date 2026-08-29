@@ -669,7 +669,7 @@ def _http(
     return result
 
 
-def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_change(
+def test_server_serves_catalog_and_mask_on_loopback_and_detects_change(
     tmp_path: Path,
 ) -> None:
     catalog, registry, _ = _fixture(tmp_path / "dicom")
@@ -678,7 +678,7 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
     thread.start()
     try:
         status, _, _ = _http(server.server_port, "/v1/source-segmentations")
-        assert status == 401
+        assert status == 200
         status, headers, body = _http(
             server.server_port,
             "/v1/source-segmentations",
@@ -693,23 +693,9 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
             f"/v1/source-segmentations/{state['segmentation_id']}"
             f"/masks/{segment['segment_number']}"
         )
-        status, _, _ = _http(
-            server.server_port,
-            mask_path,
-            headers={"Authorization": "Bearer local-agent-token"},
-        )
-        assert status == 403
-
-        status, headers, _ = _http(
-            server.server_port,
-            f"/?session={server.browser_bootstrap_token}",
-        )
-        assert status == 303
-        cookie = headers["Set-Cookie"].split(";", 1)[0]
         status, headers, mask = _http(
             server.server_port,
             mask_path,
-            headers={"Cookie": cookie},
         )
         assert status == 200
         assert headers["Content-Type"] == "application/vnd.scanview.source-binary-mask"
@@ -777,7 +763,6 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
             method="POST",
             body=json.dumps(publication).encode(),
             headers={
-                "Cookie": cookie,
                 "Content-Type": VIEWER_STATE_MEDIA_TYPE,
                 "Origin": f"http://127.0.0.1:{server.server_port}",
             },
@@ -807,9 +792,7 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
             method="POST",
             body=json.dumps(review_request).encode(),
             headers={
-                "Authorization": "Bearer local-agent-token",
                 "Content-Type": SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
-                "Origin": f"http://127.0.0.1:{server.server_port}",
             },
         )
         assert status == 403
@@ -819,7 +802,6 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
             method="POST",
             body=json.dumps(review_request).encode(),
             headers={
-                "Cookie": cookie,
                 "Content-Type": SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
                 "Origin": "http://evil.invalid",
             },
@@ -832,7 +814,6 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
             method="POST",
             body=json.dumps(review_request).encode(),
             headers={
-                "Cookie": cookie,
                 "Content-Type": "application/json",
                 "Origin": f"http://127.0.0.1:{server.server_port}",
             },
@@ -845,7 +826,6 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
             method="POST",
             body=json.dumps(review_request).encode(),
             headers={
-                "Cookie": cookie,
                 "Content-Type": SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
                 "Origin": f"http://127.0.0.1:{server.server_port}",
             },
@@ -877,7 +857,6 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
         status, _, body = _http(
             server.server_port,
             "/v1/source-segmentations",
-            headers={"Cookie": cookie},
         )
         assert status == 409
         assert json.loads(body) == {"error": "source_segmentation_inputs_changed"}
@@ -887,7 +866,6 @@ def test_server_separates_agent_catalog_from_browser_only_mask_and_detects_chang
             method="POST",
             body=json.dumps(review_request).encode(),
             headers={
-                "Cookie": cookie,
                 "Content-Type": SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
                 "Origin": f"http://127.0.0.1:{server.server_port}",
             },

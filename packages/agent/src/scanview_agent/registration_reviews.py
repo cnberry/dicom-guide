@@ -393,7 +393,7 @@ def registration_qa_agent_summary(directory: Path | None) -> dict[str, Any]:
         "human_preview_required": True,
         "external_api_required": False,
         "source_manifest_sha256": hash_file(directory / "registration.json"),
-        "next_action": "Open the separate browser-capability QA preview; bearer API access cannot approve registration.",
+        "next_action": "Open the local browser QA preview; agent control cannot approve registration.",
     }
 
 

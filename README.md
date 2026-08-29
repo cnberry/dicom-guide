@@ -16,7 +16,7 @@ Crop centers and magnifies a selected region across all three planes without cha
 source DICOM data.
 
 Conversation stays in Codex instead of being duplicated in the website. A repository
-skill and authenticated loopback control API let Codex read the exact visible series,
+skill and bearer-protected agent-control API let Codex read the exact visible series,
 source image, stack position, rendered state, and pinned/crosshair DICOM LPS point;
 select an exact native or MPR target; and change display tools. The bridge is
 memory-only and sends no DICOM, pixel data, screenshots, source text, or coordinates
@@ -31,8 +31,7 @@ they no longer compete for attention in the primary viewer.
 All DICOM processing is local by design. ScanView has no cloud-processing fallback:
 if a required local decoder, registration engine, or runtime dependency is missing,
 the operation fails closed without uploading images or metadata. The only runtime
-HTTP traffic is authenticated loopback communication between the local viewer and
-the local ScanView process.
+HTTP traffic stays on loopback between the local viewer and the local ScanView process.
 
 The first local catalog contains 2 studies, 65 series, and 10,286 DICOM instances.
 They represent one MRI exam and one CT exam, so there is not yet a valid
@@ -165,7 +164,7 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   chronology, alignment, lesion, diagnosis, comparison, or response claim.
 - A strict local agent consultation plan can propose 2–8 exact native MRI/CT sources
   plus bounded discussion headings. The plan is bound to the stable content of one
-  local catalog and is revalidated through the browser session before controls appear.
+  local catalog and is revalidated through the loopback service before controls appear.
   A person must open each source deliberately; validation never authenticates the
   agent, captures evidence, establishes relevance or chronology, links a lesion, or
   authorizes a diagnosis, response assessment, treatment-effect claim, or conclusion.
@@ -217,7 +216,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   support evidence—not anatomy, tumor, segmentation, registration quality, or a
   clinical conclusion—and native DICOM remains authoritative.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
-- Bearer-token-protected, loopback-only, source-read-only local API.
+- Clean-URL, loopback-only, source-read-only browser API; agent-issued viewer-control
+  commands remain bearer protected.
 - Versioned measurement, key-image, manual ROI volume, manual ROI review, manual ROI
   volume-comparison review, reviewed native-boundary display, consultation-key-image,
   consultation-packet, comparison, visit-packet, review-record,
@@ -241,8 +241,9 @@ pnpm build
 
 The launcher indexes the selected directory, binds only to loopback, opens the local
 viewer, and serves the same opaque manifest and native instances to people and
-agents. A one-time URL establishes an HttpOnly local browser session and then
-redirects to a clean URL. DICOM bytes never leave this computer.
+agents. Any local browser can open the printed clean URL directly; no browser login,
+secret query parameter, or session cookie is required. DICOM bytes never leave this
+computer.
 
 To create an installable wheel with the UI and contracts embedded, without modifying
 the source tree:
@@ -283,7 +284,7 @@ The retained owner-only v0.14.0 ZIP is 5,555,555 bytes with SHA-256
 `6ac7e02e53887089f6e54f496d7f578936ff4388be5923cf376eba800a38a729`.
 It was built twice byte-identically and passed a fresh no-index install, 32-schema
 runtime check, owner-only packaged source-SEG catalog/review creation and validation,
-non-overwrite refusal, bearer review-creation refusal, browser-session same-origin
+non-overwrite refusal, exact-Origin review creation, same-origin
 assembly, `no-store`, and independent validation of the returned five-file ZIP on
 macOS arm64. Production-browser QA rendered one native stack plus three read-only MPR
 canvases and exported/revalidated a patient-free review. The exact runtime contains
@@ -469,38 +470,35 @@ The server exposes:
 - `GET /v1/health` (no token required)
 - `GET /v1/manifest`
 - `GET /v1/viewer-control` (fresh exact rendered state plus the latest command)
-- `GET /v1/viewer-state` (opt-in, expiring browser session state)
+- `GET /v1/viewer-state` (opt-in, expiring local viewer state)
 - `GET /v1/comparison-candidates`
 - `GET /v1/presentation-states` (source-bound GSPS display catalog; annotation text
   may contain identifiers)
-- `GET /v1/source-segmentations` (sensitive source-bound SEG catalog; bearer or
-  browser authentication; labels/codes may contain identifiers)
-- `GET /v1/source-segmentations/{opaque_id}/masks/{segment_number}` (browser session
-  only; dense binary mask rehashed against its catalog descriptor)
+- `GET /v1/source-segmentations` (sensitive source-bound SEG catalog; labels/codes may
+  contain identifiers)
+- `GET /v1/source-segmentations/{opaque_id}/masks/{segment_number}` (dense binary mask
+  rehashed against its catalog descriptor)
 - `GET /v1/registration-qa` (privacy-minimized agent status)
-- `GET /v1/registration-qa/preview` (separate browser session capability only)
-- `GET /v1/registration-qa/files/{allowlisted_nrrd}` (separate browser session capability only)
-- `GET /v1/reviewed-registration/display` (accepted-review browser session only)
+- `GET /v1/registration-qa/preview` (local browser QA preview)
+- `GET /v1/registration-qa/files/{allowlisted_nrrd}` (local browser QA inputs)
+- `GET /v1/reviewed-registration/display` (accepted-review local display)
 - `GET /v1/reviewed-registration/files/{fixed.nrrd|registered-moving.nrrd|registered-moving-coverage.nrrd}`
-  (accepted-review browser session only)
+  (accepted-review local display inputs)
 - `GET /v1/instances/{opaque_id}`
 - `POST /v1/viewer-control` (bearer-agent navigation/display command; memory only)
 - `POST /v1/viewer-control/observation` (same-origin browser heartbeat; memory only)
 - `POST /v1/viewer-state` (same-origin browser publication/clear; memory only)
-- `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
-- `POST /v1/consultation-packets` (same-origin browser session; in-memory derivative only)
-- `POST /v1/comparison-reviews` (same-origin browser session; in-memory derivative only)
-- `POST /v1/lesion-volume-comparisons` (same-origin browser session; recursive source
+- `POST /v1/visit-packets` (same-origin browser; in-memory derivative only)
+- `POST /v1/consultation-packets` (same-origin browser; in-memory derivative only)
+- `POST /v1/comparison-reviews` (same-origin browser; in-memory derivative only)
+- `POST /v1/lesion-volume-comparisons` (same-origin browser; recursive source
   validation; in-memory derivative only)
 - `POST /v1/registration-reviews` (same-origin human browser; one in-memory JSON response)
 
-All endpoints except health require authentication. The unified browser uses a
-same-origin HttpOnly session cookie instead of exposing the printed bearer token to
-application JavaScript. QA preview pixels and review submission specifically require
-that browser session; a bearer-authorized agent can read only the minimized QA status.
-Browser-session POSTs require the exact local origin and bounded route-specific
-content. The viewer-control command POST instead requires the bearer-agent capability,
-uses a strict 8 KiB JSON contract, and refuses browser authorization alone. The
+Browser GETs require no login because the service binds only to loopback. Browser POSTs
+still require the exact local origin and bounded route-specific content. The viewer-
+control command POST separately requires the bearer-agent capability and uses a strict
+8 KiB JSON contract. The
 viewer-state route accepts at most 16 KiB of strict JSON and keeps only
 the latest 30-second publication in memory. Visit-packet
 input contains only the two timepoint key-image archives. Consultation input contains
@@ -657,7 +655,7 @@ conclusion.
 
 ## Control the side-panel viewer from Codex
 
-Launch ScanView, keep its one-time browser URL open in the Codex side panel, and give
+Launch ScanView, keep its clean loopback URL open in the Codex side panel, and give
 the printed bearer token only to the local Codex session. Repository agents are routed
 through `skills/scanview-control/SKILL.md`; the helper can inspect or change the view
 without screenshots or UI scraping:
@@ -671,9 +669,9 @@ export SCANVIEW_AGENT_TOKEN='<ephemeral token from the launcher>'
   --view mpr --tool crosshairs --reset
 ```
 
-Do not put the token in committed files, shared scripts, screenshots, or logs. Commands
-use bearer authorization; browser observations use the separate HttpOnly session and
-exact loopback Origin. The server validates every target against the live catalog,
+Do not put the token in committed files, shared scripts, screenshots, or logs. Agent
+commands use bearer authorization; browser observations require the exact loopback
+Origin but no browser login. The server validates every target against the live catalog,
 assigns a monotonic in-memory revision, and accepts success only after the browser
 reports the same command and `render_status: ready`. Native commands require the exact
 source instance. MPR commands use a patient-space target and report the exact nearest
@@ -681,7 +679,7 @@ native source slice at the rendered crosshair.
 
 The bridge authorizes navigation, point focus, display-tool selection, and reset only.
 It cannot mutate DICOM, create measurements, diagnose, classify response, or produce a
-clinical conclusion. `GET /v1/manifest`, minimized instance metadata, and protected
+clinical conclusion. `GET /v1/manifest`, minimized instance metadata, and local
 `GET /v1/instances/{id}` provide local source access when needed; DICOM parsing and
 pixel analysis must remain on this computer.
 

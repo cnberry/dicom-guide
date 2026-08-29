@@ -318,7 +318,7 @@ def test_cli_creates_owner_only_plan_and_privacy_validates(
     assert summary["contains_source_ids"] is False
 
 
-def test_browser_only_endpoint_enforces_origin_media_size_and_catalog() -> None:
+def test_loopback_browser_endpoint_enforces_origin_media_size_and_catalog() -> None:
     catalog = _catalog()
     plan = _plan()
     body = json.dumps(plan).encode()
@@ -335,25 +335,17 @@ def test_browser_only_endpoint_enforces_origin_media_size_and_catalog() -> None:
             path,
             body=body,
             headers={
-                "Authorization": "Bearer agent-plan-bearer-token",
-                "Origin": origin,
                 "Content-Type": MEDIA_TYPE,
             },
         )
         assert status == HTTPStatus.FORBIDDEN
-
-        status, headers, _ = _http(
-            port, "GET", f"/?session={server.browser_bootstrap_token}"
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        cookie = headers["Set-Cookie"].split(";", 1)[0]
 
         status, _, _ = _http(
             port,
             "POST",
             path,
             body=body,
-            headers={"Cookie": cookie, "Content-Type": MEDIA_TYPE},
+            headers={"Content-Type": MEDIA_TYPE},
         )
         assert status == HTTPStatus.FORBIDDEN
 
@@ -363,7 +355,6 @@ def test_browser_only_endpoint_enforces_origin_media_size_and_catalog() -> None:
             path,
             body=body,
             headers={
-                "Cookie": cookie,
                 "Origin": origin,
                 "Content-Type": "application/json",
             },
@@ -376,7 +367,6 @@ def test_browser_only_endpoint_enforces_origin_media_size_and_catalog() -> None:
             path,
             body=body,
             headers={
-                "Cookie": cookie,
                 "Origin": origin,
                 "Content-Type": MEDIA_TYPE,
             },
@@ -399,7 +389,6 @@ def test_browser_only_endpoint_enforces_origin_media_size_and_catalog() -> None:
             path,
             body=duplicate_body,
             headers={
-                "Cookie": cookie,
                 "Origin": origin,
                 "Content-Type": MEDIA_TYPE,
             },
@@ -414,7 +403,6 @@ def test_browser_only_endpoint_enforces_origin_media_size_and_catalog() -> None:
             path,
             body=json.dumps(tampered).encode(),
             headers={
-                "Cookie": cookie,
                 "Origin": origin,
                 "Content-Type": MEDIA_TYPE,
             },
@@ -428,7 +416,6 @@ def test_browser_only_endpoint_enforces_origin_media_size_and_catalog() -> None:
             path,
             body=b"x" * (MAX_PLAN_BYTES + 1),
             headers={
-                "Cookie": cookie,
                 "Origin": origin,
                 "Content-Type": MEDIA_TYPE,
             },

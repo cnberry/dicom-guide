@@ -41,7 +41,7 @@ The owner-only v0.10.0 artifact is 5,531,237 bytes with SHA-256
 Its second build was byte-identical. Fresh macOS arm64 and Strawberry Linux x86_64
 extractions passed verification, no-index install, 29-schema runtime, owner-only
 source-SEG catalog creation/validation, 401/200 catalog authorization, `no-store`,
-bearer mask refusal, browser-session exact mask hash/length, and changed-source 409.
+clean-URL mask access, exact mask hash/length, and changed-source 409.
 The Linux listener was loopback-only with no server-owned established external socket.
 Only the exact ZIP and patient-free synthetic fixture went to Strawberry; the remote
 test tree was deleted and no Mila data left the Mac.
@@ -51,7 +51,7 @@ The owner-only v0.11.0 artifact is 5,532,095 bytes with SHA-256
 Its second build was byte-identical. Fresh macOS arm64 and Strawberry Linux x86_64
 extractions passed verification, no-index install, the 29-schema runtime, owner-only
 source-SEG catalog creation/validation, 401/200 catalog authorization, `no-store`,
-bearer mask refusal, browser-session exact mask reconstruction, and changed-source
+clean-URL mask access, exact mask reconstruction, and changed-source
 409. The installed artifact contained neither highdicom nor NumPy and declared no
 runtime network or external DICOM-processing API requirement. Strawberry was
 loopback-only, its disposable test tree was deleted, and no Mila data left the Mac.
@@ -67,7 +67,7 @@ The owner-only v0.12.0 artifact is 5,535,669 bytes with SHA-256
 Its second build was byte-identical. A fresh macOS arm64 extraction passed
 verification, no-index install, the embedded 30-schema runtime, owner-only
 dcmqi-created source-SEG creation/validation, 401/200 catalog authorization,
-`no-store`, bearer mask refusal, browser-session exact mask reconstruction, and
+`no-store`, clean-URL mask access, exact mask reconstruction, and
 changed-source 409. The installed artifact contained neither dcmqi, highdicom, nor
 NumPy and declared no runtime network or external DICOM-processing API requirement.
 The optional dcmqi writer/reader gate runs outside the package in an OS-isolated,
@@ -94,7 +94,7 @@ The owner-only v0.14.0 artifact is 5,555,555 bytes with SHA-256
 Its second build was byte-identical. A fresh macOS arm64 extraction passed
 verification, no-index installation, the embedded 32-schema runtime, packaged
 source-SEG catalog/review creation and revalidation, owner-only/non-overwrite output,
-bearer POST refusal, browser-session same-origin review assembly, `no-store`, and
+exact-Origin review assembly, `no-store`, and
 independent revalidation of the returned archive. The 3,157,956-byte wheel has
 SHA-256 `78f9a6a5399e87e914ece316c3cd31ef37809bd003a9f13fb30606a7de6eaae4`.
 The installed artifact contains neither dcmqi, highdicom, nor NumPy and declares no
@@ -236,12 +236,10 @@ frame must still resolve through it to one exact SOP class/instance and native p
 rebuilds the dense masks and arithmetic, and emits only validity plus aggregate counts.
 It omits labels, codes, IDs, paths, pixels, geometry, hashes, and volumes.
 
-`GET /v1/source-segmentations` returns the sensitive catalog with `no-store` to an
-authenticated browser or bearer agent. A bearer read may be audited as
-`source_segmentations_read`. Dense masks at
-`GET /v1/source-segmentations/{opaque_id}/masks/{segment_number}` require the HttpOnly
-browser session; bearer attempts return 403 and may be audited as
-`browser_only_source_segmentation_mask_attempt`. The browser independently validates
+`GET /v1/source-segmentations` returns the sensitive catalog with `no-store` on the
+loopback service. A bearer read may be audited as `source_segmentations_read`. Dense
+masks at `GET /v1/source-segmentations/{opaque_id}/masks/{segment_number}` are also
+available on loopback without a browser login. The browser independently validates
 the catalog, derives physical source order from DICOM geometry, rehashes/recounts the
 mask, aligns whole slabs to Cornerstone's actual image order, and exposes only a
 read-only tri-planar display. Agents receive technical source content, not permission
@@ -283,9 +281,9 @@ boundary/technical-volume discussion and future pairing-review eligibility only.
 Current comparison assembly does not consume this artifact; longitudinal linkage,
 change, response, diagnosis, and clinical conclusion stay false.
 
-The browser route `POST /v1/source-segmentation-reviews` requires the HttpOnly browser
-session, same origin, exact request media type, 32 KiB maximum, and unchanged guarded
-source inputs. Bearer authorization alone returns 403. The server assembles and
+The browser route `POST /v1/source-segmentation-reviews` requires the exact loopback
+Origin, exact request media type, 32 KiB maximum, and unchanged guarded source inputs.
+The server assembles and
 independently validates the ZIP in memory, returns `no-store`, and persists nothing.
 CLI validation returns a privacy-minimized summary with no IDs, reviewer identity,
 source text, pixels, paths, hashes, or measurement values. No external API is called.
@@ -345,10 +343,9 @@ ambiguous last-value-wins interpretation.
 In Consult Prep, a person pastes the plan into the viewer. The viewer strictly parses
 the fixed locks, then submits at most 32 KiB with media type
 `application/vnd.scanview.agent-consultation-plan+json` to same-origin,
-browser-session-only `POST /v1/agent-consultation-plans/validate`. The local server
+`POST /v1/agent-consultation-plans/validate`. The local server
 rebuilds and compares the plan against its live catalog and returns only a
-privacy-minimized `no-store` summary. A bearer token without the browser session is
-refused. The viewer then resolves each exact source locally and presents separate
+privacy-minimized `no-store` summary. The viewer then resolves each exact source locally and presents separate
 “Open in Image A” and “Open in Image B” controls.
 
 Nothing opens automatically. Opening an item only navigates the selected native pane
@@ -566,16 +563,15 @@ two validated uint8 binary masks in memory. It guards the comparison and native 
 identities for the lifetime of the process; any change locks the specialized display
 while leaving ordinary native DICOM available.
 
-Bearer-authorized agents may read only
-`GET /v1/lesion-volume-comparison-display`. Its privacy-minimized summary exposes the
+Agents may read `GET /v1/lesion-volume-comparison-display`. Its privacy-minimized summary exposes the
 discussion-only arithmetic, dates-as-elapsed-days, modality, authorization state, and
 explicit false values for registration, spatial overlay, voxelwise localization,
 response, diagnosis, causality, and clinical conclusion. It omits reviewer identity,
 organization, source series/instance IDs, tissue definitions, criteria, hashes, and
 mask bytes.
 
-The full v1 display context and the two verified masks require the separate HttpOnly
-browser session. The context conforms to
+The full v1 display context and the two verified masks are available from the same
+loopback service without browser login. The context conforms to
 `schemas/scanview-native-boundary-display-v1.schema.json`; mask responses are exact
 `application/vnd.scanview.native-binary-mask` bytes with byte-count and SHA-256
 headers. The browser revalidates context semantics, hashes, binary values, foreground
@@ -843,8 +839,8 @@ It never modifies DICOM pixels or geometry; the selected crop center becomes the
 shared patient-space point.
 
 The browser polls and applies each revision once. It alone may post
-`/v1/viewer-control/observation`, using the distinct HttpOnly browser session, exact
-loopback Origin, and the same media type. An applied observation contains command
+`/v1/viewer-control/observation`, using the exact loopback Origin and the same media
+type. An applied observation contains command
 provenance, interaction source (`agent` or `person`), render status, exact series and
 nearest native instance/position, view, tool, and a pinned LPS point. A native command
 must report its exact requested instance. For MPR, the command instance is a source-
@@ -945,7 +941,7 @@ lock, writes with `O_APPEND`, and fsyncs each event. Startup validates the entir
 strict JSONL hash chain. Before routing each covered bearer GET, it appends one v1
 event. A changed, corrupt, concurrently used, over-limit, permission-broadened, or
 unwritable log causes HTTP 503 before the sensitive bearer operation is routed.
-Browser-session reads are not bearer events and remain usable if the optional bearer
+Reads without a bearer are not bearer events and remain usable if the optional bearer
 audit becomes unavailable.
 
 Events conform to `schemas/scanview-agent-access-audit-event-v1.schema.json` and
@@ -953,9 +949,8 @@ contain only sequence, whole-second UTC timestamp, fixed operation class,
 `bearer_authorized_request`, previous-event SHA-256, event SHA-256, and explicit
 local-only/no-content declarations. Fixed classes cover manifest, viewer state,
 comparison candidates, native-boundary summary, registration status, native DICOM
-instance requests, longitudinal readiness, and bearer attempts at browser-only
-boundary/registration context
-or pixels. An event proves that the configured bearer capability authorized a request;
+instance requests, longitudinal readiness, and bearer reads of sensitive local
+boundary/registration context or pixels. An event proves that the configured bearer capability authorized a request;
 it does not claim response delivery or identify a person, process, model, or agent.
 
 The audit never stores the bearer token, HTTP target/URL, query, opaque IDs, filesystem
@@ -1029,12 +1024,10 @@ Generation is not acceptance. The registration bundle remains
 `review-registration` mounts a visibly watermarked browser-capability human preview
 with derived fixed/moving reference, registered, and technical sampling-support
 boundary views, three-plane traversal, four
-comparison modes, landmarks, and physical-point residual tools. A bearer token can read only
-`GET /v1/registration-qa`, a privacy-minimized status. Preview context, allowlisted
-NRRD bytes, and decision POST
-require the distinct HttpOnly browser session; the bearer agent interface cannot
-approve registration. Possession of the separate browser capability is not proof a
-person is present.
+comparison modes, landmarks, and physical-point residual tools. Preview context and
+allowlisted NRRD bytes are available on loopback without browser login; the decision
+POST requires the exact loopback Origin. This local browser boundary is not proof a
+person is present or qualified.
 
 The downloaded v2 review JSON anchors all seven live bundle members, the source manifest
 and transform, fixed/registered/mask geometry, exact mask semantics and counts,
@@ -1074,9 +1067,8 @@ scanview-agent launch '/safe/local/DICOM/root' \
 
 The server creates one strict `reviewed_registration_display_context` only after full
 bundle/review validation, then rechecks review, bundle-directory, and all seven evidence-
-file identities and metadata before every reviewed response. The browser session can fetch exactly `fixed.nrrd`,
-`registered-moving.nrrd`, and `registered-moving-coverage.nrrd`; the bearer interface receives only a privacy-minimized
-authorization summary. The context binds review/event/bundle/manifest/transform/file
+file identities and metadata before every reviewed response. The local display can fetch exactly `fixed.nrrd`,
+`registered-moving.nrrd`, and `registered-moving-coverage.nrrd`. The context binds review/event/bundle/manifest/transform/file
 hashes, source roles/dates, identical geometry, and self-attested reviewer role/training
 without name or organization. Only opacity and swipe are implemented. Native moving,
 subtraction, lesion-mask propagation, segmentation, resampled-image measurements, exports, and response
@@ -1137,24 +1129,22 @@ POST /v1/registration-reviews
 
 There is no source write, overwrite, or delete endpoint. The viewer-control command
 is a bounded bearer-agent memory write and the observation route is a distinct
-same-origin browser-session memory write; neither creates a file or derivative. The
+same-origin browser memory write; neither creates a file or derivative. The
 viewer-state POST is a
-memory-only session publication/clear route: exact loopback Origin, private browser
-session, exact media type, 16 KiB limit, strict fields, catalog validation, publisher
+memory-only session publication/clear route: exact loopback Origin, exact media type,
+16 KiB limit, strict fields, catalog validation, publisher
 revocation, and a 30-second TTL apply. The three evidence POSTs are stateless derivative
 responses with exact ZIP allowlists. Visit input contains `baseline.zip` and
 `followup.zip`; consultation input contains `view-a.zip` and `view-b.zip`; review
 input adds only `comparison.json`. All return
 `application/zip` with `no-store`. Non-health
-agent requests require `Authorization: Bearer <token>`. QA preview, reviewed-registration
-files, native-boundary context/masks, and QA review submission reject bearer-only
-authorization and require the human browser cookie. Reviewed routes exist only for one
+agent control commands require `Authorization: Bearer <token>`. Browser GETs require
+no login; browser writes require the exact loopback Origin. Reviewed routes exist only for one
 startup-validated accepted review;
 the server rechecks the review, bundle directory, and all seven evidence-file identities
 and metadata before each reviewed context or file response.
-The browser receives a
-SameSite, HttpOnly session cookie after a one-time loopback redirect; the token is
-not exposed to viewer JavaScript or retained in the visible URL.
+The browser opens the clean loopback URL directly; no session cookie or secret query
+parameter is created.
 When `--agent-audit-log` is configured, covered bearer GETs are recorded before this
 routing step; an audit failure returns 503 without exposing the requested payload.
 

@@ -384,7 +384,7 @@ def test_cli_writes_owner_only_artifact_and_privacy_minimized_validation(
     assert summary["contains_source_ids"] is False
 
 
-def test_loopback_endpoint_requires_local_authority_and_locks_after_change(
+def test_loopback_endpoint_needs_no_browser_login_and_locks_after_change(
     tmp_path: Path,
 ) -> None:
     pr_path, _ = _write_fixture(tmp_path)
@@ -395,7 +395,7 @@ def test_loopback_endpoint_requires_local_authority_and_locks_after_change(
     port = server.server_port
     try:
         status, _, _ = _http(port, "/v1/presentation-states")
-        assert status == HTTPStatus.UNAUTHORIZED
+        assert status == HTTPStatus.OK
 
         status, headers, body = _http(
             port,
@@ -406,15 +406,9 @@ def test_loopback_endpoint_requires_local_authority_and_locks_after_change(
         assert headers["Cache-Control"] == "no-store"
         assert json.loads(body)["supported_state_count"] == 1
 
-        status, headers, _ = _http(
-            port, f"/?session={server.browser_bootstrap_token}"
-        )
-        assert status == HTTPStatus.SEE_OTHER
-        cookie = headers["Set-Cookie"].split(";", 1)[0]
         status, _, body = _http(
             port,
             "/v1/presentation-states",
-            headers={"Cookie": cookie},
         )
         assert status == HTTPStatus.OK
         assert json.loads(body)["states"][0]["text_count"] == 1
@@ -423,7 +417,6 @@ def test_loopback_endpoint_requires_local_authority_and_locks_after_change(
         status, _, _ = _http(
             port,
             "/v1/presentation-states",
-            headers={"Cookie": cookie},
         )
         assert status == HTTPStatus.CONFLICT
     finally:
