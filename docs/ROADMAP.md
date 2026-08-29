@@ -813,6 +813,24 @@
    1280×720 browser QA. Both Single and 3-plane modes reported document height equal
    to viewport height; all three MPR cards shared identical top/bottom coordinates.
 
+## Completed in the thirty-ninth milestone
+
+1. Replaced the focused viewer's multi-row chrome with one compact toolbar. Removed
+   visible branding, catalog status, duplicate series/date headings, pinned-point
+   rows, MPR instructions, and other layout-consuming text; precise point and local-
+   reconstruction notices remain as small overlays on the image area.
+2. Kept Series, Folder, Single/3-plane, and the active mode's essential display tools
+   together without the former side-panel breakpoint forcing them into separate rows.
+   The image region now begins immediately below the toolbar and retains almost the
+   entire viewport.
+3. Made the focused App the sole display-tool state owner. MPR applies the requested
+   tool directly to Cornerstone instead of echoing local tool changes back through the
+   parent, removing the Crosshairs/Window toggle feedback path.
+4. Passed TypeScript typecheck, all 144 viewer tests, production build, and live
+   1280×720 browser QA. The toolbar measured 40 pixels high, three MPR canvases each
+   measured 649 pixels high, both display modes stayed within one viewport, and tool
+   selections remained stable across multiple control polling intervals.
+
 ## Immediate
 
 1. Use **In-depth review** for one series at a time. Treat the three-plane view as a

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 09:48 PDT
+Last updated: 2026-08-29 10:00 PDT
 
 ## Current handoff
 
@@ -18,6 +18,12 @@ Last updated: 2026-08-29 09:48 PDT
   folder action, and the redundant MPR Close button. **Open folder** now sits directly
   beside the Series selector. Both native and MPR workspaces flex into the remaining
   viewport height; three MPR cards stay in one row with no document scrolling.
+- The latest image-first pass collapses branding, catalog status, duplicated series
+  metadata, pinned-point rows, MPR instructions, and display tools into one 40-pixel
+  toolbar plus small non-layout overlays. At 1280×720 the MPR canvases begin at y=64
+  and occupy the remaining 649 pixels; the document remains exactly one viewport tall.
+  Focused display-tool state now has one owner, removing the parent/child feedback loop
+  that made Crosshairs and Window switch back after a person selected them.
 - A versioned local viewer-control API now separates bearer-agent commands from
   browser-session observations. Codex can select an exact catalog series/instance,
   choose native or MPR, set the display tool, reset, and focus a DICOM LPS point. The
@@ -43,7 +49,9 @@ Last updated: 2026-08-29 09:48 PDT
   screenshot, token, or patient-specific finding was saved to Git.
 - Side-panel browser QA at 1280×720 confirmed one horizontal MPR row, adjacent Series
   and Open-folder controls, both Single and 3-plane transitions, and exact 720-pixel
-  document/viewport heights in both modes.
+  document/viewport heights in both modes. A second live pass held Crosshairs and
+  Window independently through multiple viewer-control polling intervals with exactly
+  one active tool, then left the deliverable viewer in 3-plane/Crosshairs mode.
 - Current code verification passes TypeScript typecheck, 144 viewer tests in 30
   files, the production build, the full Python agent suite, five focused viewer-
   control tests, skill CLI help, and skill-package validation. The known Vite codec

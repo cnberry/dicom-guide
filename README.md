@@ -9,8 +9,9 @@ CT studies over time. It is being built for two audiences at once:
 The current default reads copied DICOM files locally, groups them into studies and
 series, and presents one selected series in a focused Cornerstone3D surface intended
 to stay open in the Codex side panel. It shows either one native pane or three side-by-
-side axial/coronal/sagittal MPR panes. Controls remain deliberately small: Window, Pan,
-Zoom, Reset, slice navigation, point pinning, and the three-plane switch.
+side axial/coronal/sagittal MPR panes. One compact toolbar holds series/folder, view,
+and display controls; point and reconstruction context float over the images instead
+of taking away viewing space.
 
 Conversation stays in Codex instead of being duplicated in the website. A repository
 skill and authenticated loopback control API let Codex read the exact visible series,
@@ -43,8 +44,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 ## Current capabilities
 
 - Focused side-panel single-series interface with one native image pane or three
-  auto-fitting side-by-side MPR panes; no embedded chat, future-mode switch,
-  measurement, export, packet,
+  auto-fitting side-by-side MPR panes beneath one compact toolbar; no embedded chat,
+  future-mode switch, measurement, export, packet,
   readiness, SEG/GSPS, consultation, or legacy agent-state panels appear in the
   default workspace.
 - Versioned, session-only Codex control state with exact opaque series/source identity,
@@ -55,8 +56,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   series, reading active state, opening an exact source in native or MPR view,
   controlling display tools, querying minimized instance metadata, and retrieving an
   exact DICOM object only when local analysis requires it.
-- Separate visible but locked time-comparison mode, with measurement and alignment
-  requirements documented before implementation.
+- Time comparison is absent from the focused UI until its measurement and alignment
+  requirements are implemented and validated.
 - Local folder import; no upload, analytics, fonts, or telemetry.
 - One loopback launcher for the bundled UI, privacy-minimized catalog, protected
   native DICOM bytes, and agent endpoints.

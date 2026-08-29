@@ -1609,32 +1609,18 @@ export default function App({ active = true }: { active?: boolean } = {}) {
 
     return (
       <main className="simple-app">
-        <header className="simple-header">
-          <div className="brand">
-            <div className="brand-mark" aria-hidden="true">
-              SV
-            </div>
-            <div>
-              <h1>ScanView</h1>
-            </div>
-          </div>
-          <input
-            ref={inputRef}
-            className="hidden-input"
-            type="file"
-            multiple
-            // Supported by current Chromium and Safari; React's type omits the attribute.
-            {...({ webkitdirectory: '' } as Record<string, string>)}
-            onChange={(event) => void chooseFiles(event.target.files)}
-          />
-        </header>
-
-        <div className="simple-sourcebar">
-          <span>
-            <i className={`status-dot ${series.length ? 'ready' : ''}`} />
-            {sourceStatus}
-          </span>
-          <span>{viewerControlMessage}</span>
+        <h1 className="sr-only">ScanView</h1>
+        <input
+          ref={inputRef}
+          className="hidden-input"
+          type="file"
+          multiple
+          // Supported by current Chromium and Safari; React's type omits the attribute.
+          {...({ webkitdirectory: '' } as Record<string, string>)}
+          onChange={(event) => void chooseFiles(event.target.files)}
+        />
+        <div className="sr-only" aria-live="polite">
+          {sourceStatus}. {viewerControlMessage}
         </div>
 
         <div className="simple-workspace">
@@ -1668,8 +1654,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                         setMeasurementComparisonDraft(undefined);
                       }}
                     />
-                    <button className="import-button" onClick={openFolder}>
-                      Open folder
+                    <button className="import-button" aria-label="Open folder" onClick={openFolder}>
+                      Folder
                     </button>
                   </div>
                   <div className="simple-control-groups">
@@ -1708,30 +1694,59 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                         3-plane
                       </button>
                     </div>
-                    {!mprEligibility.eligible && (
-                      <span className="mpr-unavailable">3-plane unavailable: {mprEligibility.reason}</span>
-                    )}
                     {!mprSeries && (
                       <div className="simple-tools" aria-label="Image tools">
-                      {(
-                        [
-                          ['window', 'Window'],
-                          ['pan', 'Pan'],
-                          ['zoom', 'Zoom'],
-                        ] as const
-                      ).map(([tool, label]) => (
+                        {(
+                          [
+                            ['window', 'Window'],
+                            ['pan', 'Pan'],
+                            ['zoom', 'Zoom'],
+                          ] as const
+                        ).map(([tool, label]) => (
+                          <button
+                            key={tool}
+                            className={activeTool === tool ? 'active' : ''}
+                            aria-pressed={activeTool === tool}
+                            onClick={() => {
+                              notePersonInteraction();
+                              setActiveTool(tool);
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
                         <button
-                          key={tool}
-                          className={activeTool === tool ? 'active' : ''}
-                          aria-pressed={activeTool === tool}
                           onClick={() => {
                             notePersonInteraction();
-                            setActiveTool(tool);
+                            setResetNonce((value) => value + 1);
                           }}
                         >
-                          {label}
+                          Reset
                         </button>
-                      ))}
+                      </div>
+                    )}
+                    {mprSeries && (
+                      <div className="simple-tools" aria-label="3-plane tools">
+                        {(
+                          [
+                            ['crosshairs', 'Crosshairs'],
+                            ['window', 'Window'],
+                            ['pan', 'Pan'],
+                            ['zoom', 'Zoom'],
+                          ] as const
+                        ).map(([tool, label]) => (
+                          <button
+                            key={tool}
+                            className={mprTool === tool ? 'active' : ''}
+                            aria-pressed={mprTool === tool}
+                            onClick={() => {
+                              notePersonInteraction();
+                              setMprTool(tool);
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
                         <button
                           onClick={() => {
                             notePersonInteraction();
@@ -1745,25 +1760,21 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                   </div>
                 </div>
 
-                <div className="pinned-point-bar" aria-live="polite">
-                  <span>
-                    {patientPoint
-                      ? `Pinned · ${formatMprPatientPoint(patientPoint)} LPS`
-                      : mprSeries
-                        ? 'Crosshairs will publish one persistent patient-space point.'
-                        : 'Click the image to pin a point for Codex.'}
-                  </span>
-                  {patientPoint && !mprSeries && (
-                    <button
-                      onClick={() => {
-                        notePersonInteraction();
-                        setPatientPoint(undefined);
-                      }}
-                    >
-                      Clear point
-                    </button>
-                  )}
-                </div>
+                {patientPoint && (
+                  <div className="simple-point-overlay" aria-live="polite">
+                    <span>{formatMprPatientPoint(patientPoint)} LPS</span>
+                    {!mprSeries && (
+                      <button
+                        onClick={() => {
+                          notePersonInteraction();
+                          setPatientPoint(undefined);
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {mprSeries ? (
                   <MprPanel
@@ -1773,7 +1784,6 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     requestedPatientPoint={requestedMprPoint}
                     requestedTool={mprTool}
                     resetNonce={resetNonce}
-                    onToolChange={setMprTool}
                     onRenderStatusChange={setViewerRenderStatus}
                     onPersonInteraction={notePersonInteraction}
                     controlRevision={appliedAgentCommand?.revision}

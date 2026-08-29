@@ -42,7 +42,6 @@ type Props = {
   requestedTool?: Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom'>;
   resetNonce?: number;
   onRenderStatusChange?: (status: 'loading' | 'ready' | 'error') => void;
-  onToolChange?: (tool: Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom'>) => void;
   onPersonInteraction?: () => void;
   controlRevision?: number;
 };
@@ -114,7 +113,6 @@ export function MprPanel({
   requestedTool,
   resetNonce = 0,
   onRenderStatusChange,
-  onToolChange,
   onPersonInteraction,
   controlRevision,
 }: Props) {
@@ -130,8 +128,6 @@ export function MprPanel({
   requestedToolRef.current = requestedTool;
   const renderStatusChangeRef = useRef(onRenderStatusChange);
   renderStatusChangeRef.current = onRenderStatusChange;
-  const toolChangeRef = useRef(onToolChange);
-  toolChangeRef.current = onToolChange;
   const [activeTool, setActiveTool] = useState<MprTool>('crosshairs');
   const activeToolRef = useRef<MprTool>('crosshairs');
   activeToolRef.current = activeTool;
@@ -178,7 +174,7 @@ export function MprPanel({
   }, [patientPoint]);
 
   useEffect(() => {
-    if (requestedTool) setActiveTool(requestedTool);
+    if (requestedTool) controllerRef.current?.setPrimaryTool(requestedTool);
   }, [requestedTool]);
 
   useEffect(() => {
@@ -303,11 +299,6 @@ export function MprPanel({
 
   useEffect(() => {
     controllerRef.current?.setPrimaryTool(activeTool);
-    if (['crosshairs', 'window', 'pan', 'zoom'].includes(activeTool)) {
-      toolChangeRef.current?.(
-        activeTool as Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom'>,
-      );
-    }
   }, [activeTool]);
 
   useEffect(() => {
@@ -450,51 +441,6 @@ export function MprPanel({
   if (simple) {
     return (
       <section className="mpr-panel simple-mpr" aria-label={`3-plane view for ${series.description}`}>
-        <div className="mpr-heading">
-          <div>
-            <span className="eyebrow">3-plane view</span>
-            <h2>{series.description}</h2>
-            <p>
-              {formatDicomDate(series.acquisitionDate)} · {series.modality} ·{' '}
-              {series.instances.length} slices
-            </p>
-          </div>
-          <div className="mpr-actions" aria-label="3-plane tools">
-            {(
-              [
-                ['crosshairs', 'Crosshairs'],
-                ['window', 'Window'],
-                ['pan', 'Pan'],
-                ['zoom', 'Zoom'],
-              ] as const
-            ).map(([tool, label]) => (
-              <button
-                key={tool}
-                className={activeTool === tool ? 'active' : ''}
-                aria-pressed={activeTool === tool}
-                disabled={Boolean(status)}
-                onClick={() => {
-                  onPersonInteraction?.();
-                  setActiveTool(tool);
-                }}
-              >
-                {label}
-              </button>
-            ))}
-            <button
-              disabled={Boolean(status)}
-              onClick={() => {
-                onPersonInteraction?.();
-                controllerRef.current?.reset();
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-        <div className="mpr-link-note">
-          Click any view to move the shared point · local reconstruction, not aligned.
-        </div>
         <div className="mpr-grid">
           {orientationLabels.map(({ id, label }) => (
             <article className="mpr-viewport-card" key={id}>
@@ -511,6 +457,7 @@ export function MprPanel({
             </article>
           ))}
         </div>
+        <span className="simple-mpr-note">Local MPR · not aligned</span>
       </section>
     );
   }
