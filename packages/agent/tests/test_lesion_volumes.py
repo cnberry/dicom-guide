@@ -12,12 +12,14 @@ from pydicom import dcmread
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.sequence import Sequence
 from pydicom.uid import (
+    CTImageStorage,
     ExplicitVRLittleEndian,
     MRImageStorage,
     SegmentationStorage,
     generate_uid,
 )
 
+from scanview_agent.catalog import opaque_id
 from scanview_agent.lesion_volumes import lesion_volume_archive_summary
 from scanview_agent.lesion_volume_reviews import (
     ATTESTATION as REVIEW_ATTESTATION,
@@ -46,21 +48,29 @@ def _write_source(
     frame_uid: str,
     sop_uid: str,
     position: float,
+    acquisition_date: str | None = None,
+    patient_id: str = "SYNTHETIC",
+    modality: str = "MR",
 ) -> None:
+    source_sop_class = MRImageStorage if modality == "MR" else CTImageStorage
     meta = FileMetaDataset()
-    meta.MediaStorageSOPClassUID = MRImageStorage
+    meta.MediaStorageSOPClassUID = source_sop_class
     meta.MediaStorageSOPInstanceUID = sop_uid
     meta.TransferSyntaxUID = ExplicitVRLittleEndian
     dataset = FileDataset(path.name, {}, file_meta=meta, preamble=b"\0" * 128)
     dataset.is_little_endian = True
     dataset.is_implicit_VR = False
-    dataset.SOPClassUID = MRImageStorage
+    dataset.SOPClassUID = source_sop_class
     dataset.SOPInstanceUID = sop_uid
     dataset.StudyInstanceUID = study_uid
     dataset.SeriesInstanceUID = series_uid
     dataset.FrameOfReferenceUID = frame_uid
-    dataset.PatientID = "SYNTHETIC"
-    dataset.Modality = "MR"
+    dataset.PatientID = patient_id
+    if acquisition_date is not None:
+        dataset.StudyDate = acquisition_date
+        dataset.SeriesDate = acquisition_date
+        dataset.AcquisitionDate = acquisition_date
+    dataset.Modality = modality
     dataset.Rows = 8
     dataset.Columns = 8
     dataset.PixelSpacing = [0.5, 0.75]
@@ -99,7 +109,10 @@ def _write_seg(
     artifact_id: str,
     tracking_uid: str,
     label: str,
+    foreground_voxels: int = 3,
+    source_modality: str = "MR",
 ) -> bytes:
+    source_sop_class = MRImageStorage if source_modality == "MR" else CTImageStorage
     sop_uid = generate_uid()
     meta = FileMetaDataset()
     meta.MediaStorageSOPClassUID = SegmentationStorage
@@ -162,7 +175,7 @@ def _write_seg(
         group.PlanePositionSequence = Sequence([plane])
         derivation = Dataset()
         source = Dataset()
-        source.ReferencedSOPClassUID = MRImageStorage
+        source.ReferencedSOPClassUID = source_sop_class
         source.ReferencedSOPInstanceUID = source_uids[source_index]
         source.PurposeOfReferenceCodeSequence = Sequence(
             [_code("121322", "Source Image for Image Processing Operation", "DCM")]
@@ -180,7 +193,7 @@ def _write_seg(
     referenced_series.ReferencedInstanceSequence = Sequence([])
     for source_uid in source_uids:
         reference = Dataset()
-        reference.ReferencedSOPClassUID = MRImageStorage
+        reference.ReferencedSOPClassUID = source_sop_class
         reference.ReferencedSOPInstanceUID = source_uid
         referenced_series.ReferencedInstanceSequence.append(reference)
     dataset.ReferencedSeriesSequence = Sequence([referenced_series])
@@ -190,22 +203,41 @@ def _write_seg(
     first[1] = 1
     third = bytearray(64)
     third[2] = 1
+    if foreground_voxels == 4:
+        third[3] = 1
     dataset.PixelData = _pack_frames([bytes(first), bytes(third)])
     dataset.save_as(path, enforce_file_format=True)
     return path.read_bytes()
 
 
-def _build_bundle(tmp_path: Path, positions: list[float] | None = None) -> tuple[Path, Path, dict]:
-    source_root = tmp_path / "source"
-    source_root.mkdir()
+def _build_bundle(
+    tmp_path: Path,
+    positions: list[float] | None = None,
+    *,
+    source_root: Path | None = None,
+    source_prefix: str = "source",
+    acquisition_date: str | None = None,
+    instance_acquisition_dates: list[str | None] | None = None,
+    patient_id: str = "SYNTHETIC",
+    use_catalog_ids: bool = False,
+    artifact_id: str = "seg_12345678-1234-4abc-8def-1234567890ab",
+    foreground_voxels: int = 3,
+    modality: str = "MR",
+) -> tuple[Path, Path, dict]:
+    if foreground_voxels not in {3, 4}:
+        raise ValueError("synthetic helper supports three or four foreground voxels")
+    source_root = source_root or tmp_path / "source"
+    source_root.mkdir(exist_ok=True)
     positions = positions or [0.0, 2.0, 4.0]
     study_uid = generate_uid()
     series_uid = generate_uid()
     frame_uid = generate_uid()
     source_uids = [generate_uid() for _ in range(3)]
+    if instance_acquisition_dates is not None and len(instance_acquisition_dates) != 3:
+        raise ValueError("synthetic helper requires exactly three instance dates")
     source_items = []
     for index, (sop_uid, position) in enumerate(zip(source_uids, positions, strict=True)):
-        path = source_root / f"source-{index}.dcm"
+        path = source_root / f"{source_prefix}-{index}.dcm"
         _write_source(
             path,
             study_uid=study_uid,
@@ -213,12 +245,23 @@ def _build_bundle(tmp_path: Path, positions: list[float] | None = None) -> tuple
             frame_uid=frame_uid,
             sop_uid=sop_uid,
             position=position,
+            acquisition_date=(
+                instance_acquisition_dates[index]
+                if instance_acquisition_dates is not None
+                else acquisition_date
+            ),
+            patient_id=patient_id,
+            modality=modality,
         )
         payload = path.read_bytes()
         source_items.append(
             {
                 "frame_index": index,
-                "instance_id": f"{index + 1:016x}",
+                "instance_id": (
+                    opaque_id("instance", sop_uid)
+                    if use_catalog_ids
+                    else f"{index + 1:016x}"
+                ),
                 "bytes": len(payload),
                 "sha256": _sha256(payload),
                 "rows": 8,
@@ -229,7 +272,6 @@ def _build_bundle(tmp_path: Path, positions: list[float] | None = None) -> tuple
             }
         )
 
-    artifact_id = "seg_12345678-1234-4abc-8def-1234567890ab"
     tracking_uid = generate_uid()
     label = "Reviewer-defined region"
     seg_path = tmp_path / "segmentation.dcm"
@@ -243,11 +285,15 @@ def _build_bundle(tmp_path: Path, positions: list[float] | None = None) -> tuple
         artifact_id=artifact_id,
         tracking_uid=tracking_uid,
         label=label,
+        foreground_voxels=foreground_voxels,
+        source_modality=modality,
     )
     dense = bytearray(8 * 8 * 3)
     dense[0] = 1
     dense[1] = 1
     dense[2 * 64 + 2] = 1
+    if foreground_voxels == 4:
+        dense[2 * 64 + 3] = 1
     source_lines = [
         f"{item['frame_index']}:{item['instance_id']}:{item['bytes']}:{item['sha256']}"
         for item in source_items
@@ -264,11 +310,21 @@ def _build_bundle(tmp_path: Path, positions: list[float] | None = None) -> tuple
         "sensitive": True,
         "deidentified": False,
         "source": {
-            "patient_context_id": "0000000000000004",
-            "study_id": "0000000000000001",
-            "series_id": "0000000000000002",
-            "frame_of_reference_id": "0000000000000003",
-            "modality": "MR",
+            "patient_context_id": (
+                opaque_id("patient", f"id-issuer::{patient_id}")
+                if use_catalog_ids
+                else "0000000000000004"
+            ),
+            "study_id": (
+                opaque_id("study", study_uid) if use_catalog_ids else "0000000000000001"
+            ),
+            "series_id": (
+                opaque_id("series", series_uid) if use_catalog_ids else "0000000000000002"
+            ),
+            "frame_of_reference_id": (
+                opaque_id("frame", frame_uid) if use_catalog_ids else "0000000000000003"
+            ),
+            "modality": modality,
             "instance_count": 3,
             "instances": source_items,
             "source_set_sha256": _sha256(("\n".join(source_lines) + "\n").encode()),
@@ -302,9 +358,9 @@ def _build_bundle(tmp_path: Path, positions: list[float] | None = None) -> tuple
         "measurement": {
             "status": "computed_unreviewed",
             "method": "binary_voxel_count_times_native_voxel_determinant",
-            "foreground_voxel_count": 3,
-            "volume_mm3": 3 * voxel_volume,
-            "volume_ml": 3 * voxel_volume / 1000,
+            "foreground_voxel_count": foreground_voxels,
+            "volume_mm3": foreground_voxels * voxel_volume,
+            "volume_ml": foreground_voxels * voxel_volume / 1000,
             "mask_pixel_sha256": _sha256(bytes(dense)),
             "boundary_uncertainty": "not_quantified",
         },
@@ -334,7 +390,7 @@ def _build_bundle(tmp_path: Path, positions: list[float] | None = None) -> tuple
             "Acquisition and boundary differences can change a future measurement.",
         ],
     }
-    archive = tmp_path / "lesion-volume.zip"
+    archive = tmp_path / f"{source_prefix}-lesion-volume.zip"
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         bundle.writestr("evidence.json", json.dumps(evidence, indent=2) + "\n")
         bundle.writestr("segmentation.dcm", seg_bytes)
@@ -568,8 +624,11 @@ def _build_review_bundle(
     tmp_path: Path,
     *,
     decision: str = "accepted_for_discussion",
+    evidence_bundle: tuple[Path, Path, dict] | None = None,
+    review_id: str = "review_12345678-1234-4abc-8def-1234567890ab",
+    output_name: str = "lesion-volume-review.zip",
 ) -> tuple[Path, Path, dict, dict]:
-    evidence_archive, source_root, evidence = _build_bundle(tmp_path)
+    evidence_archive, source_root, evidence = evidence_bundle or _build_bundle(tmp_path)
     evidence_bytes = evidence_archive.read_bytes()
     accepted = decision == "accepted_for_discussion"
     visible_decision = decision.replace("_", " ")
@@ -597,7 +656,7 @@ def _build_review_bundle(
     record = {
         "schema_version": "1.0.0",
         "artifact_type": "scanview.lesion-volume-review",
-        "review_id": "review_12345678-1234-4abc-8def-1234567890ab",
+        "review_id": review_id,
         "created_at": "2026-08-28T13:00:00.000Z",
         "review_status": decision,
         "local_only": True,
@@ -663,7 +722,7 @@ def _build_review_bundle(
         },
         "limitations": REVIEW_LIMITATIONS,
     }
-    review_archive = tmp_path / "lesion-volume-review.zip"
+    review_archive = tmp_path / output_name
     with zipfile.ZipFile(review_archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         bundle.writestr("review.json", json.dumps(record, indent=2) + "\n")
         bundle.writestr("evidence.zip", evidence_bytes)

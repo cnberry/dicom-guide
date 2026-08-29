@@ -191,6 +191,7 @@ def _read_instance(path: Path, root: Path, *, include_hashes: bool, salt: str) -
             getattr(dataset, "ImageOrientationPatient", None)
         ),
         "number_of_frames": _int(getattr(dataset, "NumberOfFrames", None)) or 1,
+        "acquisition_date": acquisition_date,
         "header": {
             "patient_context_id": _patient_context_id(dataset, study_uid, salt),
             "acquisition_date": acquisition_date,

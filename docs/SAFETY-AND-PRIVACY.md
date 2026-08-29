@@ -40,7 +40,9 @@ quality-system, and regulatory review.
 - The derivative POSTs are not external DICOM-processing dependencies. They accept
   only exact bounded ZIP transports from the exact loopback origin. Visit input has
   two derived timepoint key-image ZIPs; consultation input has one neutral MR and one
-  neutral CT key-image ZIP; review input adds one normalized comparison JSON.
+  neutral CT key-image ZIP; review input adds one normalized comparison JSON; reviewed
+  volume-comparison input has two complete boundary-review ZIPs and one strict pairing
+  request. The latter is also joined to the current local catalog and source root.
   Compressed and uncompressed size limits, duplicate/extra/encrypted-member refusal,
   recursive in-memory validation, and `no-store` responses apply. No server-side
   patient file is created.
@@ -87,6 +89,17 @@ quality-system, and regulatory review.
   source, mask, snapshot, file, HTML-safety, or permission change fails closed. Even
   a valid accepted review cannot link timepoints, compute change, classify response,
   diagnose, or create a clinical conclusion.
+- A reviewed manual ROI volume comparison is a separate sensitive five-file archive.
+  It cannot be created from masks alone: each timepoint must already have a complete
+  accepted boundary review, and a person must separately attest same-lesion identity,
+  same represented tissue, chronology, acquisition/boundary comparability,
+  registration consideration, and eight pairing-review checks. The server derives
+  consistent per-series dates from the live local catalog and recursively revalidates
+  both nested DICOM SEG/source chains. Accepted output exposes transparent reviewed
+  volume arithmetic only. Boundary uncertainty remains unquantified; spatial overlay,
+  voxelwise localization, response/progression classification, treatment causality,
+  diagnosis, clinical conclusion, and medical-record sign-off remain false. Any
+  rejection, revision, malformed input, or changed source withholds all numeric values.
 - Rigid registration invokes a version-gated local Slicer 5.12.3/BRAINSFit process.
   The release computed revision is 34627; the enforced runtime repository revision is
   `9034c71`. The official macOS package and this host's installed copy were
@@ -233,8 +246,12 @@ are established.
 - A separate accepted boundary review can document what a self-attested qualified
   reviewer intended to include at one timepoint. It does not make the software or
   volume clinically validated, authenticate that person, prove the represented tissue,
-  or establish the same target on a later scan. A future comparison must validate two
-  exact accepted records and perform a new explicit cross-timepoint linkage review.
+  or establish the same target on a later scan.
+- The implemented reviewed volume-comparison artifact validates two exact accepted
+  records and requires a new explicit cross-timepoint linkage review. Its numerical
+  difference may still reflect boundary choices, acquisition/contrast, motion,
+  partial-volume effects, edema, necrosis, resection cavity, treatment effect, or
+  other non-tumor-burden factors. It is not a response criterion or causal conclusion.
 
 ## Agent output contract
 
@@ -267,6 +284,16 @@ The lesion-volume-review validator may repeat the nested
 Agents must pair it with `identity_verification: self_asserted_unverified` and
 `evidence_use: single_timepoint_reviewed_for_discussion_only`. They must not shorten
 that state to “clinically reviewed,” “approved tumor volume,” or “response evidence.”
+
+The lesion-volume-comparison validator may report reviewed baseline/follow-up volumes,
+arithmetic absolute/percentage change, numeric direction, and elapsed days only when
+both complete review/evidence/source chains validate and the explicit pairing decision
+is `accepted_for_volume_change_discussion`. Agents must preserve the phrases
+“reviewed manual volume arithmetic” and “for discussion only,” plus
+`identity_verification: self_asserted_unverified`. They must not call it tumor response,
+progression, regression, treatment effect, tumor burden, spatial change, clinical
+validation, or sign-off. Every invalid/non-accepted state has `evidence_use: none` and
+null numeric fields.
 
 The browser pairing editor uses the same constraints and requires strictly ordered
 acquisition dates, a human-selected measurement at each timepoint, and a bounded

@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.3.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.4.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -24,8 +24,9 @@ DICOM catalog is built. The launched agent interface is the same loopback bearer
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
 corruption evidence only, not publisher or clinical identity authentication. The
-exact v0.3.0 artifact has passed no-index install, runtime, synthetic source-bound SEG
-and qualified boundary-review validation, source-tamper refusal, and loopback launch
+exact v0.4.0 artifact has passed no-index install, runtime, synthetic source-bound SEG,
+qualified boundary-review, and reviewed volume-comparison validation, source-tamper
+refusal, and loopback launch
 on macOS arm64 and Strawberry Linux x86_64; signing/notarization remains pending.
 
 ## Local artifacts
@@ -196,7 +197,7 @@ file hashes, a script/external-resource/event-handler-free static page, exact
 source-snapshot equality, and the complete nested source/geometry/mask/arithmetic
 validation. `accepted_for_discussion` additionally requires suitable acquisition,
 all checklist values, and a non-missing opaque patient context. It permits only
-`reviewed_volume_for_discussion` and eligibility as input to a future separate pairing
+`reviewed_volume_for_discussion` and eligibility as input to the separate pairing
 review. It never grants longitudinal linkage, percentage change, response
 classification, diagnosis, clinical conclusion, identity authentication, or
 medical-record sign-off. Invalid evidence returns no volume and `evidence_use: none`.
@@ -204,6 +205,55 @@ medical-record sign-off. Invalid evidence returns no volume and `evidence_use: n
 The privacy-minimized summary omits reviewer name, organization, tissue definition,
 criteria, notes, source IDs, and hashes. The full ZIP remains sensitive and
 patient-identifiable and must stay local.
+
+## Reviewed manual ROI volume-comparison archives
+
+This is a second review boundary, not an automatic operation on two accepted masks.
+It consumes exactly two independently accepted boundary-review ZIPs plus one strict
+`scanview.lesion-volume-comparison-request` record. The exact local root containing
+both source series is mandatory:
+
+```bash
+scanview-agent assemble-lesion-volume-comparison \
+  baseline-boundary-review.zip followup-boundary-review.zip pairing-request.json \
+  '/safe/local/DICOM/root' --output reviewed-volume-comparison.zip
+scanview-agent validate-lesion-volume-comparison \
+  reviewed-volume-comparison.zip '/safe/local/DICOM/root'
+```
+
+Both reviews must share one opaque patient context and modality but have distinct
+studies, series, evidence IDs, and review IDs. ScanView builds a fresh live catalog,
+requires every instance in each reviewed series to share one DICOM date, and requires
+baseline before follow-up. Person-entered dates are not request fields. The reviewer
+records same-lesion identity, same represented tissue, chronology,
+acquisition/boundary comparability, registration consideration, eight explicit review
+checks, a decision, and the fixed attestation. Reviewer name, role, and organization
+are self-asserted and not authenticated. Accepted review requires confirmed identity,
+tissue, and chronology; suitable or suitable-with-limitations comparability; every
+check; and a note whenever comparability or registration uncertainty exists.
+
+The output conforms to
+`schemas/scanview-lesion-volume-comparison-review-v1.schema.json` and has exactly:
+
+- `comparison.json`;
+- `baseline-review.zip` and `followup-review.zip`;
+- regenerated script-free `review.html`;
+- `README.txt`.
+
+Validation requires exact member shape, strict duplicate-key-free JSON, schema and
+cross-field semantics, hash/size anchors, exact regenerated page bytes, both complete
+nested review/evidence archives, and every original source byte. The minimized summary
+reveals reviewed baseline/follow-up volumes, arithmetic absolute and percentage change,
+numeric direction, and elapsed days only for a valid
+`accepted_for_volume_change_discussion` record. It omits IDs, hashes, tissue definitions,
+reviewer fields, and notes. Any revision, rejection, malformed record, or source change
+sets every numeric field to null and `evidence_use: none`.
+
+This contract performs transparent volume arithmetic only. It never authorizes a
+spatial overlay, voxelwise localization, biological tumor-burden interpretation,
+progression/response classification, treatment causality, diagnosis, clinical
+conclusion, or medical-record sign-off. The manual-boundary uncertainty remains
+unquantified.
 
 ## Clinician consultation-packet archives
 

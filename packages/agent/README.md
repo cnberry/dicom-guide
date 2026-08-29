@@ -17,6 +17,11 @@ scanview-agent validate-lesion-volume \
   '/path/to/scanview-lesion-volume.zip' '/path/to/copied/DICOM'
 scanview-agent validate-lesion-volume-review \
   '/path/to/scanview-lesion-volume-review.zip' '/path/to/copied/DICOM'
+scanview-agent assemble-lesion-volume-comparison \
+  baseline-boundary-review.zip followup-boundary-review.zip pairing-request.json \
+  '/path/to/copied/DICOM' --output reviewed-volume-comparison.zip
+scanview-agent validate-lesion-volume-comparison \
+  reviewed-volume-comparison.zip '/path/to/copied/DICOM'
 scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
   --output scanview-visit-packet.zip
 scanview-agent validate-visit-packet scanview-visit-packet.zip
@@ -67,15 +72,18 @@ For offline transfer and installation on macOS or Linux, run
 wheel, pinned pure-Python `pydicom` 3.0.2, hash-locked local requirements, and
 verifier/install/launch scripts. The installer invokes pip only with `--no-index` and
 `--require-hashes`, and every launch checks the bundle and installed runtime before
-indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.3.0 bundle has passed
-offline install, runtime checks, source-bound boundary-review validation, tamper
-refusal, and loopback launch on both macOS arm64 and Strawberry Linux x86_64;
+indexing DICOM. Python 3.11+ remains a prerequisite. The exact v0.4.0 bundle has passed
+offline install, runtime checks, source-bound boundary-review and reviewed volume-
+comparison validation, tamper refusal, and loopback launch on both macOS arm64 and
+Strawberry Linux x86_64;
 publisher signing remains pending.
 The server has no source-write or delete endpoint. The unified viewer's derivative
 POSTs accept exact bounded transports: two timepoint key-image bundles for a visit
 packet, one neutral MRI plus one neutral CT key-image bundle for a consultation
 packet, or the timepoint bundles plus one normalized comparison for a comparison-
-review packet. All recursively assemble and revalidate in memory, return `no-store`,
+review packet. The reviewed volume-comparison route accepts exactly two complete
+boundary-review ZIPs plus one strict pairing request and revalidates them against the
+live source root. All recursively assemble and revalidate in memory, return `no-store`,
 and create no server-side patient file. Measurement validation returns only validity, schema,
 review state, count, and errors; it does not echo source identifiers, coordinates,
 or values. Comparison requires explicit tracking IDs from distinct source series and
@@ -129,10 +137,33 @@ boundary-review archive against the exact local DICOM root. It recursively reval
 the nested source-bound evidence and DICOM SEG, verifies the script-free review page
 and exact visible record, and enforces the fixed review decision and permission locks.
 An accepted record can permit discussion of that reviewed boundary and eligibility
-for a future pairing review only. Reviewer identity is always self-asserted and
+for the separate pairing review only. Reviewer identity is always self-asserted and
 unverified; longitudinal linkage, percent change, response classification, diagnosis,
 and clinical conclusion remain false. Invalid or changed source evidence withholds
 the volume and fails closed with `evidence_use: none`.
+
+`assemble-lesion-volume-comparison` is the separate cross-timepoint pairing-review
+transition. It accepts exactly two complete `accepted_for_discussion` boundary-review
+ZIPs, one strict pairing request, and the exact local DICOM root. It requires one
+matching opaque patient context and modality, distinct studies/series/reviews/evidence,
+and live catalog dates that establish baseline before follow-up. Every source instance
+in each reviewed series must agree on that date. The request records self-attested
+qualified role, same-lesion and same-tissue judgments, chronology,
+acquisition/boundary comparability, registration consideration, eight checklist
+values, notes, decision, and the fixed attestation.
+
+An `accepted_for_volume_change_discussion` decision fails closed until all pairing
+gates are complete. The five-member output contains `comparison.json`, both exact
+review ZIPs, a regenerated script-free `review.html`, and `README.txt`.
+`validate-lesion-volume-comparison` recursively reopens both reviews, their DICOM SEG
+evidence, and every live source object, then checks hashes, strict JSON/schema/archive
+shape, chronology, and exact page bytes. Only a valid accepted record exposes reviewed
+baseline/follow-up volumes, arithmetic absolute/percentage change, numeric direction,
+and elapsed days in its privacy-minimized summary. Rejection, revision, malformed
+input, or any source change returns null numeric values and `evidence_use: none`.
+Spatial overlay, voxelwise localization, response classification, treatment causality,
+diagnosis, clinical conclusion, identity authentication, and medical-record sign-off
+remain false in every state; boundary uncertainty remains unquantified.
 
 `viewer-link` creates a versioned, sensitive local navigation intent from exact
 opaque catalog IDs. It verifies series/instance membership, permits only a plain

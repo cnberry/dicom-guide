@@ -48,6 +48,13 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   visible. The four-file archive embeds the exact DICOM SEG evidence and a printable
   page; independent validation reopens both the nested evidence and original source
   bytes. Acceptance means discussion-only and still cannot link scans or compute response.
+- Reviewed manual ROI volume comparisons: two separately accepted boundary-review
+  archives can be joined only after an explicit qualified pairing review confirms the
+  same lesion, same represented tissue, DICOM chronology, acquisition/boundary
+  comparability, and registration need. The five-file archive recursively revalidates
+  both DICOM SEG objects and every original source byte before exposing transparent
+  volume arithmetic. It never classifies response, attributes change to treatment,
+  localizes voxelwise change, diagnoses, or signs a medical record.
 - Window/level, pan, zoom, reset, DICOM patient-orientation labels, and manual
   length/bidirectional/elliptical ROI measurement tools.
 - Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
@@ -115,8 +122,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   clinical conclusion—and native DICOM remains authoritative.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
-- Versioned measurement, key-image, manual ROI volume, manual ROI review, consultation-key-image,
-  consultation-packet, comparison, visit-packet, review-record,
+- Versioned measurement, key-image, manual ROI volume, manual ROI review, manual ROI
+  volume-comparison review, consultation-key-image, consultation-packet, comparison, visit-packet, review-record,
   navigation-intent, viewer-state, rigid-registration, and registration-QA JSON
   Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
@@ -156,8 +163,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.3.0.zip
-cd scanview-offline-0.3.0
+unzip release/scanview-offline-0.4.0.zip
+cd scanview-offline-0.4.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -213,6 +220,11 @@ python3 -m venv .venv
   '/path/to/scanview-lesion-volume.zip' '/path/to/copied/DICOM'
 .venv/bin/scanview-agent validate-lesion-volume-review \
   '/path/to/scanview-lesion-volume-review.zip' '/path/to/copied/DICOM'
+.venv/bin/scanview-agent assemble-lesion-volume-comparison \
+  baseline-boundary-review.zip followup-boundary-review.zip pairing-request.json \
+  '/path/to/copied/DICOM' --output reviewed-volume-comparison.zip
+.venv/bin/scanview-agent validate-lesion-volume-comparison \
+  reviewed-volume-comparison.zip '/path/to/copied/DICOM'
 .venv/bin/scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
   --output scanview-visit-packet.zip
 .venv/bin/scanview-agent validate-visit-packet scanview-visit-packet.zip
@@ -264,6 +276,8 @@ The server exposes:
 - `POST /v1/visit-packets` (same-origin browser session; in-memory derivative only)
 - `POST /v1/consultation-packets` (same-origin browser session; in-memory derivative only)
 - `POST /v1/comparison-reviews` (same-origin browser session; in-memory derivative only)
+- `POST /v1/lesion-volume-comparisons` (same-origin browser session; recursive source
+  validation; in-memory derivative only)
 - `POST /v1/registration-reviews` (same-origin human browser; one in-memory JSON response)
 
 All endpoints except health require authentication. The unified browser uses a
@@ -276,8 +290,11 @@ the latest 30-second publication in memory. Visit-packet
 input contains only the two timepoint key-image archives. Consultation input contains
 only two neutral MR/CT key-image archives. Comparison-review input
 contains those same two archives plus the current normalized comparison JSON; the
-server builds the nested visit packet and review archive entirely in memory. Every
-route returns `no-store` and creates no server-side file. There is no source mutation
+server builds the nested visit packet and review archive entirely in memory. Lesion-
+volume-comparison input contains only two complete boundary-review ZIPs and one
+strict pairing request; the server joins them to the current source catalog and
+recursively revalidates their nested DICOM SEG and original DICOM bytes in memory.
+Every route returns `no-store` and creates no server-side file. There is no source mutation
 or deletion endpoint.
 The server refuses non-loopback bind addresses. This loopback interface is part of
 the offline local application, not an external processing API.
@@ -604,7 +621,47 @@ Validation reopens the nested DICOM SEG evidence, rehashes every source object, 
 the review/page/file bindings, and withholds the volume if anything changed. Even an
 accepted record authorizes only one-timepoint boundary and volume discussion; lesion
 linkage, longitudinal change, percentage change, response classification, diagnosis,
-and clinical conclusions remain false and require a later separate pairing review.
+and clinical conclusions remain false until the separate pairing review below—and
+response/diagnostic conclusions remain false even after that review.
+
+## Pair two accepted manual ROI boundaries
+
+This path is available only for two same-modality scans from the same opaque patient
+context and different studies/series, with exact DICOM dates establishing baseline
+before follow-up. Load both accepted boundary-review ZIPs in the unified viewer while
+their exact source series are visible. A qualified reviewer must explicitly record:
+
+- same-lesion and same-represented-tissue judgments;
+- acquisition and boundary comparability;
+- chronology and whether spatial registration is separately needed;
+- all eight source/boundary/pairing checklist items and the fixed self-attestation.
+
+The server—not the browser preview—is authoritative. It derives dates from the live
+catalog, checks that every instance in each series has one consistent date, recursively
+validates both four-file boundary reviews and their nested DICOM SEG evidence, and
+rehashes every source object. The returned archive contains exactly
+`comparison.json`, `baseline-review.zip`, `followup-review.zip`, `review.html`, and
+`README.txt`. It is created in memory and downloaded without a patient file being
+persisted by the server.
+
+The equivalent non-overwriting CLI workflow is:
+
+```bash
+scanview-agent assemble-lesion-volume-comparison \
+  baseline-boundary-review.zip followup-boundary-review.zip pairing-request.json \
+  '/safe/local/DICOM/root' --output reviewed-volume-comparison.zip
+scanview-agent validate-lesion-volume-comparison \
+  reviewed-volume-comparison.zip '/safe/local/DICOM/root'
+```
+
+Only an `accepted_for_volume_change_discussion` decision with every required gate can
+expose baseline volume, follow-up volume, absolute change, percentage change, numeric
+direction, and elapsed days. Revision, rejection, malformed input, or any source-byte
+change returns no numeric values and `evidence_use: none`. Even a valid accepted record
+does not authorize spatial overlay, voxelwise localization, biological tumor-burden
+interpretation, progression/response classification, treatment causality, diagnosis,
+clinical conclusion, or medical-record sign-off. Boundary uncertainty remains
+unquantified and reviewer identity/credentials remain self-asserted and unverified.
 
 ## Prepare a neutral MRI/CT consultation packet
 

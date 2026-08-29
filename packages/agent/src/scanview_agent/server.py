@@ -35,6 +35,11 @@ from .consultation_packets import (
     consultation_packet_from_transport,
     consultation_packet_summary,
 )
+from .lesion_volume_comparisons import (
+    MAX_TRANSPORT_BYTES as MAX_LESION_VOLUME_COMPARISON_TRANSPORT_BYTES,
+    lesion_volume_comparison_from_transport,
+    lesion_volume_comparison_summary,
+)
 from .navigation import NAVIGATION_FRAGMENT_PREFIX
 from .registration_display import (
     reviewed_registration_display_context,
@@ -213,6 +218,7 @@ def _registration_agent_summary(
 class ScanViewServer(ThreadingHTTPServer):
     catalog: dict[str, Any]
     registry: dict[str, Path]
+    source_root: Path | None
     instance_guards: dict[str, dict[str, Any]]
     token: str
     browser_bootstrap_token: str
@@ -517,6 +523,10 @@ class Handler(BaseHTTPRequestHandler):
                 "application/vnd.scanview.comparison-review-input+zip",
                 MAX_COMPARISON_REVIEW_TRANSPORT_BYTES,
             ),
+            "/v1/lesion-volume-comparisons": (
+                "application/vnd.scanview.lesion-volume-comparison-input+zip",
+                MAX_LESION_VOLUME_COMPARISON_TRANSPORT_BYTES,
+            ),
             "/v1/consultation-packets": (
                 "application/vnd.scanview.consultation-input+zip",
                 MAX_CONSULTATION_PACKET_TRANSPORT_BYTES,
@@ -527,6 +537,9 @@ class Handler(BaseHTTPRequestHandler):
             ),
         }
         if path not in supported:
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        if path == "/v1/lesion-volume-comparisons" and self.server.source_root is None:
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
             return
         if not self._authorized():
@@ -573,6 +586,25 @@ class Handler(BaseHTTPRequestHandler):
                         "assembled comparison review failed local integrity validation"
                     )
                 filename_prefix = "scanview-comparison-review"
+            elif path == "/v1/lesion-volume-comparisons":
+                if self.server.source_root is None:
+                    raise ValueError("local DICOM source root is unavailable")
+                payload = lesion_volume_comparison_from_transport(
+                    body,
+                    self.server.source_root,
+                    catalog=self.server.catalog,
+                    created_at=created_at,
+                )
+                summary = lesion_volume_comparison_summary(
+                    io.BytesIO(payload),
+                    self.server.source_root,
+                    catalog=self.server.catalog,
+                )
+                if not summary["valid"]:
+                    raise ValueError(
+                        "assembled lesion-volume comparison failed local integrity validation"
+                    )
+                filename_prefix = "scanview-lesion-volume-comparison"
             elif path == "/v1/consultation-packets":
                 payload = consultation_packet_from_transport(
                     body,
@@ -605,6 +637,7 @@ class Handler(BaseHTTPRequestHandler):
                     "error": {
                         "/v1/visit-packets": "invalid_visit_packet_input",
                         "/v1/comparison-reviews": "invalid_comparison_review_input",
+                        "/v1/lesion-volume-comparisons": "invalid_lesion_volume_comparison_input",
                         "/v1/consultation-packets": "invalid_consultation_packet_input",
                         "/v1/consultation-boards": "invalid_consultation_board_input",
                     }[path],
@@ -955,10 +988,16 @@ def create_server(
     ui_dist: Path | None = None,
     registration_bundle: Path | None = None,
     registration_review: Path | None = None,
+    source_root: Path | None = None,
 ) -> ScanViewServer:
     if host not in {"127.0.0.1", "::1", "localhost"}:
         raise ValueError("ScanView only supports loopback binding in this release")
     guarded_registry, instance_guards = _guard_instance_sources(catalog, registry)
+    resolved_source_root = (
+        source_root.expanduser().resolve(strict=True) if source_root is not None else None
+    )
+    if resolved_source_root is not None and not resolved_source_root.is_dir():
+        raise ValueError("ScanView DICOM source root must be a directory")
     resolved_ui = ui_dist.expanduser().resolve(strict=True) if ui_dist else None
     if resolved_ui is not None and not (resolved_ui / "index.html").is_file():
         raise ValueError(f"ScanView UI bundle is missing index.html: {resolved_ui}")
@@ -1026,6 +1065,7 @@ def create_server(
     server = ScanViewServer((host, port), Handler)
     server.catalog = catalog
     server.registry = guarded_registry
+    server.source_root = resolved_source_root
     server.instance_guards = instance_guards
     server.token = token or secrets.token_urlsafe(24)
     server.browser_bootstrap_token = _distinct_token({server.token})
@@ -1063,6 +1103,7 @@ def serve(
     navigation_fragment: str | None = None,
     registration_bundle: Path | None = None,
     registration_review: Path | None = None,
+    source_root: Path | None = None,
 ) -> None:
     if navigation_fragment is not None and (
         not navigation_fragment.startswith(NAVIGATION_FRAGMENT_PREFIX)
@@ -1078,6 +1119,7 @@ def serve(
         ui_dist=ui_dist,
         registration_bundle=registration_bundle,
         registration_review=registration_review,
+        source_root=source_root,
     )
     url_host = f"[{host}]" if ":" in host else host
     base_url = f"http://{url_host}:{server.server_port}"

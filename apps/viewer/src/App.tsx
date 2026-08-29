@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
 import { MeasurementWorkspace } from './components/MeasurementWorkspace';
 import { MprPanel } from './components/MprPanel';
+import { LesionVolumeComparisonPanel } from './components/LesionVolumeComparisonPanel';
 import {
   createMeasurementEvidencePacket,
   removeMeasurementAnnotation,
@@ -1305,6 +1306,14 @@ export default function App({ active = true }: { active?: boolean } = {}) {
 
           {mprSeries && <MprPanel series={mprSeries} onClose={() => setMprSeriesId(undefined)} />}
 
+          {!consultPrepMode && (
+            <LesionVolumeComparisonPanel
+              series={series}
+              selectedBaselineSeriesId={baselineId}
+              selectedFollowupSeriesId={followupId}
+            />
+          )}
+
           <section className="review-grid">
             {consultPrepMode ? (
               <article className="compatibility-card review">
@@ -1569,7 +1578,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       )}
 
       <footer>
-        <span>ScanView 0.3 · local-first prototype</span>
+        <span>ScanView 0.4 · local-first prototype</span>
         <span>Every automated result is unreviewed until a qualified clinician accepts it.</span>
       </footer>
     </main>

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 23:23 PDT
+Last updated: 2026-08-29 00:05 PDT
 
 ## Data transfer
 
@@ -65,6 +65,16 @@ Last updated: 2026-08-28 23:23 PDT
   longitudinal, response, diagnostic, and clinical-conclusion permission stays false.
   The independent agent validator recursively revalidates the nested DICOM SEG and
   live source bytes, checks the static review page and exact record, and fails closed.
+- A second reviewed manual ROI volume-comparison workflow now accepts only two exact
+  independently accepted boundary-review archives plus a strict qualified pairing
+  request. It joins both reviewed series to the live catalog, verifies consistent
+  per-instance DICOM dates and strict chronology, recursively reopens both DICOM SEG/
+  source chains, and requires explicit same-lesion, same-tissue, comparability,
+  registration-consideration, checklist, and attestation gates. A valid acceptance
+  exposes transparent reviewed volume arithmetic for discussion only. Any non-accepted,
+  malformed, mismatched, or source-changed state withholds every numeric value;
+  response, treatment causality, spatial localization, diagnosis, conclusion, and
+  sign-off remain false.
 - Validated DICOM patient-orientation labels implemented; labels are withheld rather
   than guessed when Image Orientation (Patient) is missing or malformed.
 - Follow-up auto-selection removed; same-exam pairings are explicitly incompatible
@@ -203,7 +213,8 @@ Last updated: 2026-08-28 23:23 PDT
 - Versioned measurement, key-image, consultation-key-image, consultation-packet,
   numeric-comparison, visit-packet,
   comparison-review, navigation-intent, viewer-state, rigid-registration,
-  registration-QA, reviewed-registration-display, and source-bound manual ROI volume
+  registration-QA, reviewed-registration-display, source-bound manual ROI volume,
+  manual boundary-review, and reviewed manual ROI volume-comparison
   JSON Schemas plus local validation are implemented. Same-series pairs, unknown units,
   mismatched measurement types, and mismatched visual/numeric evidence are refused; no
   response label is emitted.
@@ -213,7 +224,7 @@ Last updated: 2026-08-28 23:23 PDT
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 22 contracts without breaking lightweight
+  UI-embedded wheel together with all 23 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -230,7 +241,7 @@ Last updated: 2026-08-28 23:23 PDT
 
 ## Verification
 
-- Python agent tests: 181 passing, including cross-patient and legacy-context
+- Python agent tests: 195 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -261,9 +272,12 @@ Last updated: 2026-08-28 23:23 PDT
   output, and deterministic presentation; source-bound manual ROI evidence plus
   qualified boundary-review shape, recursive source/evidence binding, exact static
   record presentation, permission locks, malformed-input fail-closed behavior, and
-  privacy-minimized summaries; deterministic offline-bundle shape,
+  privacy-minimized summaries; two-review manual ROI volume-comparison shape,
+  live-catalog chronology, nested source/evidence recursion, human pairing gates,
+  arithmetic/page/source tamper refusal, exact in-memory endpoint transport, and
+  privacy-minimized withholding; deterministic offline-bundle shape,
   pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
-- Viewer tests: 108 passing, including patient-context and local-only enforcement,
+- Viewer tests: 114 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, exact neutral two-view consultation transport/sidecar,
@@ -282,39 +296,44 @@ Last updated: 2026-08-28 23:23 PDT
   chronology/source-separation refusal, encoded/predecode/decoded and render-dimension
   caps, ordinary-viewer state retention across mode switches, and rejected/malformed/
   legacy reviewed-context refusal; source-bound manual ROI evidence generation and
-  the complete one-timepoint boundary-review decision/attestation workflow.
-- All 22 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
+  the complete one-timepoint boundary-review decision/attestation workflow; reviewed
+  volume-comparison preview, exact three-member transport, human acceptance gates,
+  limitation-note requirement, same-origin endpoint, and local download behavior.
+- All 23 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
   schemas remain as historical contracts while generation and display require v2.
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- UI-embedded staged Python wheel build: passing; the 3,037,143-byte v0.3.0 wheel contains
+- UI-embedded staged Python wheel build: passing; the 3,056,523-byte v0.4.0 wheel contains
   the registration host/runner/review/display module, viewer-state server module,
-  source-bound manual ROI and boundary-review validators, viewer entry point, all 11
-  built UI/worker/codec files (10,166,351 bytes uncompressed), and all 22 JSON Schemas
-  (201,661 bytes). A fresh isolated installation resolved its embedded UI and schemas
+  source-bound manual ROI, boundary-review, and reviewed volume-comparison validators,
+  viewer entry point, all 11 built UI/worker/codec files (10,187,057 bytes
+  uncompressed), and all 23 JSON Schemas (216,361 bytes). A fresh isolated
+  installation resolved its embedded UI and schemas
   without the source checkout.
-- Offline runtime bundle v0.3.0 build plus macOS arm64 and Strawberry Linux x86_64 smoke tests:
-  passing. The deterministic 5,431,433-byte ZIP contains nine fixed-timestamp members:
-  `bundle.json` plus eight hash-manifested payloads, including the 3,037,143-byte
+- Offline runtime bundle v0.4.0 build plus macOS arm64 and Strawberry Linux x86_64 smoke tests:
+  passing. The deterministic 5,451,088-byte ZIP contains nine fixed-timestamp members:
+  `bundle.json` plus eight hash-manifested payloads, including the 3,056,523-byte
   embedded ScanView wheel and
   pinned 2,376,822-byte `pydicom` 3.0.2 wheel. A fresh extraction verified, installed
   with `PIP_NO_INDEX=1`, `--no-index`, and `--require-hashes`, then rechecked both
-  versions, the embedded UI, all 22 schemas, the consultation and manual ROI review
-  contracts, and explicit
+  versions, the embedded UI, all 23 schemas, the consultation, manual ROI review, and
+  reviewed volume-comparison contracts, and explicit
   `runtime_network_required: false` and
   `external_dicom_processing_api_required: false` runtime assertions. A second build
   from the same wheels was byte-identical. The retained ZIP SHA-256 is
-  `3f5677d9ab825f4e8aef61b5c50a9f73b224b2bf02556c8fc3b82d43ce0aaffb`; the embedded
+  `32c173f31a5efa098b1c295bea14557669419f07b3e922b519654ac6aa37a948`; the embedded
   wheel SHA-256 is
-  `6af1997f3c4939d07e1b1c2180af09147619befe6b6e8e73632a4f981f3fdd58`. Its packaged
-  launcher indexed the 12-instance synthetic MR series and served its manifest over
+  `4ccd10d44561c9c1bcc2bd984dbfddc0ac6db9d035898c8d204ddffcb301dd1e`. Its packaged
+  launcher indexed two synthetic MR studies / 6 instances and served its manifest over
   loopback. The exact final ZIP also verified and installed offline on Strawberry
-  Ubuntu 26.04 x86_64, reported all 22 schemas with both network/API requirements
-  false, recursively validated the browser-created 0.908 mL boundary-review archive,
-  and failed closed after one exact source byte was changed. No Mila data was sent.
-  The current patient-free v0.3.0 ZIP, prior v0.2.0 ZIP, and historical v0.1.0 ZIP are
-  retained in the ignored local `release/` directory.
+  Ubuntu 26.04 x86_64 / Python 3.14.4, reported all 23 schemas with both network/API
+  requirements false, validated the browser-created 0.002250→0.003000 mL reviewed
+  comparison, and failed closed after one exact source byte was changed with all
+  values withheld. No Mila data was sent. The remote synthetic staging directory was
+  removed after the gate.
+  The current patient-free v0.4.0 ZIP, prior v0.3.0/v0.2.0 ZIPs, and historical
+  v0.1.0 ZIP are retained in the ignored local `release/` directory.
 - Registration execution test: synthetic version-gated-engine success and failure
   paths pass, including required expected-launcher hash, strict engine report, parsed
   scalar NRRDs/fixed-space geometry, finite proper-rigid transform, owner-only modes,
@@ -511,6 +530,14 @@ Last updated: 2026-08-28 23:23 PDT
   host-controlled `0644` download mode, so the UI now instructs users to move/protect
   retained sensitive boards; the synthetic DICOM and board were moved to recoverable
   Trash.
+- Reviewed volume-comparison production smoke test: two synthetic same-patient MR
+  studies rendered as exact baseline/follow-up source panes. The browser loaded both
+  accepted boundary-review ZIPs, displayed 0.002250 and 0.003000 mL with catalog dates,
+  kept export disabled until every qualified pairing gate and attestation was complete,
+  and downloaded the exact five-file archive through one local POST. Independent
+  validation reported +0.000750 mL / +33.333% over 31 days for discussion only; moving
+  either source pane relocked export, and a one-byte source change failed nonzero with
+  every value withheld. Browser diagnostics were empty. All inputs were synthetic.
 - Real-copy Consult Prep smoke test: the same catalog automatically opened the
   neutral consultation workspace, showed Image A/Image B instead of timepoint roles,
   kept approximate linking disabled, hid longitudinal lesion pairing and response
@@ -538,8 +565,10 @@ Last updated: 2026-08-28 23:23 PDT
   record sign-off remain. The current review chain is self-attested and explicitly
   unverified. Elliptical ROI is a 2D manual draft. A source-bound binary ROI can now
   receive a separate qualified, self-attested boundary-review record for one-timepoint
-  discussion, but this is still not authenticated clinical sign-off, a proven tumor
-  segmentation, or a longitudinal clinical volume comparison.
+  discussion, and two accepted records can enter a separate reviewed arithmetic-
+  volume pairing. This is still not authenticated clinical sign-off, a proven tumor
+  segmentation, spatial boundary-change evidence, a response classification, or a
+  clinically validated tumor-volume comparison.
 - Bearer reads of live viewer state do not yet have an append-only access audit.
   Any future audit must exclude tokens, payloads, and patient content.
 - Signed/notarized macOS/Linux release packaging remains pending. The wheel, offline

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import json
 import threading
+import zipfile
 from http import HTTPStatus
 from http.client import HTTPConnection
 from pathlib import Path
@@ -9,9 +11,12 @@ from pathlib import Path
 import pytest
 
 import scanview_agent.server as server_module
+from scanview_agent.catalog import build_catalog
+from scanview_agent.lesion_volume_comparisons import lesion_volume_comparison_summary
 from scanview_agent.registration_reviews import write_registration_review
 from scanview_agent.server import create_server
 from test_registration_reviews import registration_bundle, review_request
+from test_lesion_volume_comparisons import _pair
 
 
 def request(
@@ -115,6 +120,72 @@ def test_unified_server_establishes_private_browser_session_and_serves_dicom(
             headers={"Authorization": "Bearer test-session-token"},
         )
         assert status == HTTPStatus.OK
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_local_server_assembles_source_recursive_lesion_volume_comparison(
+    tmp_path: Path,
+) -> None:
+    baseline, followup, pairing_request, source_root = _pair(tmp_path)
+    catalog, registry = build_catalog(source_root, include_hashes=True)
+    transport = io.BytesIO()
+    with zipfile.ZipFile(transport, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("baseline-review.zip", baseline.read_bytes())
+        archive.writestr("followup-review.zip", followup.read_bytes())
+        archive.writestr("pairing-request.json", pairing_request.read_bytes())
+    server = create_server(
+        catalog,
+        registry,
+        port=0,
+        token="volume-comparison-token",
+        source_root=source_root,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_port
+    headers = {
+        "Authorization": "Bearer volume-comparison-token",
+        "Origin": f"http://127.0.0.1:{port}",
+        "Host": f"127.0.0.1:{port}",
+        "Content-Type": "application/vnd.scanview.lesion-volume-comparison-input+zip",
+    }
+    try:
+        status, _, body = post(
+            port,
+            "/v1/lesion-volume-comparisons",
+            transport.getvalue(),
+            headers={key: value for key, value in headers.items() if key != "Authorization"},
+        )
+        assert status == HTTPStatus.UNAUTHORIZED
+
+        wrong_origin = {**headers, "Origin": "http://example.invalid"}
+        status, _, body = post(
+            port,
+            "/v1/lesion-volume-comparisons",
+            transport.getvalue(),
+            headers=wrong_origin,
+        )
+        assert status == HTTPStatus.FORBIDDEN
+
+        status, response_headers, body = post(
+            port,
+            "/v1/lesion-volume-comparisons",
+            transport.getvalue(),
+            headers=headers,
+        )
+        assert status == HTTPStatus.OK
+        assert response_headers["Content-Type"] == "application/zip"
+        assert response_headers["Cache-Control"] == "no-store"
+        assert "scanview-lesion-volume-comparison" in response_headers["Content-Disposition"]
+        summary = lesion_volume_comparison_summary(
+            io.BytesIO(body), source_root, catalog=catalog
+        )
+        assert summary["valid"]
+        assert summary["percent_volume_change"] == pytest.approx(100 / 3)
+        assert not summary["response_classification"]
     finally:
         server.shutdown()
         server.server_close()

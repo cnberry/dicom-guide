@@ -471,12 +471,41 @@
    volume and future-pairing authority. The v0.3.0 offline release embeds 22 schemas;
    macOS and Strawberry Linux package gates are recorded in Status.
 
+## Completed in the twenty-sixth milestone
+
+1. Added a separate five-file reviewed manual ROI volume-comparison archive. It embeds
+   two unchanged accepted boundary-review ZIPs, one strict pairing record, a regenerated
+   script-free review page, and local instructions without mutating either ancestor.
+2. Added the qualified pairing form to the ordinary same-modality longitudinal viewer.
+   Export requires both exact reviewed source series in the live panes and explicit
+   same-lesion, same-tissue, chronology, acquisition/boundary comparability,
+   registration-consideration, eight-check, decision, and fixed-attestation records.
+   The form is absent from neutral MRI+CT Consult Prep.
+3. Added recursive agent assembly and validation. Both nested review/evidence archives,
+   DICOM SEG bytes, every original source byte, live catalog membership, per-instance
+   DICOM date consistency, strict chronology, static page, hashes, and archive shape are
+   rechecked locally. The server transport persists no patient file.
+4. Limited valid accepted output to reviewed baseline/follow-up volumes, arithmetic
+   absolute/percentage change, numeric direction, and elapsed days for discussion.
+   Reviewer identity remains self-asserted; boundary uncertainty remains unquantified;
+   spatial localization, response classification, treatment causality, diagnosis,
+   clinical conclusion, and medical-record sign-off remain false.
+5. Made rejection, revision, malformed input, mismatched patient/modality/chronology,
+   incomplete pairing gates, extra members, numeric/page tampering, and any source-byte
+   change fail closed with every numeric field null and `evidence_use: none`. Browser
+   preview also refuses duplicate, unexpected, or oversized expanded ZIP members.
+6. Production browser QA used two synthetic MR studies only. It verified exact source-
+   pane gating, 0.002250 mL to 0.003000 mL arithmetic, complete acceptance gates, local
+   five-file download, independent validation, empty browser diagnostics, and one-byte
+   source-tamper refusal. No Mila data left the computer.
+7. Added the 23rd embedded JSON Schema and advanced the deterministic offline bundle to
+   v0.4.0. Exact macOS and Strawberry Linux package evidence is recorded in Status.
+
 ## Immediate
 
-1. Use manual ROI volume evidence only as a source-bound discussion draft. A qualified
-   clinician can now record the separate complete-boundary review, represented tissue,
-   and inclusion/exclusion criteria; even accepted review does not make ScanView
-   clinically validated or authorize diagnosis/response use.
+1. Use manual ROI volume evidence and reviewed volume comparisons only as source-bound
+   discussion artifacts. Even an accepted two-timepoint pairing is arithmetic—not a
+   response category, treatment-effect conclusion, diagnosis, or clinical sign-off.
 2. Use consultation packets or boards only to prepare questions with Mila's
    clinicians; confirm every MRI/CT source view in the clinical imaging system and do
    not treat either artifact as a diagnosis or treatment-response analysis.
@@ -498,14 +527,12 @@
 
 ## Next milestone
 
-1. Design a separate two-timepoint pairing review that accepts only two exact,
-   independently source-validated `accepted_for_discussion` boundary records; require
-   same modality, matching opaque patient context, distinct studies/series, strict
-   chronology, matched sequence/tissue definitions, and explicit same-target review
-   before permitting unreviewed volume-change arithmetic. Keep response categories absent.
-2. Import a future same-modality Mila follow-up and complete explicit series pairing,
-   separately reviewed ROI boundaries, same-lesion confirmation, and qualified review
-   before designing source-bound longitudinal volume-change evidence.
+1. Import a future same-modality Mila follow-up and complete explicit series pairing,
+   separately reviewed ROI boundaries, same-lesion/tissue confirmation, and qualified
+   pairing review. Keep the current MRI+CT media out of this longitudinal path.
+2. Add linked tri-planar review of both native accepted boundaries without inferring
+   voxelwise change; require a separately accepted registration before any spatial
+   overlay and keep response categories absent.
 3. Add platform signing and notarization without weakening local-only runtime behavior.
 4. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
    configuration.

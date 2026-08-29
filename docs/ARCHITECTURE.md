@@ -32,6 +32,12 @@ Copied DICOM (source-read-only in ScanView)
                          |                                      |                                         +--> DICOM SEG-format + sidecar
                          |                                      |                                                |
                          |                                      |                                                +--> independent local validator
+                         |                                      |                                                |
+                         |                                      |                                                +--> qualified boundary-review ZIP
+                         |                                      |                                                       |
+                         |                                      |                                two accepted reviews --+--> explicit pairing review
+                         |                                      |                                                                 |
+                         |                                      |                                                                 +--> reviewed volume arithmetic
                          |                                      |
                          |                                      +--> measurement packet
                          |                                                   |
@@ -131,7 +137,10 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    contains only `baseline.zip` and `followup.zip`; review input adds only
    `comparison.json`; consultation input contains only neutral `view-a.zip` and
    `view-b.zip`; consultation-board input contains only a strict label manifest and
-   2–8 ordered neutral key-image ZIPs.
+   2–8 ordered neutral key-image ZIPs; reviewed volume-comparison input contains only
+   two complete boundary-review ZIPs and one strict pairing request. That route also
+   holds the exact local source root, joins both reviewed series to the live catalog,
+   and derives chronology from consistent per-instance DICOM dates.
    The service assembles and revalidates every nested derivative in memory, returns
    it with `no-store`, and persists nothing. Service-backed measurement IDs join
    directly to the manifest; legacy folder IDs remain accepted.
@@ -159,7 +168,15 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    the DICOM references, rebuilds the dense binary mask, and recomputes the arithmetic.
    Source/format/arithmetic validation never changes its `draft_unreviewed` state or
    unlocks longitudinal linking, percentage change, response, diagnosis, or a clinical
-   conclusion. Rigid transforms and resampled volumes now go to a separate,
+   conclusion. A separate boundary-review ZIP can authorize one-timepoint discussion.
+   Two such accepted reviews can enter a second explicit pairing review only after
+   same-patient-context, same-modality, source-date, same-lesion, same-tissue,
+   acquisition/boundary-comparability, registration-consideration, and checklist gates.
+   The five-file output recursively embeds and revalidates both review/evidence chains
+   and exposes only transparent reviewed volume arithmetic. Response classification,
+   treatment causality, spatial overlay, voxelwise localization, diagnosis, clinical
+   conclusion, and medical-record sign-off remain locked. Rigid transforms and
+   resampled volumes now go to a separate,
    owner-only, atomic no-replace directory with exact source hashes, version-gated
    local Slicer/BRAINSFit/BRAINSResample provenance, and every display use locked pending QA. Future lesion masks,
    additional measurements, and reports follow the same boundary. Manual
@@ -251,8 +268,8 @@ explicit measurement pair --> comparison ----+                              |
                                                                              +--> amended comparison (new ZIP, unreviewed)
 ```
 
-The manual single-series evidence and boundary-review path is intentionally not
-longitudinal:
+The manual boundary-evidence path reaches longitudinal arithmetic only through a
+second person-reviewed transition:
 
 ```text
 strict native source grid --> person-painted binary ROI --> DICOM SEG-format + sidecar
@@ -261,9 +278,15 @@ strict native source grid --> person-painted binary ROI --> DICOM SEG-format + s
                                                                   |
                                                                   +--> self-attested qualified boundary review
                                                                           |
-                                                                          +--> nested evidence + printable record
+                                                                          +--> nested evidence + printable record --+
+                                                                                                                   |
+                       independently accepted later boundary review ----------------------------------------------+
+                                                                                                                   |
+                                                                                                                   +--> explicit qualified pairing review
+                                                                                                                          |
+                                                                                                                          +--> arithmetic volume change for discussion only
 
-lesion identity / cross-exam link / percent change / response: unavailable
+software-established lesion identity / spatial change / response / causality: unavailable
 ```
 
 When a catalog contains no valid dated same-modality cross-study source pair, the

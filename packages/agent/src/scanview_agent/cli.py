@@ -23,6 +23,10 @@ from .consultation_packets import (
     write_consultation_packet,
 )
 from .key_images import key_image_archive_summary
+from .lesion_volume_comparisons import (
+    lesion_volume_comparison_summary,
+    write_lesion_volume_comparison,
+)
 from .lesion_volumes import lesion_volume_archive_summary
 from .lesion_volume_reviews import lesion_volume_review_summary
 from .measurements import (
@@ -172,6 +176,33 @@ def parser() -> argparse.ArgumentParser:
         type=Path,
         help="Local DICOM root used to rehash the nested evidence source set",
     )
+
+    assemble_lesion_volume_comparison = commands.add_parser(
+        "assemble-lesion-volume-comparison",
+        help=(
+            "Join two accepted source-bound boundary reviews using one explicit "
+            "qualified pairing request and live DICOM chronology"
+        ),
+    )
+    assemble_lesion_volume_comparison.add_argument("baseline_review", type=Path)
+    assemble_lesion_volume_comparison.add_argument("followup_review", type=Path)
+    assemble_lesion_volume_comparison.add_argument("pairing_request", type=Path)
+    assemble_lesion_volume_comparison.add_argument(
+        "source_root", type=Path, help="Exact local DICOM root containing both timepoints"
+    )
+    assemble_lesion_volume_comparison.add_argument(
+        "--output", "-o", type=Path, required=True
+    )
+
+    validate_lesion_volume_comparison = commands.add_parser(
+        "validate-lesion-volume-comparison",
+        help=(
+            "Recursively validate a reviewed manual ROI volume comparison, both "
+            "nested reviews, and every exact local DICOM source"
+        ),
+    )
+    validate_lesion_volume_comparison.add_argument("archive", type=Path)
+    validate_lesion_volume_comparison.add_argument("source_root", type=Path)
 
     assemble_visit_packet = commands.add_parser(
         "assemble-visit-packet",
@@ -434,6 +465,7 @@ def main() -> None:
             token=args.token,
             registration_bundle=args.registration_bundle,
             registration_review=args.registration_review,
+            source_root=args.root,
         )
     elif args.command == "launch":
         try:
@@ -480,6 +512,7 @@ def main() -> None:
             navigation_fragment=navigation_fragment,
             registration_bundle=args.registration_bundle,
             registration_review=args.registration_review,
+            source_root=args.root,
         )
     elif args.command == "viewer-link":
         try:
@@ -513,6 +546,25 @@ def main() -> None:
             raise SystemExit(1)
     elif args.command == "validate-lesion-volume-review":
         summary = lesion_volume_review_summary(args.archive, args.source_root)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "assemble-lesion-volume-comparison":
+        try:
+            summary = write_lesion_volume_comparison(
+                args.baseline_review,
+                args.followup_review,
+                args.pairing_request,
+                args.source_root,
+                args.output,
+            )
+        except ValueError as error:
+            argument_parser.error(str(error))
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-lesion-volume-comparison":
+        summary = lesion_volume_comparison_summary(args.archive, args.source_root)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

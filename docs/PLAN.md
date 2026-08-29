@@ -39,6 +39,12 @@ result into a medical conclusion.
   acquisition and complete three-plane gates, a script-free printable page, and an
   independent privacy-minimized validator. Acceptance is self-attested and for
   discussion only; it cannot establish a cross-timepoint link or response.
+- Separate reviewed manual ROI volume-comparison archives that accept only two exact
+  independently accepted boundary reviews plus a qualified pairing request. Live
+  catalog chronology, both nested DICOM SEG/source chains, same patient context,
+  modality, distinct studies/series, same lesion/tissue, comparability, registration
+  consideration, and checklist gates are enforced before discussion-only arithmetic.
+  Response, causality, spatial localization, diagnosis, and clinical conclusion stay locked.
 - Physically linked, visible LPS crosshairs within one MPR volume, with canonical
   planes protected from oblique rotation and slab-thickness manipulation.
 - Source-linked local key-image archives with display provenance, permanent review
@@ -114,9 +120,10 @@ result into a medical conclusion.
 - Manual single-series binary DICOM SEG-format export plus a source-bound sidecar is
   implemented; SEG import, DICOM SR, a protected derivative store, and external
   conformance testing remain future work.
-- Single-timepoint manual-boundary review is implemented. Cross-timepoint lesion
-  identity/linkage, longitudinal volume-change evidence, and manual/semi-automatic
-  component-specific tumor segmentation remain future work.
+- Single-timepoint manual-boundary review and a separately reviewed cross-timepoint
+  arithmetic-volume pairing transition are implemented. Spatial boundary-change
+  localization, authenticated clinical sign-off, response assessment, and manual/
+  semi-automatic component-specific tumor segmentation remain future work.
 
 ### Research only
 
@@ -186,3 +193,8 @@ result into a medical conclusion.
     unverified, requires complete three-plane/acquisition/tissue-definition gates for
     discussion-only acceptance, and cannot authorize lesion linkage, change arithmetic,
     response classification, diagnosis, or a clinical conclusion.
+20. **Reviewed volume-comparison separation:** two accepted boundary reviews expose
+    arithmetic change only after a distinct source-recursive human pairing review
+    confirms chronology, same lesion/tissue, comparability, and registration need.
+    Non-accepted or source-invalid states withhold every value, and acceptance never
+    authorizes response, causality, spatial localization, diagnosis, or sign-off.
