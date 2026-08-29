@@ -172,6 +172,16 @@ def test_refuses_wrong_membership_tool_provenance_and_point_flag() -> None:
         )
 
 
+def test_allows_display_crop_for_mpr_but_not_native() -> None:
+    crop_command = {**command(), "tool": "crop", "patient_point_lps_mm": None}
+    assert validate_command(crop_command, catalog())["tool"] == "crop"
+    with pytest.raises(ValueError, match="unsupported"):
+        validate_command(
+            {**crop_command, "view_mode": "native"},
+            catalog(),
+        )
+
+
 def test_response_withholds_stale_observation() -> None:
     current = {**command(), "revision": 4, "issued_at": "2026-08-29T12:00:00Z"}
     available = response(command=current, observation=observation(), observation_age_seconds=1.2)

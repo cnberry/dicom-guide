@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   createMprViewports,
   type MprOrientation,
@@ -11,7 +11,11 @@ import {
   formatDicomDate,
   type DicomSeries,
 } from '../dicom';
-import { formatMprPatientPoint, type MprPatientPoint } from '../mpr';
+import {
+  formatMprPatientPoint,
+  type MprCanvasPoint,
+  type MprPatientPoint,
+} from '../mpr';
 import type { ManualSegmentationStats } from '../lesionVolume';
 import {
   LESION_VOLUME_REVIEW_ATTESTATION,
@@ -39,7 +43,7 @@ type Props = {
   simple?: boolean;
   onPatientPointChange?: (point?: MprPatientPoint) => void;
   requestedPatientPoint?: MprPatientPoint;
-  requestedTool?: Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom'>;
+  requestedTool?: Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom' | 'crop'>;
   resetNonce?: number;
   onRenderStatusChange?: (status: 'loading' | 'ready' | 'error') => void;
   onPersonInteraction?: () => void;
@@ -51,6 +55,13 @@ const orientationLabels: Array<{ id: MprOrientation; label: string }> = [
   { id: 'coronal', label: 'Coronal' },
   { id: 'sagittal', label: 'Sagittal' },
 ];
+
+type CropSelection = {
+  orientation: MprOrientation;
+  pointerId: number | null;
+  start: MprCanvasPoint;
+  end: MprCanvasPoint;
+};
 
 const reviewChecklistLabels: Array<[keyof LesionVolumeReviewChecklist, string]> = [
   ['original_images_reviewed', 'Original source images reviewed'],
@@ -132,6 +143,8 @@ export function MprPanel({
   const activeToolRef = useRef<MprTool>('crosshairs');
   activeToolRef.current = activeTool;
   const [patientPoint, setPatientPoint] = useState<MprPatientPoint>();
+  const [cropSelection, setCropSelection] = useState<CropSelection>();
+  const cropSelectionRef = useRef<CropSelection | undefined>(undefined);
   const [status, setStatus] = useState('Building local volume from source slices…');
   const [brushSize, setBrushSize] = useState(12);
   const [segmentationStats, setSegmentationStats] = useState<ManualSegmentationStats>({
@@ -168,6 +181,7 @@ export function MprPanel({
   const [sourceReviewExportStatus, setSourceReviewExportStatus] = useState('');
   const eligibility = assessMprEligibility(series);
   const evidenceEligibility = assessLesionVolumeEligibility(series);
+  const displayTool = simple ? (requestedTool ?? 'crosshairs') : activeTool;
 
   useEffect(() => {
     patientPointChangeRef.current?.(patientPoint);
@@ -190,6 +204,11 @@ export function MprPanel({
   useEffect(() => {
     if (resetNonce > 0) controllerRef.current?.reset();
   }, [resetNonce]);
+
+  useEffect(() => {
+    cropSelectionRef.current = undefined;
+    setCropSelection(undefined);
+  }, [displayTool, resetNonce, series.id]);
 
   useEffect(() => {
     if (!controlRevision) return;
@@ -333,6 +352,98 @@ export function MprPanel({
     }
   };
 
+  const pointInHost = (
+    element: HTMLDivElement,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ): MprCanvasPoint => {
+    const bounds = element.getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)),
+      Math.max(0, Math.min(bounds.height, event.clientY - bounds.top)),
+    ];
+  };
+
+  const updateCropSelection = (selection?: CropSelection) => {
+    cropSelectionRef.current = selection;
+    setCropSelection(selection);
+  };
+
+  const startCrop = (
+    orientation: MprOrientation,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    onPersonInteraction?.();
+    if (displayTool !== 'crop' || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const point = pointInHost(event.currentTarget, event);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const current = cropSelectionRef.current;
+    updateCropSelection(
+      current?.orientation === orientation && current.pointerId === null
+        ? { ...current, pointerId: event.pointerId, end: point }
+        : { orientation, pointerId: event.pointerId, start: point, end: point },
+    );
+  };
+
+  const moveCrop = (
+    orientation: MprOrientation,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (
+      displayTool !== 'crop' ||
+      !cropSelectionRef.current ||
+      cropSelectionRef.current.orientation !== orientation ||
+      cropSelectionRef.current.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+    event.preventDefault();
+    updateCropSelection({
+      ...cropSelectionRef.current,
+      end: pointInHost(event.currentTarget, event),
+    });
+  };
+
+  const finishCrop = (
+    orientation: MprOrientation,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (
+      displayTool !== 'crop' ||
+      !cropSelectionRef.current ||
+      cropSelectionRef.current.orientation !== orientation ||
+      cropSelectionRef.current.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const end = pointInHost(event.currentTarget, event);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const current = cropSelectionRef.current;
+    const selected = controllerRef.current?.fitToCanvasRectangle(
+      orientation,
+      current.start,
+      end,
+    );
+    updateCropSelection(
+      selected
+        ? undefined
+        : { orientation, pointerId: null, start: current.start, end: current.start },
+    );
+  };
+
+  const cancelCrop = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (cropSelectionRef.current?.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    updateCropSelection(undefined);
+  };
+
   const downloadBoundaryReview = async () => {
     const controller = controllerRef.current;
     if (!controller || !reviewerRole) return;
@@ -440,7 +551,10 @@ export function MprPanel({
 
   if (simple) {
     return (
-      <section className="mpr-panel simple-mpr" aria-label={`3-plane view for ${series.description}`}>
+      <section
+        className={`mpr-panel simple-mpr ${displayTool === 'crop' ? 'crop-active' : ''}`}
+        aria-label={`3-plane view for ${series.description}`}
+      >
         <div className="mpr-grid">
           {orientationLabels.map(({ id, label }) => (
             <article className="mpr-viewport-card" key={id}>
@@ -448,11 +562,28 @@ export function MprPanel({
                 <strong>{label}</strong>
                 <span>{activeTool === 'crosshairs' ? 'click to move' : 'wheel for slices'}</span>
               </header>
-              <div
-                ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}
-                className="mpr-host"
-                onPointerDown={onPersonInteraction}
-              />
+              <div className="mpr-host-shell">
+                <div
+                  ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}
+                  className="mpr-host"
+                  onPointerDown={(event) => startCrop(id, event)}
+                  onPointerMove={(event) => moveCrop(id, event)}
+                  onPointerUp={(event) => finishCrop(id, event)}
+                  onPointerCancel={cancelCrop}
+                />
+                {cropSelection?.orientation === id && (
+                  <div
+                    className="mpr-crop-selection"
+                    style={{
+                      left: Math.min(cropSelection.start[0], cropSelection.end[0]),
+                      top: Math.min(cropSelection.start[1], cropSelection.end[1]),
+                      width: Math.abs(cropSelection.end[0] - cropSelection.start[0]),
+                      height: Math.abs(cropSelection.end[1] - cropSelection.start[1]),
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
               {status && <div className="mpr-status">{status}</div>}
             </article>
           ))}
@@ -463,7 +594,10 @@ export function MprPanel({
   }
 
   return (
-    <section className="mpr-panel" aria-label={`MPR view for ${series.description}`}>
+    <section
+      className={`mpr-panel ${displayTool === 'crop' ? 'crop-active' : ''}`}
+      aria-label={`MPR view for ${series.description}`}
+    >
       <div className="mpr-heading">
         <div>
           <span className="eyebrow">
@@ -488,6 +622,7 @@ export function MprPanel({
               ['window', 'Window / level'],
               ['pan', 'Pan'],
               ['zoom', 'Zoom'],
+              ['crop', 'Crop to box'],
             ] as const
           ).map(([tool, label]) => (
             <button
@@ -911,15 +1046,35 @@ export function MprPanel({
                 Patient-axis reslice ·{' '}
                 {activeTool === 'crosshairs'
                   ? 'click to link'
+                  : activeTool === 'crop'
+                    ? 'drag a box to fit'
                   : activeTool === 'paint' || activeTool === 'erase'
                     ? 'manual native-grid edit'
                     : 'wheel to navigate'}
               </span>
             </header>
-            <div
-              ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}
-              className="mpr-host"
-            />
+            <div className="mpr-host-shell">
+              <div
+                ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}
+                className="mpr-host"
+                onPointerDown={(event) => startCrop(id, event)}
+                onPointerMove={(event) => moveCrop(id, event)}
+                onPointerUp={(event) => finishCrop(id, event)}
+                onPointerCancel={cancelCrop}
+              />
+              {cropSelection?.orientation === id && (
+                <div
+                  className="mpr-crop-selection"
+                  style={{
+                    left: Math.min(cropSelection.start[0], cropSelection.end[0]),
+                    top: Math.min(cropSelection.start[1], cropSelection.end[1]),
+                    width: Math.abs(cropSelection.end[0] - cropSelection.start[0]),
+                    height: Math.abs(cropSelection.end[1] - cropSelection.start[1]),
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
             {status && <div className="mpr-status">{status}</div>}
           </article>
         ))}

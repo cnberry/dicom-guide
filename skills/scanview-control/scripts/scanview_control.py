@@ -214,7 +214,7 @@ def parser() -> argparse.ArgumentParser:
     show.add_argument("--series-id", required=True)
     show.add_argument("--instance-id", required=True)
     show.add_argument("--view", choices=["native", "mpr"], required=True)
-    show.add_argument("--tool", choices=["window", "pan", "zoom", "crosshairs"])
+    show.add_argument("--tool", choices=["window", "pan", "zoom", "crosshairs", "crop"])
     show.add_argument("--lps", nargs=3, type=float)
     show.add_argument("--reset", action="store_true")
     show.add_argument("--wait-seconds", type=float, default=12.0)

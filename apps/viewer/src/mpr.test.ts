@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calculateMprCropFit,
   formatMprPatientPoint,
   mprCrosshairConfiguration,
   reorderDenseMaskSlices,
@@ -25,6 +26,48 @@ describe('MPR crosshair contract', () => {
 
   it('formats a DICOM LPS patient point without silently changing units', () => {
     expect(formatMprPatientPoint([12.04, -3.55, 100])).toBe('12.0, -3.5, 100.0 mm');
+  });
+
+  it('fits a valid display crop to the viewport while preserving aspect ratio', () => {
+    expect(
+      calculateMprCropFit({
+        start: [100, 200],
+        end: [300, 500],
+        viewportWidth: 800,
+        viewportHeight: 600,
+        parallelScale: 120,
+      }),
+    ).toEqual({ center: [200, 350], parallelScale: 60 / 0.94 });
+  });
+
+  it('refuses tiny, invalid, and non-zooming crop selections', () => {
+    expect(
+      calculateMprCropFit({
+        start: [10, 10],
+        end: [18, 18],
+        viewportWidth: 800,
+        viewportHeight: 600,
+        parallelScale: 120,
+      }),
+    ).toBeUndefined();
+    expect(
+      calculateMprCropFit({
+        start: [0, 0],
+        end: [800, 600],
+        viewportWidth: 800,
+        viewportHeight: 600,
+        parallelScale: 120,
+      }),
+    ).toBeUndefined();
+    expect(
+      calculateMprCropFit({
+        start: [0, 0],
+        end: [100, 100],
+        viewportWidth: 0,
+        viewportHeight: 600,
+        parallelScale: 120,
+      }),
+    ).toBeUndefined();
   });
 
   it('aligns dense mask slabs to the volume image order and fails on drift', () => {

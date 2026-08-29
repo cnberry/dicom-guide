@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-29 10:00 PDT
+Last updated: 2026-08-29 10:31 PDT
 
 ## Current handoff
 
@@ -24,6 +24,12 @@ Last updated: 2026-08-29 10:00 PDT
   and occupy the remaining 649 pixels; the document remains exactly one viewport tall.
   Focused display-tool state now has one owner, removing the parent/child feedback loop
   that made Crosshairs and Window switch back after a person selected them.
+- MPR Zoom now owns both vertical drag and wheel input while selected; the wheel
+  returns to slice navigation for other tools. A new **Crop** tool accepts a drag box
+  or two opposite corners in any plane, then recenters and aspect-fits that one camera
+  to the selected display area. It is reversible camera state only: DICOM pixels,
+  source geometry, patient-space coordinates, and the other planes are unchanged.
+  **Reset** restores all three full-view cameras and clears an unfinished selection.
 - A versioned local viewer-control API now separates bearer-agent commands from
   browser-session observations. Codex can select an exact catalog series/instance,
   choose native or MPR, set the display tool, reset, and focus a DICOM LPS point. The
@@ -52,9 +58,13 @@ Last updated: 2026-08-29 10:00 PDT
   document/viewport heights in both modes. A second live pass held Crosshairs and
   Window independently through multiple viewer-control polling intervals with exactly
   one active tool, then left the deliverable viewer in 3-plane/Crosshairs mode.
-- Current code verification passes TypeScript typecheck, 144 viewer tests in 30
-  files, the production build, the full Python agent suite, five focused viewer-
-  control tests, skill CLI help, and skill-package validation. The known Vite codec
+- Crop/zoom QA at 840×640 retained exact document/viewport dimensions and three
+  569-pixel-high MPR hosts. The crop selector rendered over the local image without
+  entering the Cornerstone canvas host, and the relaunched local controller accepted
+  Crop as a ready person-selected display state. No crop or pixel derivative persists.
+- Current code verification passes TypeScript typecheck, 147 viewer tests in 30
+  files, the production build, the full Python agent suite, six focused viewer-
+  control tests, and skill CLI help. The known Vite codec
   externalization and large-chunk messages remain build warnings, not failures.
 - The completed v0.14.0 local-only artifact remains
   `release/scanview-offline-0.14.0.zip` (owner-only and ignored by Git), 5,555,555

@@ -98,6 +98,19 @@ describe('Codex viewer control bridge', () => {
     });
   });
 
+  it('reports display-only crop mode only for MPR', () => {
+    expect(
+      buildViewerControlObservation({
+        series: series(),
+        index: 0,
+        viewMode: 'mpr',
+        nativeTool: 'window',
+        mprTool: 'crop',
+        renderStatus: 'ready',
+      }),
+    ).toMatchObject({ view_mode: 'mpr', tool: 'crop' });
+  });
+
   it('rejects malformed commands before applying them', async () => {
     vi.stubGlobal(
       'fetch',

@@ -16,7 +16,7 @@ SERIES_ID = re.compile(r"^series_[0-9a-f]{20}$")
 INSTANCE_ID = re.compile(r"^instance_[0-9a-f]{20}$")
 VIEW_TOOLS = {
     "native": {"window", "pan", "zoom"},
-    "mpr": {"crosshairs", "window", "pan", "zoom"},
+    "mpr": {"crosshairs", "window", "pan", "zoom", "crop"},
 }
 
 PERMISSIONS = {

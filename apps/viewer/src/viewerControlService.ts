@@ -7,7 +7,7 @@ export const VIEWER_CONTROL_OBSERVATION_ENDPOINT = '/v1/viewer-control/observati
 export const VIEWER_CONTROL_MEDIA_TYPE = 'application/vnd.scanview.viewer-control+json';
 
 export type ViewerControlViewMode = 'native' | 'mpr';
-export type ViewerControlTool = 'window' | 'pan' | 'zoom' | 'crosshairs';
+export type ViewerControlTool = 'window' | 'pan' | 'zoom' | 'crosshairs' | 'crop';
 
 export type ViewerControlCommand = {
   schema_version: '1.0.0';
@@ -70,7 +70,7 @@ const instancePattern = /^instance_[0-9a-f]{20}$/;
 const commandPattern = /^control_[0-9a-f]{32}$/;
 const toolsByView = {
   native: new Set<ViewerControlTool>(['window', 'pan', 'zoom']),
-  mpr: new Set<ViewerControlTool>(['crosshairs', 'window', 'pan', 'zoom']),
+  mpr: new Set<ViewerControlTool>(['crosshairs', 'window', 'pan', 'zoom', 'crop']),
 };
 
 const patientPoint = (value: unknown): MprPatientPoint | null | undefined => {

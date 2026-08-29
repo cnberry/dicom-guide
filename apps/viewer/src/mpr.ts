@@ -1,4 +1,48 @@
 export type MprPatientPoint = [number, number, number];
+export type MprCanvasPoint = [number, number];
+
+export type MprCropFit = {
+  center: MprCanvasPoint;
+  parallelScale: number;
+};
+
+export const calculateMprCropFit = ({
+  start,
+  end,
+  viewportWidth,
+  viewportHeight,
+  parallelScale,
+  padding = 0.94,
+}: {
+  start: MprCanvasPoint;
+  end: MprCanvasPoint;
+  viewportWidth: number;
+  viewportHeight: number;
+  parallelScale: number;
+  padding?: number;
+}): MprCropFit | undefined => {
+  if (
+    ![...start, ...end, viewportWidth, viewportHeight, parallelScale, padding].every(
+      Number.isFinite,
+    ) ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    parallelScale <= 0 ||
+    padding <= 0 ||
+    padding > 1
+  ) {
+    return undefined;
+  }
+  const width = Math.abs(end[0] - start[0]);
+  const height = Math.abs(end[1] - start[1]);
+  if (width < 12 || height < 12) return undefined;
+  const scaleFactor = Math.min(viewportWidth / width, viewportHeight / height) * padding;
+  if (!Number.isFinite(scaleFactor) || scaleFactor <= 1) return undefined;
+  return {
+    center: [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2],
+    parallelScale: parallelScale / Math.min(scaleFactor, 50),
+  };
+};
 
 export const reorderDenseMaskSlices = ({
   mask,

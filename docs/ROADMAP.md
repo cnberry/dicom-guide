@@ -831,6 +831,23 @@
    measured 649 pixels high, both display modes stayed within one viewport, and tool
    selections remained stable across multiple control polling intervals.
 
+## Completed in the fortieth milestone
+
+1. Fixed MPR Zoom ownership: while Zoom is selected, both vertical primary-button drag
+   and the wheel control magnification. In every other MPR display mode, the wheel
+   remains slice navigation.
+2. Added reversible display-only Crop. A person can drag a bounded rectangle or select
+   two opposite corners in any MPR plane; that plane recenters and scales to the box
+   with aspect-ratio-preserving padding. Source pixels, geometry, crosshair coordinates,
+   and the other two cameras remain unchanged.
+3. Made Reset explicitly restore every MPR camera and clear unfinished crop selection.
+   Crop is available in the focused toolbar, agent display-tool contract, repo skill,
+   and advanced MPR without granting measurement or source-mutation authority.
+4. Added bounded crop-math, viewer-control, and server validation tests. TypeScript,
+   all 147 viewer tests, the full Python agent suite, production build, and live
+   840×640 copied-scan QA pass. The page stays exactly one viewport tall, all three MPR
+   hosts remain 569 pixels high, and Crop publishes a ready local control observation.
+
 ## Immediate
 
 1. Use **In-depth review** for one series at a time. Treat the three-plane view as a

@@ -66,7 +66,9 @@ Rules:
 
 - IDs must have the documented opaque form and the instance must belong to the series in the live manifest.
 - Native tools: `window`, `pan`, `zoom`.
-- MPR tools: `crosshairs`, `window`, `pan`, `zoom`.
+- MPR tools: `crosshairs`, `window`, `pan`, `zoom`, `crop`. Crop activates the local
+  display-only box-selection tool; a person or browser controller drags the box or
+  selects two opposite corners in one pane, and Reset restores the uncropped camera.
 - A point is null or exactly three finite DICOM LPS millimeter coordinates.
 - Each accepted command receives a server-monotonic `revision`. Last accepted command wins in memory.
 - The browser polls, applies a revision once, and publishes its exact resulting state.

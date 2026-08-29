@@ -1733,12 +1733,20 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                             ['window', 'Window'],
                             ['pan', 'Pan'],
                             ['zoom', 'Zoom'],
+                            ['crop', 'Crop'],
                           ] as const
                         ).map(([tool, label]) => (
                           <button
                             key={tool}
                             className={mprTool === tool ? 'active' : ''}
                             aria-pressed={mprTool === tool}
+                            title={
+                              tool === 'zoom'
+                                ? 'Drag vertically or use the wheel to zoom'
+                                : tool === 'crop'
+                                  ? 'Drag a box, or click two corners, to fit one pane'
+                                  : undefined
+                            }
                             onClick={() => {
                               notePersonInteraction();
                               setMprTool(tool);

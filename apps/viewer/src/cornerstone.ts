@@ -42,8 +42,10 @@ import {
   type RawMeasurementAnnotation,
 } from './measurements';
 import {
+  calculateMprCropFit,
   mprCrosshairConfiguration,
   reorderDenseMaskSlices,
+  type MprCanvasPoint,
   type MprPatientPoint,
 } from './mpr';
 import {
@@ -73,7 +75,7 @@ export type ViewportToolController = {
   destroy: () => void;
 };
 
-export type MprTool = 'crosshairs' | 'window' | 'pan' | 'zoom' | 'paint' | 'erase';
+export type MprTool = 'crosshairs' | 'window' | 'pan' | 'zoom' | 'crop' | 'paint' | 'erase';
 export type MprOrientation = 'axial' | 'coronal' | 'sagittal';
 export type NormalizedMprPoint = [number, number, number];
 export type ReadonlyMprSegmentation = {
@@ -90,6 +92,11 @@ export type MprViewportController = {
   ) => () => void;
   setPatientPoint: (point: MprPatientPoint) => void;
   setNormalizedPoint: (point: NormalizedMprPoint) => void;
+  fitToCanvasRectangle: (
+    orientation: MprOrientation,
+    start: MprCanvasPoint,
+    end: MprCanvasPoint,
+  ) => boolean;
   reset: () => void;
   setBrushSize: (size: number) => void;
   clearSegmentation: () => void;
@@ -786,9 +793,6 @@ export const createMprViewports = async (
       });
     }
     viewportIds.forEach((viewportId) => toolGroup.addViewport(viewportId, engineId));
-    toolGroup.setToolActive(StackScrollTool.toolName, {
-      bindings: [{ mouseButton: ToolEnums.MouseBindings.Wheel }],
-    });
     const mprToolClasses: Partial<Record<MprTool, string>> = {
       crosshairs: CrosshairsTool.toolName,
       window: WindowLevelTool.toolName,
@@ -799,18 +803,39 @@ export const createMprViewports = async (
         : {}),
     };
     const setPrimaryTool = (tool: MprTool) => {
+      toolGroup.setToolPassive(StackScrollTool.toolName, { removeAllBindings: true });
       Object.values(mprToolClasses).forEach((toolName) =>
         toolGroup.setToolPassive(toolName, { removeAllBindings: true }),
       );
+      if (tool === 'crop') {
+        toolGroup.setToolActive(StackScrollTool.toolName, {
+          bindings: [{ mouseButton: ToolEnums.MouseBindings.Wheel }],
+        });
+        return;
+      }
       const toolName = mprToolClasses[tool] ?? CrosshairsTool.toolName;
       toolGroup.setToolActive(toolName, {
-        bindings: [{ mouseButton: ToolEnums.MouseBindings.Primary }],
+        bindings: [
+          { mouseButton: ToolEnums.MouseBindings.Primary },
+          ...(tool === 'zoom'
+            ? [{ mouseButton: ToolEnums.MouseBindings.Wheel }]
+            : []),
+        ],
       });
+      if (tool !== 'zoom') {
+        toolGroup.setToolActive(StackScrollTool.toolName, {
+          bindings: [{ mouseButton: ToolEnums.MouseBindings.Wheel }],
+        });
+      }
     };
     setPrimaryTool(primaryTool);
-    const viewports = viewportIds.map(
-      (viewportId) => engine.getViewport(viewportId) as Types.IVolumeViewport,
-    );
+    const viewportsByOrientation = Object.fromEntries(
+      orientations.map(({ id }) => [
+        id,
+        engine.getViewport(`${engineId}-${id}`) as Types.IVolumeViewport,
+      ]),
+    ) as Record<MprOrientation, Types.IVolumeViewport>;
+    const viewports = Object.values(viewportsByOrientation);
     const crosshairs = toolGroup.getToolInstance(CrosshairsTool.toolName) as CrosshairsTool;
     viewports.forEach((viewport) => {
       viewport.resetCamera();
@@ -908,8 +933,44 @@ export const createMprViewports = async (
         }
         crosshairs.setToolCenter([world[0], world[1], world[2]], true);
       },
+      fitToCanvasRectangle: (orientation, start, end) => {
+        const viewport = viewportsByOrientation[orientation];
+        const element = elements[orientation];
+        const camera = viewport.getCamera();
+        const { focalPoint, position, parallelScale } = camera;
+        if (
+          !Number.isFinite(parallelScale) ||
+          !focalPoint ||
+          focalPoint.length !== 3 ||
+          !position ||
+          position.length !== 3
+        ) {
+          return false;
+        }
+        const fit = calculateMprCropFit({
+          start,
+          end,
+          viewportWidth: element.clientWidth,
+          viewportHeight: element.clientHeight,
+          parallelScale: parallelScale!,
+        });
+        if (!fit) return false;
+        const centerWorld = viewport.canvasToWorld(fit.center);
+        if (centerWorld.length !== 3 || !centerWorld.every(Number.isFinite)) {
+          return false;
+        }
+        const offset = centerWorld.map((value, axis) => value - focalPoint[axis]);
+        viewport.setCamera({
+          focalPoint: [...centerWorld] as Types.Point3,
+          position: position.map((value, axis) => value + offset[axis]) as Types.Point3,
+          parallelScale: fit.parallelScale,
+        });
+        viewport.render();
+        return true;
+      },
       reset: () => {
         viewports.forEach((viewport) => {
+          viewport.resetCamera();
           viewport.resetProperties();
         });
         crosshairs.resetCrosshairs();
