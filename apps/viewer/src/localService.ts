@@ -35,11 +35,27 @@ const stringArray = (value: unknown): string[] =>
 const readInstance = (value: unknown, index: number): DicomInstance | undefined => {
   if (!isRecord(value) || !isOpaqueId(value.id, 'instance')) return undefined;
   const imagePosition = finiteNumbers(value.image_position_patient, 3);
+  const pixelSpacing = finiteNumbers(value.pixel_spacing, 2);
+  const orientation = finiteNumbers(value.image_orientation_patient, 6);
   return {
     instanceId: value.id,
     imageUrl: `/v1/instances/${encodeURIComponent(value.id)}`,
+    bytes:
+      typeof value.bytes === 'number' && Number.isSafeInteger(value.bytes) && value.bytes > 0
+        ? value.bytes
+        : undefined,
+    sha256:
+      typeof value.sha256 === 'string' && /^[0-9a-f]{64}$/.test(value.sha256)
+        ? value.sha256
+        : undefined,
     instanceNumber: finiteNumber(value.instance_number) ?? index,
     imagePosition,
+    rows: finiteNumber(value.rows),
+    columns: finiteNumber(value.columns),
+    pixelSpacing,
+    sliceThickness: finiteNumber(value.slice_thickness),
+    orientation,
+    numberOfFrames: finiteNumber(value.number_of_frames),
   };
 };
 

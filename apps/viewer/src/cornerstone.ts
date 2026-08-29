@@ -1,9 +1,11 @@
+import { adaptersSEG } from '@cornerstonejs/adapters';
 import {
   Enums,
   RenderingEngine,
   cache,
   eventTarget,
   init as initCore,
+  metaData,
   setVolumesForViewports,
   type Types,
   volumeLoader,
@@ -14,6 +16,7 @@ import {
 } from '@cornerstonejs/dicom-image-loader';
 import {
   BidirectionalTool,
+  BrushTool,
   CrosshairsTool,
   EllipticalROITool,
   Enums as ToolEnums,
@@ -26,8 +29,12 @@ import {
   addTool,
   annotation,
   init as initTools,
+  segmentation,
+  utilities as toolUtilities,
 } from '@cornerstonejs/tools';
-import type { DicomSeries } from './dicom';
+import dcmjs from 'dcmjs';
+import { assessLesionVolumeEligibility, type DicomSeries } from './dicom';
+import { repairDicomSegFrameSourceClasses } from './dicomSeg';
 import {
   buildMeasurementEvidencePacket,
   type ImageSourceReference,
@@ -35,6 +42,12 @@ import {
   type RawMeasurementAnnotation,
 } from './measurements';
 import { mprCrosshairConfiguration, type MprPatientPoint } from './mpr';
+import {
+  MAX_MANUAL_LABELMAP_VOXELS,
+  buildLesionVolumeArchive,
+  type LesionVolumeArchive,
+  type ManualSegmentationStats,
+} from './lesionVolume';
 
 let initialization: Promise<void> | undefined;
 const imageReferences = new Map<string, ImageSourceReference>();
@@ -56,12 +69,22 @@ export type ViewportToolController = {
   destroy: () => void;
 };
 
-export type MprTool = 'crosshairs' | 'window' | 'pan' | 'zoom';
+export type MprTool = 'crosshairs' | 'window' | 'pan' | 'zoom' | 'paint' | 'erase';
 export type MprOrientation = 'axial' | 'coronal' | 'sagittal';
 export type MprViewportController = {
   setPrimaryTool: (tool: MprTool) => void;
   subscribeToPatientPoint: (listener: (point: MprPatientPoint) => void) => () => void;
   reset: () => void;
+  setBrushSize: (size: number) => void;
+  clearSegmentation: () => void;
+  subscribeToSegmentationStats: (
+    listener: (stats: ManualSegmentationStats) => void,
+  ) => () => void;
+  exportSegmentationEvidence: (
+    label: string,
+    targetDefinition: string,
+  ) => Promise<LesionVolumeArchive>;
+  hasSegmentationDraft: () => boolean;
   resize: () => void;
   destroy: () => void;
 };
@@ -77,6 +100,7 @@ export const initializeCornerstone = (): Promise<void> => {
       Object.values(toolClasses).forEach((toolClass) => addTool(toolClass));
       addTool(StackScrollTool);
       addTool(CrosshairsTool);
+      addTool(BrushTool);
     })();
   }
   return initialization;
@@ -300,6 +324,277 @@ export const createStackViewport = async (
   };
 };
 
+const MPR_PAINT_TOOL = 'ScanViewManualPaint';
+const MPR_ERASE_TOOL = 'ScanViewManualErase';
+
+const normalizeDICOMText = (value: string, name: string, maximum: number): string => {
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  if (!normalized) throw new Error(`${name} is required.`);
+  if (normalized.length > maximum) throw new Error(`${name} must be ${maximum} characters or fewer.`);
+  if (/[\\\u0000-\u001f\u007f]/u.test(normalized)) {
+    throw new Error(`${name} cannot contain a backslash or control character.`);
+  }
+  return normalized;
+};
+
+const waitForVolumeLoad = (
+  volume: Types.IImageVolume,
+  signal: AbortSignal,
+): Promise<void> => {
+  if (volume.loadStatus?.loaded) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const imageIds = new Set(volume.imageIds);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      eventTarget.removeEventListener(Enums.Events.IMAGE_VOLUME_LOADING_COMPLETED, onCompleted);
+      eventTarget.removeEventListener(Enums.Events.IMAGE_LOAD_ERROR, onError);
+      signal.removeEventListener('abort', onAbort);
+    };
+    const finish = (error?: Error) => {
+      cleanup();
+      if (error) reject(error);
+      else resolve();
+    };
+    const onCompleted = (event: Event) => {
+      const detail = (event as CustomEvent<{ volumeId?: string }>).detail;
+      if (detail?.volumeId !== volume.volumeId) return;
+      finish();
+    };
+    const onError = (event: Event) => {
+      const detail = (event as CustomEvent<{ imageId?: string }>).detail;
+      if (!detail?.imageId || !imageIds.has(detail.imageId)) return;
+      finish(new Error('A native source frame could not be loaded for DICOM SEG export.'));
+    };
+    const onAbort = () => finish(new Error('Native source loading was cancelled.'));
+    eventTarget.addEventListener(Enums.Events.IMAGE_VOLUME_LOADING_COMPLETED, onCompleted);
+    eventTarget.addEventListener(Enums.Events.IMAGE_LOAD_ERROR, onError);
+    signal.addEventListener('abort', onAbort, { once: true });
+    const timeout = window.setTimeout(
+      () => finish(new Error('Timed out while loading native source frames for DICOM SEG export.')),
+      120_000,
+    );
+    volume.load();
+    if (volume.loadStatus?.loaded) {
+      finish();
+    }
+  });
+};
+
+const scalarMask = (volume: Types.IImageVolume): ArrayLike<number> => {
+  const values =
+    volume.voxelManager?.getCompleteScalarDataArray?.() ??
+    volume.voxelManager?.getScalarData();
+  if (!values) throw new Error('The local manual labelmap is unavailable.');
+  return values as ArrayLike<number>;
+};
+
+const segmentationStats = (
+  values: ArrayLike<number>,
+  voxelVolumeMm3: number,
+): ManualSegmentationStats => {
+  let foregroundVoxels = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = Number(values[index]);
+    if (value !== 0 && value !== 1) {
+      throw new Error('The v1 manual labelmap must remain strictly binary.');
+    }
+    foregroundVoxels += value;
+  }
+  const volumeMm3 = foregroundVoxels * voxelVolumeMm3;
+  return {
+    foregroundVoxels,
+    voxelVolumeMm3,
+    volumeMm3,
+    volumeMl: volumeMm3 / 1000,
+  };
+};
+
+const buildDicomSeg = async ({
+  sourceVolume,
+  dimensions,
+  maskValues,
+  artifactId,
+  trackingUid,
+  label,
+  targetDefinition,
+}: {
+  sourceVolume: Types.IImageVolume;
+  dimensions: Types.Point3;
+  maskValues: ArrayLike<number>;
+  artifactId: string;
+  trackingUid: string;
+  label: string;
+  targetDefinition: string;
+}): Promise<Uint8Array> => {
+  const rows = dimensions[1];
+  const columns = dimensions[0];
+  const frameLength = rows * columns;
+  const labelmaps2D = Array.from({ length: dimensions[2] }, (_, frameIndex) => {
+    const start = frameIndex * frameLength;
+    const pixelData = new Uint8Array(frameLength);
+    const segmentsOnLabelmap = new Set<number>();
+    for (let index = 0; index < frameLength; index += 1) {
+      const value = Number(maskValues[start + index]);
+      if (value !== 0 && value !== 1) {
+        throw new Error('The v1 DICOM SEG export requires a binary labelmap.');
+      }
+      pixelData[index] = value;
+      if (value === 1) segmentsOnLabelmap.add(1);
+    }
+    return {
+      rows,
+      columns,
+      pixelData,
+      segmentsOnLabelmap: Array.from(segmentsOnLabelmap),
+    };
+  });
+  if (!labelmaps2D.some((frame) => frame.segmentsOnLabelmap.length > 0)) {
+    throw new Error('Paint at least one voxel before exporting evidence.');
+  }
+  const recommendedColor = dcmjs.data.Colors.rgb2DICOMLAB([1, 0.31, 0.47]).map(Math.round);
+  const metadata: Array<Record<string, unknown> | undefined> = [];
+  metadata[1] = {
+    SegmentNumber: '1',
+    SegmentLabel: label,
+    SegmentDescription: targetDefinition,
+    SegmentAlgorithmType: 'MANUAL',
+    TrackingID: artifactId,
+    TrackingUID: trackingUid,
+    RecommendedDisplayCIELabValue: recommendedColor,
+    SegmentedPropertyCategoryCodeSequence: {
+      CodeValue: '49755003',
+      CodingSchemeDesignator: 'SCT',
+      CodeMeaning: 'Morphologically Abnormal Structure',
+    },
+    SegmentedPropertyTypeCodeSequence: {
+      CodeValue: '52988006',
+      CodingSchemeDesignator: 'SCT',
+      CodeMeaning: 'Lesion',
+    },
+  };
+  const labelmap3D = {
+    segmentsOnLabelmap: [1],
+    metadata,
+    labelmaps2D,
+  };
+  const referencedImages = sourceVolume.getCornerstoneImages();
+  if (
+    referencedImages.length !== dimensions[2] ||
+    referencedImages.some((image) => !image)
+  ) {
+    throw new Error('Every native source frame must be loaded before DICOM SEG export.');
+  }
+  const sourceGeometryByInstance = new Map<
+    string,
+    {
+      sopClassUid: string;
+      imagePositionPatient: [number, number, number];
+      imageOrientationPatient: [number, number, number, number, number, number];
+      pixelSpacing: [number, number];
+      sliceThickness: number;
+      sourceIndex: number;
+    }
+  >();
+  referencedImages.forEach((image, sourceIndex) => {
+    const sopCommon = metaData.get(Enums.MetadataModules.SOP_COMMON, image.imageId) as
+      | { sopClassUID?: string; sopInstanceUID?: string }
+      | undefined;
+    const imageData = metaData.get(Enums.MetadataModules.IMAGE_DATA, image.imageId) as
+      | { SOPClassUID?: string; SOPInstanceUID?: string }
+      | undefined;
+    const plane = metaData.get(Enums.MetadataModules.IMAGE_PLANE, image.imageId) as
+      | {
+          imagePositionPatient?: number[];
+          imageOrientationPatient?: number[];
+          rowCosines?: number[];
+          columnCosines?: number[];
+          pixelSpacing?: number[];
+          rowPixelSpacing?: number;
+          columnPixelSpacing?: number;
+          sliceThickness?: number;
+        }
+      | undefined;
+    const sopClassUid = sopCommon?.sopClassUID ?? imageData?.SOPClassUID;
+    const sopInstanceUid = sopCommon?.sopInstanceUID ?? imageData?.SOPInstanceUID;
+    const position = plane?.imagePositionPatient;
+    const orientation =
+      plane?.imageOrientationPatient ??
+      (plane?.rowCosines?.length === 3 && plane.columnCosines?.length === 3
+        ? [...plane.rowCosines, ...plane.columnCosines]
+        : undefined);
+    const pixelSpacing =
+      plane?.pixelSpacing ??
+      (Number.isFinite(plane?.rowPixelSpacing) && Number.isFinite(plane?.columnPixelSpacing)
+        ? [plane!.rowPixelSpacing!, plane!.columnPixelSpacing!]
+        : undefined);
+    const sliceThickness = plane?.sliceThickness;
+    if (
+      !sopClassUid ||
+      !sopInstanceUid ||
+      position?.length !== 3 ||
+      !position.every(Number.isFinite) ||
+      orientation?.length !== 6 ||
+      !orientation.every(Number.isFinite) ||
+      pixelSpacing?.length !== 2 ||
+      !pixelSpacing.every((value) => Number.isFinite(value) && value > 0) ||
+      !Number.isFinite(sliceThickness) ||
+      sliceThickness! <= 0 ||
+      sourceGeometryByInstance.has(sopInstanceUid)
+    ) {
+      throw new Error('Exact loaded source geometry is unavailable for DICOM SEG export.');
+    }
+    sourceGeometryByInstance.set(sopInstanceUid, {
+      sopClassUid,
+      imagePositionPatient: [position[0], position[1], position[2]],
+      imageOrientationPatient: [
+        orientation[0],
+        orientation[1],
+        orientation[2],
+        orientation[3],
+        orientation[4],
+        orientation[5],
+      ],
+      pixelSpacing: [pixelSpacing[0], pixelSpacing[1]],
+      sliceThickness: sliceThickness!,
+      sourceIndex,
+    });
+  });
+  const generated = adaptersSEG.Cornerstone3D.Segmentation.generateSegmentation(
+    referencedImages,
+    labelmap3D,
+    metaData,
+    {
+      sopClassUID: '1.2.840.10008.5.1.4.1.1.66.4',
+      transferSyntaxUid: '1.2.840.10008.1.2.1',
+    },
+  );
+  const dataset = generated.dataset as Record<string, unknown> & {
+    SegmentSequence?: Array<Record<string, unknown>> | Record<string, unknown>;
+  };
+  dataset.SegmentsOverlap = 'NO';
+  dataset.SpecificCharacterSet = 'ISO_IR 192';
+  dataset.ContentLabel = 'SCANVIEW_SEG';
+  dataset.ContentDescription = 'Unreviewed local manual lesion ROI evidence';
+  dataset.SeriesDescription = 'ScanView unreviewed manual lesion ROI';
+  dataset.Manufacturer = 'ScanView local';
+  dataset.ManufacturerModelName = 'ScanView';
+  dataset.SoftwareVersions = '0.2.0';
+  const segmentItem = Array.isArray(dataset.SegmentSequence)
+    ? dataset.SegmentSequence[0]
+    : dataset.SegmentSequence;
+  if (!segmentItem) throw new Error('The local DICOM SEG adapter omitted its segment description.');
+  Object.assign(segmentItem, {
+    SegmentNumber: '1',
+    SegmentLabel: label,
+    SegmentDescription: targetDefinition,
+    SegmentAlgorithmType: 'MANUAL',
+    TrackingID: artifactId,
+    TrackingUID: trackingUid,
+  });
+  repairDicomSegFrameSourceClasses(dataset, sourceGeometryByInstance);
+  return new Uint8Array(dcmjs.data.datasetToDict(dataset).write());
+};
+
 export const createMprViewports = async (
   engineId: string,
   elements: Record<MprOrientation, HTMLDivElement>,
@@ -309,9 +604,27 @@ export const createMprViewports = async (
   await initializeCornerstone();
   const engine = new RenderingEngine(engineId);
   const volumeId = `cornerstoneStreamingImageVolume:${engineId}-volume`;
+  const segmentationId = `${engineId}-manual-segmentation`;
+  const labelmapVolumeId = `${engineId}-manual-labelmap`;
   const toolGroupId = `${engineId}-tools`;
+  const evidenceEligibility = assessLesionVolumeEligibility(series);
+  const loadAbortController = new AbortController();
+  const viewportIds = (['axial', 'coronal', 'sagittal'] as const).map(
+    (id) => `${engineId}-${id}`,
+  );
+  let segmentationAdded = false;
+  let labelmapVolume: Types.IImageVolume | undefined;
   const removeVolume = () => {
+    if (cache.getVolumeLoadObject(labelmapVolumeId)) cache.removeVolumeLoadObject(labelmapVolumeId);
     if (cache.getVolumeLoadObject(volumeId)) cache.removeVolumeLoadObject(volumeId);
+  };
+  const removeSegmentation = () => {
+    if (!segmentationAdded) return;
+    viewportIds.forEach((viewportId) => {
+      segmentation.removeLabelmapRepresentation(viewportId, segmentationId, true);
+    });
+    segmentation.removeSegmentation(segmentationId);
+    segmentationAdded = false;
   };
   const orientations: Array<{
     id: MprOrientation;
@@ -335,9 +648,52 @@ export const createMprViewports = async (
     );
     const imageIds = imageIdsForSeries(series);
     const volume = await volumeLoader.createAndCacheVolume(volumeId, { imageIds });
-    volume.load();
-    const viewportIds = orientations.map(({ id }) => `${engineId}-${id}`);
+    let sourceLoadError: Error | undefined;
+    const sourceLoaded = evidenceEligibility.eligible
+      ? waitForVolumeLoad(volume, loadAbortController.signal).catch((error: unknown) => {
+          sourceLoadError =
+            error instanceof Error ? error : new Error('A native source frame could not be loaded.');
+        })
+      : Promise.resolve();
     await setVolumesForViewports(engine, [{ volumeId }], viewportIds);
+
+    if (evidenceEligibility.eligible) {
+      if (volume.numVoxels > MAX_MANUAL_LABELMAP_VOXELS) {
+        throw new Error('This source exceeds the 64 Mi-voxel manual segmentation safety bound.');
+      }
+      labelmapVolume = volumeLoader.createAndCacheDerivedLabelmapVolume(volumeId, {
+        volumeId: labelmapVolumeId,
+      });
+      segmentation.addSegmentations([
+        {
+          segmentationId,
+          representation: {
+            type: ToolEnums.SegmentationRepresentations.Labelmap,
+            data: {
+              volumeId: labelmapVolumeId,
+              referencedVolumeId: volumeId,
+            },
+          },
+          config: {
+            label: 'Manual unreviewed region',
+            segments: {
+              1: {
+                label: 'Manual region 1',
+                active: true,
+                locked: false,
+                cachedStats: {},
+              },
+            },
+          },
+        },
+      ]);
+      segmentationAdded = true;
+      viewportIds.forEach((viewportId) => {
+        segmentation.addLabelmapRepresentationToViewport(viewportId, [{ segmentationId }]);
+        segmentation.activeSegmentation.setActiveSegmentation(viewportId, segmentationId);
+      });
+      segmentation.segmentIndex.setActiveSegmentIndex(segmentationId, 1);
+    }
 
     const toolGroup = ToolGroupManager.createToolGroup(toolGroupId);
     if (!toolGroup) throw new Error('Unable to create the local MPR tool group.');
@@ -345,21 +701,35 @@ export const createMprViewports = async (
       toolGroup.addTool(toolClass.toolName),
     );
     toolGroup.addTool(CrosshairsTool.toolName, mprCrosshairConfiguration);
+    if (evidenceEligibility.eligible) {
+      toolGroup.addToolInstance(MPR_PAINT_TOOL, BrushTool.toolName, {
+        activeStrategy: 'FILL_INSIDE_CIRCLE',
+        brushSize: 12,
+      });
+      toolGroup.addToolInstance(MPR_ERASE_TOOL, BrushTool.toolName, {
+        activeStrategy: 'ERASE_INSIDE_CIRCLE',
+        brushSize: 12,
+      });
+    }
     viewportIds.forEach((viewportId) => toolGroup.addViewport(viewportId, engineId));
     toolGroup.setToolActive(StackScrollTool.toolName, {
       bindings: [{ mouseButton: ToolEnums.MouseBindings.Wheel }],
     });
-    const mprToolClasses = {
-      crosshairs: CrosshairsTool,
-      window: WindowLevelTool,
-      pan: PanTool,
-      zoom: ZoomTool,
-    } as const;
+    const mprToolClasses: Partial<Record<MprTool, string>> = {
+      crosshairs: CrosshairsTool.toolName,
+      window: WindowLevelTool.toolName,
+      pan: PanTool.toolName,
+      zoom: ZoomTool.toolName,
+      ...(evidenceEligibility.eligible
+        ? { paint: MPR_PAINT_TOOL, erase: MPR_ERASE_TOOL }
+        : {}),
+    };
     const setPrimaryTool = (tool: MprTool) => {
-      Object.values(mprToolClasses).forEach((toolClass) =>
-        toolGroup.setToolPassive(toolClass.toolName, { removeAllBindings: true }),
+      Object.values(mprToolClasses).forEach((toolName) =>
+        toolGroup.setToolPassive(toolName, { removeAllBindings: true }),
       );
-      toolGroup.setToolActive(mprToolClasses[tool].toolName, {
+      const toolName = mprToolClasses[tool] ?? CrosshairsTool.toolName;
+      toolGroup.setToolActive(toolName, {
         bindings: [{ mouseButton: ToolEnums.MouseBindings.Primary }],
       });
     };
@@ -372,6 +742,19 @@ export const createMprViewports = async (
       viewport.resetCamera();
       viewport.render();
     });
+    const sliceSpacingMm = series.geometry.pixelSpacing
+      ? Math.abs(volume.spacing[2])
+      : Number.NaN;
+    if (!Number.isFinite(sliceSpacingMm) || sliceSpacingMm <= 0) {
+      throw new Error('The native source slice spacing is unavailable.');
+    }
+    const voxelVolumeMm3 =
+      series.geometry.pixelSpacing![0] * series.geometry.pixelSpacing![1] * sliceSpacingMm;
+    let segmentationDirty = false;
+    const currentStats = () =>
+      labelmapVolume
+        ? segmentationStats(scalarMask(labelmapVolume), voxelVolumeMm3)
+        : { foregroundVoxels: 0, voxelVolumeMm3: 0, volumeMm3: 0, volumeMl: 0 };
     return {
       setPrimaryTool,
       subscribeToPatientPoint: (listener) => {
@@ -400,14 +783,115 @@ export const createMprViewports = async (
         crosshairs.resetCrosshairs();
         viewports.forEach((viewport) => viewport.render());
       },
+      setBrushSize: (size) => {
+        if (!labelmapVolume) return;
+        const bounded = Math.max(1, Math.min(50, Math.round(size)));
+        toolUtilities.segmentation.setBrushSizeForToolGroup(
+          toolGroupId,
+          bounded,
+          MPR_PAINT_TOOL,
+        );
+        toolUtilities.segmentation.setBrushSizeForToolGroup(
+          toolGroupId,
+          bounded,
+          MPR_ERASE_TOOL,
+        );
+      },
+      clearSegmentation: () => {
+        if (labelmapVolume) {
+          segmentation.helpers.clearSegmentValue(segmentationId, 1);
+          segmentationDirty = false;
+        }
+      },
+      subscribeToSegmentationStats: (listener) => {
+        if (!labelmapVolume) {
+          listener(currentStats());
+          return () => undefined;
+        }
+        let pending: number | undefined;
+        const emit = () => {
+          if (pending !== undefined) window.clearTimeout(pending);
+          pending = window.setTimeout(() => {
+            pending = undefined;
+            listener(currentStats());
+          }, 300);
+        };
+        const onModified = (event: Event) => {
+          const detail = (event as CustomEvent<{ segmentationId?: string }>).detail;
+          if (detail?.segmentationId === segmentationId) {
+            segmentationDirty = true;
+            emit();
+          }
+        };
+        eventTarget.addEventListener(ToolEnums.Events.SEGMENTATION_DATA_MODIFIED, onModified);
+        listener({ foregroundVoxels: 0, voxelVolumeMm3, volumeMm3: 0, volumeMl: 0 });
+        return () => {
+          if (pending !== undefined) window.clearTimeout(pending);
+          eventTarget.removeEventListener(
+            ToolEnums.Events.SEGMENTATION_DATA_MODIFIED,
+            onModified,
+          );
+        };
+      },
+      exportSegmentationEvidence: async (label, targetDefinition) => {
+        if (!labelmapVolume || !evidenceEligibility.eligible) {
+          throw new Error(evidenceEligibility.reason);
+        }
+        const normalizedLabel = normalizeDICOMText(label, 'Working region label', 64);
+        const normalizedDefinition = normalizeDICOMText(
+          targetDefinition,
+          'Target definition',
+          300,
+        );
+        await sourceLoaded;
+        if (sourceLoadError) throw sourceLoadError;
+        const artifactId = `seg_${crypto.randomUUID()}`;
+        const trackingUid = dcmjs.data.DicomMetaDictionary.uid();
+        const maskValues = scalarMask(labelmapVolume);
+        const dicomSegBytes = await buildDicomSeg({
+          sourceVolume: volume,
+          dimensions: labelmapVolume.dimensions,
+          maskValues,
+          artifactId,
+          trackingUid,
+          label: normalizedLabel,
+          targetDefinition: normalizedDefinition,
+        });
+        const orderedInstanceIds = volume.imageIds.map((imageId) => {
+          const source = imageReferences.get(imageId);
+          if (!source) throw new Error('An ordered native source reference is unavailable.');
+          return source.instanceId;
+        });
+        return buildLesionVolumeArchive({
+          series,
+          orderedInstanceIds,
+          dimensions: [
+            labelmapVolume.dimensions[0],
+            labelmapVolume.dimensions[1],
+            labelmapVolume.dimensions[2],
+          ],
+          sliceSpacingMm,
+          maskValues,
+          dicomSegBytes,
+          artifactId,
+          trackingUid,
+          label: normalizedLabel,
+          targetDefinition: normalizedDefinition,
+        });
+      },
+      hasSegmentationDraft: () => segmentationDirty,
       resize: () => engine.resize(true, false),
       destroy: () => {
+        loadAbortController.abort();
+        removeSegmentation();
         ToolGroupManager.destroyToolGroup(toolGroupId);
         engine.destroy();
         removeVolume();
       },
     };
   } catch (error) {
+    loadAbortController.abort();
+    removeSegmentation();
     ToolGroupManager.destroyToolGroup(toolGroupId);
     engine.destroy();
     removeVolume();

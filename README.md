@@ -37,6 +37,11 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
 - Geometry-gated, single-series axial/coronal/sagittal MPR built locally from native
   source slices, with physically linked patient-space crosshairs, visible LPS
   coordinates, window/level, pan, zoom, wheel navigation, and reset.
+- Source-bound manual ROI volume evidence drafts: paint or erase one binary region on
+  a strictly regular native MR/CT grid, export a DICOM SEG-format mask plus a versioned
+  JSON sidecar, and independently rehash the supplied sources and recompute voxel count
+  and volume locally. Every result remains computed, unreviewed, with boundary
+  uncertainty not quantified and all longitudinal/diagnostic conclusions locked.
 - Window/level, pan, zoom, reset, DICOM patient-orientation labels, and manual
   length/bidirectional/elliptical ROI measurement tools.
 - Follow-up is never guessed; same-exam series are rejected as longitudinal pairs.
@@ -104,8 +109,8 @@ returns zero candidates instead of treating CT and MRI as interchangeable.
   clinical conclusion—and native DICOM remains authoritative.
 - Python catalog with SHA-256 source provenance and opaque logical IDs.
 - Bearer-token-protected, loopback-only, source-read-only local API.
-- Versioned measurement, key-image, consultation-key-image, consultation-packet,
-  comparison, visit-packet, review-record,
+- Versioned measurement, key-image, manual ROI volume, consultation-key-image,
+  consultation-packet, comparison, visit-packet, review-record,
   navigation-intent, viewer-state, rigid-registration, and registration-QA JSON
   Schemas; committed tests use synthetic data only.
 - Resumable copy/repair and byte-for-byte verification utility.
@@ -145,8 +150,8 @@ package index or external DICOM-processing API:
 ```bash
 pnpm build
 .venv/bin/python scripts/build_offline_bundle.py --output-dir release
-unzip release/scanview-offline-0.1.0.zip
-cd scanview-offline-0.1.0
+unzip release/scanview-offline-0.2.0.zip
+cd scanview-offline-0.2.0
 python3 verify.py
 PIP_NO_INDEX=1 sh install.sh
 sh launch.sh '/absolute/path/to/copied/DICOM'
@@ -198,6 +203,8 @@ python3 -m venv .venv
 .venv/bin/scanview-agent launch '/path/to/copied/DICOM'
 .venv/bin/scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 .venv/bin/scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
+.venv/bin/scanview-agent validate-lesion-volume \
+  '/path/to/scanview-lesion-volume.zip' '/path/to/copied/DICOM'
 .venv/bin/scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
   --output scanview-visit-packet.zip
 .venv/bin/scanview-agent validate-visit-packet scanview-visit-packet.zip
@@ -546,8 +553,28 @@ MPR planes are interpolated display derivatives. They are not registration,
 segmentation, tumor response, or diagnosis, and original DICOM remains authoritative.
 The shared point links only the three planes reconstructed from that one source series;
 it does not align baseline and follow-up exams.
-Evidence export stays on the native source panes until derived-image provenance is
-implemented.
+
+The MPR workspace can also hold one person-painted binary region on the native source
+grid. Paint/erase and export remain disabled unless every source object is single-frame
+and agrees on matrix, pixel spacing, orientation, regular projected slice spacing, and
+absence of in-plane drift. The live voxel count × source-grid voxel volume is labeled
+**computed, unreviewed; boundary uncertainty not quantified**.
+
+Choose **Export DICOM SEG evidence** to download exactly `segmentation.dcm`,
+`evidence.json`, and `README.txt`. The DICOM object uses generic abnormal-structure/
+lesion coding for interoperability; it does not assert tumor, neoplasm, histology, or
+tissue type. Validate the bundle against the exact local source directory:
+
+```bash
+.venv/bin/scanview-agent validate-lesion-volume \
+  '/safe/local/scanview-lesion-volume.zip' '/safe/local/DICOM/root'
+```
+
+`valid: true` means only that ScanView matched source bytes, checked its narrow v1
+DICOM SEG-format profile and native geometry, and recomputed the mask hash, voxel
+count, and arithmetic volume. V1 has no acceptance or clinical-approval mechanism and
+cannot link lesions, compute longitudinal change, classify response, diagnose, or
+produce a clinical conclusion. The ZIP remains sensitive and patient-identifiable.
 
 ## Prepare a neutral MRI/CT consultation packet
 

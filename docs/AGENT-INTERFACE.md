@@ -7,7 +7,7 @@ an external API and never grants source mutation.
 ## Offline agent distribution
 
 `scripts/build_offline_bundle.py` produces one deterministic, non-overwriting
-`scanview-offline-0.1.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
+`scanview-offline-0.2.0.zip` for Python 3.11+ hosts on macOS and Linux. It contains
 the UI-embedded ScanView wheel, pinned pure-Python `pydicom` 3.0.2, an exact payload
 manifest, hash-locked requirements, and verifier/install/launch entry points. After
 extraction, an agent or person can run:
@@ -23,8 +23,10 @@ the bundle and installed versions, UI, schemas, and consultation contract before
 DICOM catalog is built. The launched agent interface is the same loopback bearer-
 authorized API documented below. Build-time dependency retrieval is separate from
 runtime DICOM processing and contains no patient data. The unsigned hash manifest is
-corruption evidence only, not publisher or clinical identity authentication. Linux
-execution remains a release gate until the artifact is run on a Linux host.
+corruption evidence only, not publisher or clinical identity authentication. The
+exact v0.2.0 artifact has passed no-index install, runtime, synthetic source-bound SEG
+validation, tamper refusal, and loopback launch on macOS arm64 and Strawberry Linux
+x86_64; signing/notarization remains pending.
 
 ## Local artifacts
 
@@ -121,12 +123,57 @@ integrity booleans, and errors; it does not print source identifiers or values. 
 valid archive remains sensitive, `unreviewed`, and a display derivative. The native
 DICOM is authoritative, and validation is not clinical approval.
 
-The human viewer's MPR planes are local navigation-only derivatives and are not part
-of the key-image or agent evidence contract. Agents should continue to reference
-native source instances until a versioned derived-image provenance contract exists.
-The live MPR panel exposes its current LPS patient coordinate in accessible UI text so
-an agent can help a person navigate, but that transient point is not saved, compared,
-or promoted to an observation.
+The human viewer's rendered MPR planes remain local navigation-only derivatives and
+are not part of the key-image contract. The separate manual ROI volume contract below
+stores its binary labelmap on the native source grid and binds every source instance;
+it does not export an MPR screenshot as evidence. The live MPR panel exposes its
+current LPS patient coordinate in accessible UI text so an agent can help a person
+navigate, but that transient point is not saved, compared, or promoted to an
+observation.
+
+## Source-bound manual ROI volume evidence
+
+ScanView v1 lets a person paint one binary region on one strictly regular native MR
+or CT source grid. The browser exports exactly `evidence.json`, `segmentation.dcm`,
+and `README.txt`. The sidecar conforms to
+`schemas/scanview-lesion-volume-evidence-v1.schema.json`; the DICOM object uses the
+Segmentation Storage SOP class, uncompressed Explicit VR Little Endian, one `MANUAL`
+segment, and generic abnormal-structure/lesion coding. Those codes are interoperability
+labels, not a diagnosis, neoplasm claim, histology, or tumor-component classification.
+
+Validate the draft only against the supplied exact local source directory:
+
+```bash
+scanview-agent validate-lesion-volume \
+  '/safe/local/scanview-lesion-volume.zip' '/safe/local/DICOM/root'
+```
+
+The validator is independent of the browser. It reads the source objects without
+following final symlinks, hashes stable file descriptors, requires one study/series/
+Frame of Reference and a consistent single-frame native matrix, checks strict
+orientation, spacing, positions, gaps, and in-plane drift, resolves all DICOM SEG
+source references, decodes the bit-packed binary frames, rebuilds the dense native
+mask, and recomputes its hash, foreground count, and voxel-count volume. It rejects
+duplicate JSON fields, extra ZIP members, changed/missing sources, reference mismatch,
+non-binary or empty masks, and sidecar arithmetic changes.
+
+`valid: true` and `source_validated_pending_review` mean only that these source,
+format, geometry, mask, and arithmetic checks passed. They do not validate the painted
+boundary, acquisition suitability, represented tissue, lesion identity, clinical
+interpretation, or DICOM conformance outside the ScanView v1 profile. V1 has no
+acceptance or clinical-approval transition. Its fixed states and locks are:
+
+- `draft_unreviewed`, `unreviewed`, `computed_unreviewed`, and
+  `boundary_uncertainty: not_quantified`;
+- local source/mask display and a single-source-series computed ROI volume only;
+- no longitudinal link, percentage change, response classification, diagnosis, or
+  clinical conclusion.
+
+Each export receives a new Tracking UID; matching labels or codes do not establish
+that two exports represent the same lesion. Invalid evidence returns no computed
+volume and `evidence_use: none`. The ZIP remains sensitive and patient-identifiable
+because its DICOM object and pixels retain clinical context even though the JSON uses
+opaque IDs.
 
 ## Clinician consultation-packet archives
 
@@ -597,9 +644,12 @@ it in `missing_context`; do not synthesize a diagnosis or response category.
 ## Future write boundary
 
 The ordinary viewer now consumes an accepted registration QA record only through the
-implemented live-bundle-validated opacity/swipe surface. Segmentation, volume-
-measurement types, transformed coverage masks, and signed evidence packets remain
-future explicit derivative workflows. Each must preserve the implemented registration
-and QA source hashes, algorithm/tool version, parameters, outputs, limitations, and
-review state. Native DICOM files remain read-only; subtraction, propagation,
-segmentation, resampled measurements, and response conclusions remain locked.
+implemented live-bundle-validated opacity/swipe surface. Manual native-grid binary ROI
+export exists only as the unreviewed single-series evidence profile above. SEG import,
+DICOM SR, component-specific or semi-automatic tumor segmentation, reviewed volume
+types, longitudinal lesion linkage, transformed lesion masks, and signed evidence
+packets remain future explicit derivative workflows. Each must preserve the
+implemented registration and QA source hashes, algorithm/tool version, parameters,
+outputs, limitations, and review state. Native DICOM files remain read-only;
+subtraction, propagation, resampled measurements, and response conclusions remain
+locked.

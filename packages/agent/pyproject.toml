@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scanview-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Privacy-conscious, source-read-only DICOM catalog and local API for ScanView"
 readme = "README.md"
 requires-python = ">=3.11"

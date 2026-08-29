@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assessCompatibility,
+  assessLesionVolumeEligibility,
   assessMprEligibility,
   formatDicomDate,
   getPatientOrientationLabels,
@@ -19,6 +20,12 @@ const instance = (position: number, instanceNumber = position): DicomInstance =>
   file: { name: `image-${instanceNumber}.dcm` } as File,
   instanceNumber,
   imagePosition: [0, 0, position],
+  rows: 128,
+  columns: 128,
+  pixelSpacing: [0.8, 0.8],
+  sliceThickness: 1,
+  orientation: [1, 0, 0, 0, 1, 0],
+  numberOfFrames: 1,
 });
 
 const series = (overrides: Partial<DicomSeries> = {}): DicomSeries => ({
@@ -206,6 +213,7 @@ describe('MPR geometry gate', () => {
         rows: 128,
         columns: 128,
         pixelSpacing: [0.8, 0.8],
+        sliceThickness: 1,
         orientation: [1, 0, 0, 0, 1, 0],
       },
       instances: [instance(0), instance(1), instance(2), instance(3)],
@@ -218,6 +226,39 @@ describe('MPR geometry gate', () => {
       reason: 'Geometry supports local orthographic reslicing.',
       sliceSpacingMm: 1,
     });
+  });
+
+  it('accepts only strict per-instance native geometry for manual volume evidence', () => {
+    expect(assessLesionVolumeEligibility(volumetricSeries())).toEqual({
+      eligible: true,
+      reason: 'Geometry supports source-bound native-grid manual volume evidence.',
+      sliceSpacingMm: 1,
+    });
+    expect(
+      assessLesionVolumeEligibility(
+        volumetricSeries({
+          instances: [
+            instance(0),
+            instance(1),
+            { ...instance(2), orientation: [1, 0, 0, 0, 0.999, 0.01] },
+          ],
+        }),
+      ).reason,
+    ).toContain('every source slice');
+  });
+
+  it('keeps navigation available while refusing loose spacing or in-plane drift for evidence', () => {
+    const looselySpaced = volumetricSeries({
+      instances: [instance(0), instance(1), instance(2), instance(3.05)],
+    });
+    expect(assessMprEligibility(looselySpaced).eligible).toBe(true);
+    expect(assessLesionVolumeEligibility(looselySpaced).reason).toContain('irregular');
+
+    const drifted = volumetricSeries({
+      instances: [instance(0), { ...instance(1), imagePosition: [0.02, 0, 1] }, instance(2)],
+    });
+    expect(assessMprEligibility(drifted).eligible).toBe(true);
+    expect(assessLesionVolumeEligibility(drifted).reason).toContain('drift');
   });
 
   it('refuses missing orientation, spacing, frame, or slice position', () => {

@@ -19,8 +19,16 @@ export type DicomInstance = {
   instanceId: string;
   file?: File;
   imageUrl?: string;
+  bytes?: number;
+  sha256?: string;
   instanceNumber: number;
   imagePosition?: number[];
+  rows?: number;
+  columns?: number;
+  pixelSpacing?: number[];
+  sliceThickness?: number;
+  orientation?: number[];
+  numberOfFrames?: number;
 };
 
 export type DicomSeries = {
@@ -201,6 +209,100 @@ export const assessMprEligibility = (series?: DicomSeries): MprEligibility => {
   };
 };
 
+const vectorsMatch = (left: number[] | undefined, right: number[], tolerance: number): boolean =>
+  Boolean(
+    left &&
+      left.length === right.length &&
+      left.every(
+        (value, index) =>
+          Number.isFinite(value) && Math.abs(value - right[index]) <= tolerance,
+      ),
+  );
+
+export const MAX_MANUAL_LABELMAP_VOXELS = 64 * 1024 * 1024;
+
+export const assessLesionVolumeEligibility = (series?: DicomSeries): MprEligibility => {
+  const mpr = assessMprEligibility(series);
+  if (!mpr.eligible || !series) return mpr;
+  const rows = series.geometry.rows!;
+  const columns = series.geometry.columns!;
+  const pixelSpacing = series.geometry.pixelSpacing!;
+  const orientation = series.geometry.orientation!;
+  const voxelCount = rows * columns * series.instances.length;
+  if (!Number.isSafeInteger(voxelCount) || voxelCount > MAX_MANUAL_LABELMAP_VOXELS) {
+    return {
+      eligible: false,
+      reason: 'Manual volume evidence is disabled above the 64 Mi-voxel local safety bound.',
+    };
+  }
+  const row = orientation.slice(0, 3);
+  const column = orientation.slice(3, 6);
+  const normal = normalFromOrientation(orientation)!;
+  if (
+    Math.abs(Math.sqrt(dot(row, row)) - 1) > 1e-4 ||
+    Math.abs(Math.sqrt(dot(column, column)) - 1) > 1e-4 ||
+    Math.abs(dot(row, column)) > 1e-4
+  ) {
+    return {
+      eligible: false,
+      reason: 'Manual volume evidence requires a strictly orthonormal native source grid.',
+    };
+  }
+  if (
+    series.instances.some(
+      (instance) =>
+        instance.numberOfFrames !== 1 ||
+        instance.rows !== rows ||
+        instance.columns !== columns ||
+        !vectorsMatch(instance.pixelSpacing, pixelSpacing, 1e-4) ||
+        !Number.isFinite(instance.sliceThickness) ||
+        instance.sliceThickness! <= 0 ||
+        !Number.isFinite(series.geometry.sliceThickness) ||
+        Math.abs(instance.sliceThickness! - series.geometry.sliceThickness!) > 0.01 ||
+        !vectorsMatch(instance.orientation, orientation, 1e-4),
+    )
+  ) {
+    return {
+      eligible: false,
+      reason:
+        'Manual volume evidence requires consistent single-frame matrix, spacing, and orientation tags on every source slice.',
+    };
+  }
+  const projections = series.instances.map((instance) => dot(instance.imagePosition!, normal));
+  const gaps = projections
+    .slice(1)
+    .map((coordinate, index) => Math.abs(coordinate - projections[index]));
+  const sliceSpacingMm = median(gaps);
+  const tolerance = Math.max(0.01, sliceSpacingMm * 0.001);
+  if (gaps.some((gap) => Math.abs(gap - sliceSpacingMm) > tolerance)) {
+    return {
+      eligible: false,
+      reason: 'Manual volume evidence is disabled because source slice spacing is irregular.',
+    };
+  }
+  const origin = series.instances[0].imagePosition!;
+  const originProjection = projections[0];
+  const hasInPlaneDrift = series.instances.some((instance, index) => {
+    const displacement = instance.imagePosition!.map((value, axis) => value - origin[axis]);
+    const normalDisplacement = normal.map(
+      (value) => value * (projections[index] - originProjection),
+    );
+    const inPlane = displacement.map((value, axis) => value - normalDisplacement[axis]);
+    return Math.sqrt(dot(inPlane, inPlane)) > 0.01;
+  });
+  if (hasInPlaneDrift) {
+    return {
+      eligible: false,
+      reason: 'Manual volume evidence is disabled for source planes with in-plane drift or tilt.',
+    };
+  }
+  return {
+    eligible: true,
+    reason: 'Geometry supports source-bound native-grid manual volume evidence.',
+    sliceSpacingMm,
+  };
+};
+
 const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
   // DICOM headers precede Pixel Data. Capping the read prevents importing a study
   // from holding all pixel arrays in memory at once.
@@ -272,6 +374,12 @@ const parseHeader = async (file: File): Promise<ParsedHeader | undefined> => {
     },
     instanceNumber: numberTag(dataset, 'x00200013') ?? 0,
     imagePosition: position,
+    rows: numberTag(dataset, 'x00280010'),
+    columns: numberTag(dataset, 'x00280011'),
+    pixelSpacing,
+    sliceThickness: numberTag(dataset, 'x00180050'),
+    orientation,
+    numberOfFrames: numberTag(dataset, 'x00280008') ?? 1,
   };
 };
 
@@ -361,9 +469,30 @@ export const parseDicomFiles = async (
       const index = cursor++;
       const parsed = await parseHeader(files[index]);
       if (parsed) {
-        const { file, instanceId, instanceNumber, imagePosition, ...seriesHeader } = parsed;
+        const {
+          file,
+          instanceId,
+          instanceNumber,
+          imagePosition,
+          rows,
+          columns,
+          pixelSpacing,
+          orientation,
+          numberOfFrames,
+          ...seriesHeader
+        } = parsed;
         const existing = bySeries.get(parsed.id);
-        const instance = { file, instanceId, instanceNumber, imagePosition };
+        const instance = {
+          file,
+          instanceId,
+          instanceNumber,
+          imagePosition,
+          rows,
+          columns,
+          pixelSpacing,
+          orientation,
+          numberOfFrames,
+        };
         if (existing) {
           existing.instances.push(instance);
         } else {

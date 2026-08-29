@@ -68,6 +68,16 @@ quality-system, and regulatory review.
 - Manifests and derivatives stay outside Git and are treated as sensitive.
 - Source delete and overwrite operations do not exist.
 - Generated content is `derived` and `unreviewed` until explicitly accepted.
+- A manual ROI volume evidence ZIP is a sensitive, patient-identifiable derivative.
+  The browser keeps one person-painted binary labelmap on the native source grid and
+  emits a DICOM SEG-format object plus an opaque-ID sidecar. The independent local
+  validator rehashes stable source descriptors and recomputes selected format,
+  geometry, mask, voxel-count, and arithmetic checks. `valid: true` is limited to
+  those checks; it is not boundary accuracy, acquisition suitability, lesion identity,
+  tumor classification, clinical validation, or DICOM conformance certification.
+  V1 stays `draft_unreviewed`, has no acceptance transition, and cannot unlock a
+  longitudinal link, percentage change, response classification, diagnosis, or
+  clinical conclusion.
 - Rigid registration invokes a version-gated local Slicer 5.12.3/BRAINSFit process.
   The release computed revision is 34627; the enforced runtime repository revision is
   `9034c71`. The official macOS package and this host's installed copy were
@@ -206,6 +216,11 @@ are established.
 - A manual ellipse is a 2D geometric approximation. Its area is not a tumor mask,
   tumor volume, total burden, or response classification; sequence and tumor component
   still require clinician confirmation.
+- A manual binary ROI volume is marked-source-grid arithmetic, not a tumor volume.
+  Boundary placement, partial-volume effects, included/excluded tissue, acquisition
+  protocol, motion, treatment effect, and lesion identity remain unreviewed. Matching
+  labels, codes, or Tracking IDs across exports do not establish the same lesion, and
+  v1 deliberately performs no longitudinal arithmetic.
 
 ## Agent output contract
 
@@ -225,6 +240,13 @@ The current `compare-measurements` command goes further: it always leaves
 `candidate_interpretations` empty. It reports only source-linked numeric differences,
 requires distinct source series and trusted physical units, and lists the clinical
 context still needed before anyone applies response criteria.
+
+The lesion-volume validator may report explicitly named `computed_unreviewed_*`
+values only after exact-source and arithmetic validation. Agents must describe that
+state as “source/format/arithmetic checks passed; clinical review pending,” never as a
+finding, tumor measurement, clinical validation, or conclusion. Invalid evidence has
+`evidence_use: none` and no computed values. Validation is read-only and cannot approve
+or change the artifact.
 
 The browser pairing editor uses the same constraints and requires strictly ordered
 acquisition dates, a human-selected measurement at each timepoint, and a bounded

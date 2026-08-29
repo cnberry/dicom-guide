@@ -23,6 +23,7 @@ from .consultation_packets import (
     write_consultation_packet,
 )
 from .key_images import key_image_archive_summary
+from .lesion_volumes import lesion_volume_archive_summary
 from .measurements import (
     build_measurement_comparison,
     measurement_comparison_summary,
@@ -142,6 +143,20 @@ def parser() -> argparse.ArgumentParser:
         help="Validate a local ScanView key-image archive and its integrity links",
     )
     validate_key_image.add_argument("archive", type=Path)
+
+    validate_lesion_volume = commands.add_parser(
+        "validate-lesion-volume",
+        help=(
+            "Validate a local manual DICOM SEG bundle against the exact native "
+            "DICOM source and recompute its unreviewed volume"
+        ),
+    )
+    validate_lesion_volume.add_argument("archive", type=Path)
+    validate_lesion_volume.add_argument(
+        "source_root",
+        type=Path,
+        help="Local DICOM root used to rehash and verify every referenced source instance",
+    )
 
     assemble_visit_packet = commands.add_parser(
         "assemble-visit-packet",
@@ -473,6 +488,11 @@ def main() -> None:
             raise SystemExit(1)
     elif args.command == "validate-key-image":
         summary = key_image_archive_summary(args.archive)
+        _write_json(summary, None)
+        if not summary["valid"]:
+            raise SystemExit(1)
+    elif args.command == "validate-lesion-volume":
+        summary = lesion_volume_archive_summary(args.archive, args.source_root)
         _write_json(summary, None)
         if not summary["valid"]:
             raise SystemExit(1)

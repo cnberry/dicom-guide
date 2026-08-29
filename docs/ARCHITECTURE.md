@@ -24,6 +24,14 @@ Copied DICOM (source-read-only in ScanView)
                          |                                      |
                          |                                      +--> geometry gate --> local MPR
                          |                                      |                     (derived navigation)
+                         |                                      |                           |
+                         |                                      |                           +--> strict native-grid gate
+                         |                                      |                                  |
+                         |                                      |                                  +--> person-painted binary ROI
+                         |                                      |                                         |
+                         |                                      |                                         +--> DICOM SEG-format + sidecar
+                         |                                      |                                                |
+                         |                                      |                                                +--> independent local validator
                          |                                      |
                          |                                      +--> measurement packet
                          |                                                   |
@@ -112,7 +120,10 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    not enter native key-image evidence. A Cornerstone crosshair controller moves one
    shared LPS point across those three planes. Minimal mode suppresses oblique rotation
    and slab controls, and the coordinate is neither persisted nor used to imply
-   cross-exam registration.
+   cross-exam registration. A stricter second gate controls manual ROI evidence:
+   every source must be single-frame with consistent matrix, spacing, orientation,
+   regular projected spacing, and no in-plane drift. The binary labelmap is stored on
+   the native grid; rendered MPR pixels are never exported as measurement evidence.
 4. **Local API:** binds to loopback only, uses an ephemeral bearer token for agents
    and an HttpOnly same-origin session for the browser, returns only opaque IDs and
    an allowlisted metadata contract, and has no source write/delete API. Its
@@ -141,7 +152,14 @@ explicit same-modality pair --> local Slicer/BRAINSFit + BRAINSResample rigid jo
    technical sampling-support NRRD to the browser session. Rejected or invalid review input falls back to
    ordinary DICOM with every registered route locked. Bearer access gets only a
    privacy-minimized authorization summary.
-5. **Derivatives:** rigid transforms and resampled volumes now go to a separate,
+5. **Derivatives:** a manual ROI volume export is a new sensitive three-file draft,
+   not a source mutation. It binds a DICOM SEG-format object to ordered source
+   byte/SHA anchors and a v1 sidecar. The browser computes a native-grid marked-voxel
+   volume; an independent Python validator reopens stable source descriptors, resolves
+   the DICOM references, rebuilds the dense binary mask, and recomputes the arithmetic.
+   Source/format/arithmetic validation never changes its `draft_unreviewed` state or
+   unlocks longitudinal linking, percentage change, response, diagnosis, or a clinical
+   conclusion. Rigid transforms and resampled volumes now go to a separate,
    owner-only, atomic no-replace directory with exact source hashes, version-gated
    local Slicer/BRAINSFit/BRAINSResample provenance, and every display use locked pending QA. Future lesion masks,
    additional measurements, and reports follow the same boundary. Manual
@@ -231,6 +249,16 @@ two validated key images --> visit packet ----+
 explicit measurement pair --> comparison ----+                              |
                                                                              +--> self-attested review (new ZIP)
                                                                              +--> amended comparison (new ZIP, unreviewed)
+```
+
+The manual single-series evidence path is intentionally not longitudinal:
+
+```text
+strict native source grid --> person-painted binary ROI --> DICOM SEG-format + sidecar
+                                                                  |
+                                                                  +--> exact-source local validation
+
+lesion identity / cross-exam link / percent change / response: unavailable
 ```
 
 When a catalog contains no valid dated same-modality cross-study source pair, the

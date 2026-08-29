@@ -408,36 +408,77 @@
 6. Used no Mila data on Strawberry and no external DICOM-processing API. The detailed
    human and machine-readable Linux provenance records are committed with the repo.
 
+## Completed in the twenty-fourth milestone
+
+1. Added one in-memory person-painted binary ROI shared across local axial, coronal,
+   and sagittal views. Paint/erase, brush size, clearing, voxel count, and arithmetic
+   mL display are available only for one strict single-frame native MR/CT grid.
+2. Added a three-member source-bound evidence export: an uncompressed DICOM
+   SEG-format object, a v1 JSON sidecar, and local instructions. Each export has one
+   `MANUAL` segment, generic abnormal-structure/lesion coding, a new Tracking UID,
+   ordered source-byte anchors, mask hash, and permanently unreviewed safety locks.
+3. Added an independent `validate-lesion-volume` agent command. It reopens stable
+   local source descriptors, rehashes every source, checks one exact study/series/
+   Frame of Reference and strict native geometry, resolves DICOM SEG references,
+   decodes sparse bit-packed frames, rebuilds the dense mask, and recomputes marked
+   voxels and volume without an external API.
+4. Added fail-closed archive, strict-JSON, size, source-change, geometry, DICOM
+   reference, binary-mask, and arithmetic validation. `valid: true` is explicitly
+   limited to source/format/geometry/mask/arithmetic checks; v1 has no approval state.
+5. Exercised the production browser workflow with a synthetic three-slice MR series:
+   one painted plane produced 64 voxels and 0.048 mL. A stricter release audit then
+   found pinned-adapter omissions in source references, derivation semantics, sparse
+   plane association, Slice Thickness, and sub-byte multi-frame packing. ScanView now
+   repairs each item from exact loaded source geometry and has a real-adapter regression.
+6. Added the 21st embedded JSON Schema and bundled the pinned local Cornerstone
+   adapter/dcmjs runtime. The viewer retains no external processing or telemetry path;
+   the offline installer and runtime remain package-index-free.
+7. Passed the release-grade cross-language gate with actual dcmjs Part-10 bytes: the
+   strict Python validator rejoined a sparse first/last-slice SEG to three exact source
+   files, recovered 2 voxels and 4.0 mm³ / 0.004 mL, and rejected a one-byte source
+   change with all computed values withheld. The deterministic versioned v0.2.0 offline
+   ZIP then verified, installed with no package index, launched its loopback UI/catalog,
+   and repeated the exact validation and tamper refusal on macOS arm64 and Strawberry
+   Ubuntu x86_64/Python 3.14.4. No Mila data left the local computer.
+
 ## Immediate
 
-1. Use consultation packets or boards only to prepare questions with Mila's
+1. Use manual ROI volume evidence only as a source-bound discussion draft. Have a
+   qualified clinician inspect the complete boundary on the original images and define
+   represented tissue/inclusion criteria; review is necessary but does not itself make
+   ScanView clinically validated or authorize diagnosis/response use.
+2. Use consultation packets or boards only to prepare questions with Mila's
    clinicians; confirm every MRI/CT source view in the clinical imaging system and do
    not treat either artifact as a diagnosis or treatment-response analysis.
-2. Import a future same-modality MRI follow-up, have a person confirm the intended
+3. Import a future same-modality MRI follow-up, have a person confirm the intended
    earlier/later sequences and clinical roles, run the required engine on that pair,
    and complete qualified visual/quantitative QA.
-3. Protect the authenticated local Slicer installation and keep using the recorded
+4. Protect the authenticated local Slicer installation and keep using the recorded
    launcher hash; reauthenticate any replacement before a future patient-specific job.
-4. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
+5. Protect the checksum-verified Strawberry Slicer installation and recorded launcher
    hash; repeat authentication and synthetic commissioning after any replacement.
-5. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
+6. Produce signed/notarized macOS/Linux ScanView release artifacts around the verified
    offline bundle, and evaluate whether to include a separately authenticated interpreter.
-6. Design optional authenticated signature integration for clinical organizations;
+7. Design optional authenticated signature integration for clinical organizations;
    never relabel the current self-attested hash chain as identity verification.
-7. Design an append-only, privacy-minimized local audit for bearer access to live
+8. Design an append-only, privacy-minimized local audit for bearer access to live
    viewer state without recording patient content or putting tokens in logs.
-8. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
+9. Have a qualified reviewer test the v2 mask-boundary checklist and accepted display
    on a clinically appropriate same-modality case before any patient-specific reliance.
 
 ## Next milestone
 
-1. Import a future same-modality Mila follow-up and complete the explicit pairing and
-   qualified review workflow before enabling reviewed comparison.
-2. Add platform signing and notarization without weakening local-only runtime behavior.
-3. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
+1. Design a separate qualified review record for one manual ROI boundary, represented
+   tissue/inclusion criteria, and acquisition suitability; do not change exported v1
+   drafts or call source/arithmetic validation clinical approval.
+2. Import a future same-modality Mila follow-up and complete explicit series pairing,
+   separately reviewed ROI boundaries, same-lesion confirmation, and qualified review
+   before designing source-bound longitudinal volume-change evidence.
+3. Add platform signing and notarization without weakening local-only runtime behavior.
+4. Add Orthanc as an optional localhost-only DICOMweb archive and pin/test its local
    configuration.
-4. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
-5. Extend append-only audit records from review decisions to local evidence access.
+5. Prototype an OHIF longitudinal ScanView mode instead of forking OHIF.
+6. Extend append-only audit records from review decisions to local evidence access.
 
 ## Registration milestone
 

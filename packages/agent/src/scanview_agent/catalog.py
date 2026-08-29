@@ -186,6 +186,7 @@ def _read_instance(path: Path, root: Path, *, include_hashes: bool, salt: str) -
         "rows": _int(getattr(dataset, "Rows", None)),
         "columns": _int(getattr(dataset, "Columns", None)),
         "pixel_spacing": _float_list(getattr(dataset, "PixelSpacing", None)),
+        "slice_thickness": _float(getattr(dataset, "SliceThickness", None)),
         "image_orientation_patient": _float_list(
             getattr(dataset, "ImageOrientationPatient", None)
         ),

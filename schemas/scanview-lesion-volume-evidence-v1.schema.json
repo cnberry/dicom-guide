@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scanview.local/schemas/scanview-lesion-volume-evidence-v1.schema.json",
+  "title": "ScanView local lesion ROI volume evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "artifact_id",
+    "created_at",
+    "state",
+    "local_only",
+    "sensitive",
+    "deidentified",
+    "source",
+    "segment",
+    "geometry",
+    "measurement",
+    "files",
+    "review",
+    "permitted_uses",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "artifact_type": { "const": "scanview.lesion-volume-evidence" },
+    "artifact_id": { "type": "string", "pattern": "^seg_[0-9a-f-]{36}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "state": { "const": "draft_unreviewed" },
+    "local_only": { "const": true },
+    "sensitive": { "const": true },
+    "deidentified": { "const": false },
+    "source": { "$ref": "#/$defs/source" },
+    "segment": { "$ref": "#/$defs/segment" },
+    "geometry": { "$ref": "#/$defs/geometry" },
+    "measurement": { "$ref": "#/$defs/measurement" },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dicom_seg"],
+      "properties": {
+        "dicom_seg": { "$ref": "#/$defs/file" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": { "status": { "const": "unreviewed" } }
+    },
+    "permitted_uses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_overlay",
+        "mask_overlay",
+        "exact_timepoint_volume",
+        "longitudinal_link",
+        "percent_change",
+        "response_classification",
+        "diagnosis",
+        "clinical_conclusion"
+      ],
+      "properties": {
+        "source_overlay": { "const": true },
+        "mask_overlay": { "const": true },
+        "exact_timepoint_volume": { "const": "computed_unreviewed_only" },
+        "longitudinal_link": { "const": false },
+        "percent_change": { "const": false },
+        "response_classification": { "const": false },
+        "diagnosis": { "const": false },
+        "clinical_conclusion": { "const": false }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    }
+  },
+  "$defs": {
+    "finiteNumber": { "type": "number" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "vector3": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/finiteNumber" },
+        { "$ref": "#/$defs/finiteNumber" },
+        { "$ref": "#/$defs/finiteNumber" }
+      ],
+      "items": false
+    },
+    "vector6": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/finiteNumber" },
+        { "$ref": "#/$defs/finiteNumber" },
+        { "$ref": "#/$defs/finiteNumber" },
+        { "$ref": "#/$defs/finiteNumber" },
+        { "$ref": "#/$defs/finiteNumber" },
+        { "$ref": "#/$defs/finiteNumber" }
+      ],
+      "items": false
+    },
+    "sourceInstance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frame_index",
+        "instance_id",
+        "bytes",
+        "sha256",
+        "rows",
+        "columns",
+        "pixel_spacing_mm",
+        "image_orientation_patient",
+        "image_position_patient"
+      ],
+      "properties": {
+        "frame_index": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "instance_id": { "type": "string", "pattern": "^(instance_[0-9a-f]{20}|[0-9a-f]{16})$" },
+        "bytes": { "type": "integer", "minimum": 132, "maximum": 4294967296 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "rows": { "type": "integer", "minimum": 2, "maximum": 16384 },
+        "columns": { "type": "integer", "minimum": 2, "maximum": 16384 },
+        "pixel_spacing_mm": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "number", "exclusiveMinimum": 0 }
+          ],
+          "items": false
+        },
+        "image_orientation_patient": { "$ref": "#/$defs/vector6" },
+        "image_position_patient": { "$ref": "#/$defs/vector3" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "study_id",
+        "series_id",
+        "frame_of_reference_id",
+        "modality",
+        "instance_count",
+        "instances",
+        "source_set_sha256"
+      ],
+      "properties": {
+        "patient_context_id": { "type": "string", "pattern": "^(patient_[0-9a-f]{20}|[0-9a-f]{16})$" },
+        "study_id": { "type": "string", "pattern": "^(study_[0-9a-f]{20}|[0-9a-f]{16})$" },
+        "series_id": { "type": "string", "pattern": "^(series_[0-9a-f]{20}|[0-9a-f]{16})$" },
+        "frame_of_reference_id": { "type": "string", "pattern": "^(frame_[0-9a-f]{20}|[0-9a-f]{16})$" },
+        "modality": { "enum": ["MR", "CT"] },
+        "instance_count": { "type": "integer", "minimum": 3, "maximum": 100000 },
+        "instances": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 100000,
+          "items": { "$ref": "#/$defs/sourceInstance" }
+        },
+        "source_set_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "code": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "scheme", "meaning"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "scheme": { "type": "string", "minLength": 1, "maxLength": 16 },
+        "meaning": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment_number",
+        "tracking_id",
+        "tracking_uid",
+        "label",
+        "target_definition",
+        "algorithm_type",
+        "property_category",
+        "property_type"
+      ],
+      "properties": {
+        "segment_number": { "const": 1 },
+        "tracking_id": { "type": "string", "pattern": "^seg_[0-9a-f-]{36}$" },
+        "tracking_uid": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)+$", "maxLength": 64 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "target_definition": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "algorithm_type": { "const": "MANUAL" },
+        "property_category": { "$ref": "#/$defs/code" },
+        "property_type": { "$ref": "#/$defs/code" }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grid_order",
+        "dimensions",
+        "pixel_spacing_mm",
+        "projected_slice_spacing_mm",
+        "row_direction",
+        "column_direction",
+        "normal_direction",
+        "voxel_volume_mm3",
+        "geometry_matches_source",
+        "resampled"
+      ],
+      "properties": {
+        "grid_order": { "const": "source_volume_frame_row_column" },
+        "dimensions": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "integer", "minimum": 2 },
+            { "type": "integer", "minimum": 2 },
+            { "type": "integer", "minimum": 3 }
+          ],
+          "items": false
+        },
+        "pixel_spacing_mm": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "number", "exclusiveMinimum": 0 }
+          ],
+          "items": false
+        },
+        "projected_slice_spacing_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "row_direction": { "$ref": "#/$defs/vector3" },
+        "column_direction": { "$ref": "#/$defs/vector3" },
+        "normal_direction": { "$ref": "#/$defs/vector3" },
+        "voxel_volume_mm3": { "type": "number", "exclusiveMinimum": 0 },
+        "geometry_matches_source": { "const": true },
+        "resampled": { "const": false }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "method",
+        "foreground_voxel_count",
+        "volume_mm3",
+        "volume_ml",
+        "mask_pixel_sha256",
+        "boundary_uncertainty"
+      ],
+      "properties": {
+        "status": { "const": "computed_unreviewed" },
+        "method": { "const": "binary_voxel_count_times_native_voxel_determinant" },
+        "foreground_voxel_count": { "type": "integer", "minimum": 1 },
+        "volume_mm3": { "type": "number", "exclusiveMinimum": 0 },
+        "volume_ml": { "type": "number", "exclusiveMinimum": 0 },
+        "mask_pixel_sha256": { "$ref": "#/$defs/sha256" },
+        "boundary_uncertainty": { "const": "not_quantified" }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "bytes", "sha256"],
+      "properties": {
+        "filename": { "const": "segmentation.dcm" },
+        "bytes": { "type": "integer", "minimum": 132, "maximum": 536870912 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

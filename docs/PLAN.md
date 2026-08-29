@@ -30,6 +30,10 @@ result into a medical conclusion.
   evidence.
 - Geometry-gated single-series local MPR with three orthographic patient-axis planes
   and explicit interpolated-derivative labeling.
+- Strictly geometry-gated, source-bound manual binary ROI volume evidence on one
+  native MR/CT series, with a DICOM SEG-format export, versioned sidecar, exact source
+  rehashing, independent mask/volume recomputation, and no clinical-approval or
+  longitudinal authority.
 - Physically linked, visible LPS crosshairs within one MPR volume, with canonical
   planes protected from oblique rotation and slab-thickness manipulation.
 - Source-linked local key-image archives with display provenance, permanent review
@@ -102,8 +106,11 @@ result into a medical conclusion.
   pixels are machine-gated to mask value one, with fixed pixels forced elsewhere.
   The mask is not shared anatomy, tumor, segmentation, registration quality, or
   clinical comparability. All other derived operations remain locked.
-- DICOM SEG/SR import/export and separate derivative store.
-- Manual/semi-automatic component-specific tumor segmentation.
+- Manual single-series binary DICOM SEG-format export plus a source-bound sidecar is
+  implemented; SEG import, DICOM SR, a protected derivative store, and external
+  conformance testing remain future work.
+- Review acceptance, lesion identity/linkage, and manual/semi-automatic
+  component-specific tumor segmentation remain future work.
 
 ### Research only
 
@@ -163,3 +170,8 @@ result into a medical conclusion.
     measures, compares, segments, renders, or packages DICOM may require an external
     API. A missing local engine or dependency must fail closed; it must never trigger
     a patient-data upload or cloud fallback.
+18. **Manual ROI evidence honesty:** export requires one strict regular native source
+    grid and binds a binary DICOM SEG-format mask to exact source bytes. Independent
+    validation recomputes only marked-voxel geometry arithmetic, leaves boundary
+    uncertainty unquantified, keeps the artifact unreviewed, and cannot establish
+    tumor identity, longitudinal linkage, response, diagnosis, or clinical approval.

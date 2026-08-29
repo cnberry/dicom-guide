@@ -28,11 +28,23 @@ const manifest = {
               id: 'instance_0123456789abcdef0123',
               instance_number: 1,
               image_position_patient: [0, 0, 0],
+              rows: 512,
+              columns: 512,
+              pixel_spacing: [0.5, 0.5],
+              slice_thickness: 1,
+              image_orientation_patient: [1, 0, 0, 0, 1, 0],
+              number_of_frames: 1,
             },
             {
               id: 'instance_1123456789abcdef0123',
               instance_number: 2,
               image_position_patient: [0, 0, 1],
+              rows: 512,
+              columns: 512,
+              pixel_spacing: [0.5, 0.5],
+              slice_thickness: 1,
+              image_orientation_patient: [1, 0, 0, 0, 1, 0],
+              number_of_frames: 1,
             },
           ],
         },
@@ -56,6 +68,9 @@ describe('loopback service manifest', () => {
     expect(result?.series[0].instances[0]).toMatchObject({
       instanceId: 'instance_0123456789abcdef0123',
       imageUrl: '/v1/instances/instance_0123456789abcdef0123',
+      pixelSpacing: [0.5, 0.5],
+      orientation: [1, 0, 0, 0, 1, 0],
+      numberOfFrames: 1,
     });
   });
 

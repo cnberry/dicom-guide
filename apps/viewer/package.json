@@ -1,7 +1,7 @@
 {
   "name": "@scanview/viewer",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -10,10 +10,13 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
+    "@babel/runtime": "7.26.10",
+    "@cornerstonejs/adapters": "5.8.2",
     "@cornerstonejs/core": "5.8.2",
     "@cornerstonejs/dicom-image-loader": "5.8.2",
     "@cornerstonejs/tools": "5.8.2",
     "dicom-parser": "1.8.21",
+    "dcmjs": "0.52.0",
     "events": "3.3.0",
     "fflate": "0.7.3",
     "react": "19.1.1",

@@ -101,6 +101,7 @@ def test_catalog_is_read_only_and_excludes_direct_identifiers(tmp_path: Path) ->
     assert instance["rows"] == 2
     assert instance["columns"] == 2
     assert instance["pixel_spacing"] == [1.0, 1.0]
+    assert instance["slice_thickness"] == 1.0
     assert instance["image_orientation_patient"] == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
     assert instance["number_of_frames"] == 1
 

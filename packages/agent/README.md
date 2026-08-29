@@ -13,6 +13,8 @@ scanview-agent serve '/path/to/copied/DICOM'
 scanview-agent launch '/path/to/copied/DICOM'
 scanview-agent validate-measurements '/path/to/scanview-measurements.json'
 scanview-agent validate-key-image '/path/to/scanview-key-image.zip'
+scanview-agent validate-lesion-volume \
+  '/path/to/scanview-lesion-volume.zip' '/path/to/copied/DICOM'
 scanview-agent assemble-visit-packet baseline-key-image.zip followup-key-image.zip \
   --output scanview-visit-packet.zip
 scanview-agent validate-visit-packet scanview-visit-packet.zip
@@ -107,6 +109,16 @@ Reviewer identity is not authenticated or digitally signed, and privacy-minimize
 validation never echoes names, roles, notes, labels, IDs, or values.
 The viewer invokes the same assembly path only when its current panes show the exact
 source instances named by the selected baseline/follow-up measurements.
+
+`validate-lesion-volume` validates one source-bound manual ROI volume evidence draft.
+It accepts a three-member ZIP and the exact local DICOM root, rehashes and matches every
+source instance, enforces one regular single-frame native MR/CT grid, checks the
+ScanView v1 subset of the DICOM SEG-format references and binary mask, and independently
+recomputes the dense mask hash, marked voxel count, and volume. Its summary exposes
+only explicitly named `computed_unreviewed_*` values. `source_validated_pending_review`
+means byte/format/geometry/arithmetic checks passed; it is not boundary review, DICOM
+conformance certification, clinical validation, diagnosis, or treatment-response
+authority. The command is read-only and cannot approve or unlock an artifact.
 
 `viewer-link` creates a versioned, sensitive local navigation intent from exact
 opaque catalog IDs. It verifies series/instance membership, permits only a plain

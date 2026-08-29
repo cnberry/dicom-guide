@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-28 21:15 PDT
+Last updated: 2026-08-28 22:38 PDT
 
 ## Data transfer
 
@@ -45,6 +45,17 @@ Last updated: 2026-08-28 21:15 PDT
 - MPR planes now share one physically linked DICOM patient-space crosshair and an
   accessible live LPS coordinate. Minimal interaction mode keeps the planes canonical
   by withholding oblique rotation and slab-thickness controls.
+- The same single-series workspace now supports one person-painted binary native-grid
+  ROI draft. Paint/erase and export require consistent single-frame per-instance
+  matrix, spacing, orientation, regular projected gaps, and no in-plane drift. The
+  live value is marked-voxel × native voxel volume and is permanently labeled
+  computed, unreviewed, with boundary uncertainty not quantified.
+- Browser export creates exactly one DICOM SEG-format mask, v1 source/provenance/
+  arithmetic sidecar, and README. An independent read-only agent validator rehashes
+  stable source descriptors, checks exact study/series/frame and DICOM references,
+  rebuilds the dense binary mask, and recomputes its hash, voxel count, and volume.
+  V1 has no acceptance path and locks lesion linkage, percent change, response,
+  diagnosis, and clinical conclusions.
 - Validated DICOM patient-orientation labels implemented; labels are withheld rather
   than guessed when Image Orientation (Patient) is missing or malformed.
 - Follow-up auto-selection removed; same-exam pairings are explicitly incompatible
@@ -183,16 +194,17 @@ Last updated: 2026-08-28 21:15 PDT
 - Versioned measurement, key-image, consultation-key-image, consultation-packet,
   numeric-comparison, visit-packet,
   comparison-review, navigation-intent, viewer-state, rigid-registration,
-  registration-QA, and reviewed-registration-display JSON Schemas plus local validation
-  are implemented. Same-series pairs, unknown units, mismatched measurement types, and
-  mismatched visual/numeric evidence are refused; no response label is emitted.
+  registration-QA, reviewed-registration-display, and source-bound manual ROI volume
+  JSON Schemas plus local validation are implemented. Same-series pairs, unknown units,
+  mismatched measurement types, and mismatched visual/numeric evidence are refused; no
+  response label is emitted.
 - Unified `scanview-agent launch` path implemented: one loopback process serves the
   bundled UI, manifest, pairing candidates, and protected native DICOM instances.
   Every instance route is bound to its startup file identity/change metadata and
   optional catalog SHA-256, refuses final-component symlinks or later changes, and
   hashes an exact ephemeral local snapshot before sending patient bytes.
 - The staged release builder embeds the viewer, workers, and local codecs into a
-  UI-embedded wheel together with all 20 contracts without breaking lightweight
+  UI-embedded wheel together with all 21 contracts without breaking lightweight
   agent-only builds. A deterministic offline builder now combines it with pinned
   pure-Python `pydicom` 3.0.2, exact hashes, no-index installation, and per-launch
   runtime checks. The package, private-display/network boundary, and real official
@@ -209,7 +221,7 @@ Last updated: 2026-08-28 21:15 PDT
 
 ## Verification
 
-- Python agent tests: 161 passing, including cross-patient and legacy-context
+- Python agent tests: 171 passing, including cross-patient and legacy-context
   rejection, visit-packet safety/integrity, key-image archive integrity, v3 JSON
   Schema conformance, ROI comparison checks, exact review joins, review event chains,
   non-overwriting amendments, privacy summaries, comparison-review transport and
@@ -239,7 +251,7 @@ Last updated: 2026-08-28 21:15 PDT
   failures, authenticated exact-origin transport, owner-only/non-overwriting CLI
   output, and deterministic presentation; deterministic offline-bundle shape,
   pure-wheel gates, payload tamper/extra-file refusal, and non-overwrite.
-- Viewer tests: 96 passing, including patient-context and local-only enforcement,
+- Viewer tests: 104 passing, including patient-context and local-only enforcement,
   pairing safety, physical-position mapping, key-image cross-linking, and measurement
   validation, the exact two-file visit-packet transport and relative same-origin
   endpoint contract, exact neutral two-view consultation transport/sidecar,
@@ -258,36 +270,36 @@ Last updated: 2026-08-28 21:15 PDT
   chronology/source-separation refusal, encoded/predecode/decoded and render-dimension
   caps, ordinary-viewer state retention across mode switches, and rejected/malformed/
   legacy reviewed-context refusal.
-- All 20 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
+- All 21 JSON Schemas pass Draft 2020-12 validation; v1 registration/review/display
   schemas remain as historical contracts while generation and display require v2.
 - Python source and utility bytecode compilation: passing.
 - Viewer TypeScript typecheck: passing.
 - Viewer production build: passing (Cornerstone codec bundle warnings noted).
-- UI-embedded staged Python wheel build: passing; the 2,946,422-byte wheel contains the
+- UI-embedded staged Python wheel build: passing; the 3,023,709-byte v0.2.0 wheel contains the
   registration host/runner/review/display module, viewer-state server module, viewer
-  entry point, all 11 built UI/worker/codec files (9,912,738 bytes uncompressed), and
-  all 20 JSON Schemas (181,638 bytes). A fresh isolated installation resolved its
+  entry point, all 11 built UI/worker/codec files (10,150,713 bytes uncompressed), and
+  all 21 JSON Schemas (190,951 bytes). A fresh isolated installation resolved its
   embedded UI and schemas without the source checkout; temporary release, installation,
   and installer-log artifacts were moved to recoverable Trash.
-- Offline runtime bundle build plus macOS arm64 and Strawberry Linux x86_64 smoke tests:
-  passing. The deterministic 5,340,464-byte ZIP contains nine fixed-timestamp members:
-  `bundle.json` plus eight hash-manifested payloads, including the 2,946,422-byte
+- Offline runtime bundle v0.2.0 build plus macOS arm64 and Strawberry Linux x86_64 smoke tests:
+  passing. The deterministic 5,417,751-byte ZIP contains nine fixed-timestamp members:
+  `bundle.json` plus eight hash-manifested payloads, including the 3,023,709-byte
   embedded ScanView wheel and
   pinned 2,376,822-byte `pydicom` 3.0.2 wheel. A fresh extraction verified, installed
   with `PIP_NO_INDEX=1`, `--no-index`, and `--require-hashes`, then rechecked both
-  versions, the embedded UI, all 20 schemas, both consultation contracts, and explicit
+  versions, the embedded UI, all 21 schemas, both consultation contracts, and explicit
   `runtime_network_required: false` and
   `external_dicom_processing_api_required: false` runtime assertions. A second build
   from the same wheels was byte-identical. The retained ZIP SHA-256 is
-  `e6ca632f031268eed9139b2a70899c534f4f8a77cf75f3bf08ead86108c47c81`. Its packaged
-  launcher indexed synthetic MR and CT instances, served health/manifest over loopback,
-  and independently validated the production synthetic consultation board
-  with direct identifiers excluded and deidentification explicitly false. The exact
-  final ZIP also verified and installed offline on Strawberry Ubuntu 26.04 x86_64 and
-  reported all 20 schemas with both network/API requirements false. One patient-free
-  verified ZIP is retained in the ignored local `release/` directory; synthetic
-  sources, extracted runtimes, staging directories, and the duplicate build were
-  moved to recoverable Trash.
+  `90fd9fe87d680a8d68d621252d82d3638fff22343a9c9670aa89e957160f598e`. Its packaged
+  launcher indexed three synthetic MR instances and served health/manifest over
+  loopback. The exact final ZIP also verified and installed offline on Strawberry
+  Ubuntu 26.04 x86_64, reported all 21 schemas with both network/API requirements
+  false, validated the real-adapter synthetic SEG, and failed closed after one source
+  byte was changed. The current patient-free v0.2.0 ZIP and historical v0.1.0 ZIP are
+  retained in the ignored local `release/` directory; synthetic sources, extracted
+  runtimes, staging directories, and the duplicate build were moved to recoverable
+  Trash.
 - Registration execution test: synthetic version-gated-engine success and failure
   paths pass, including required expected-launcher hash, strict engine report, parsed
   scalar NRRDs/fixed-space geometry, finite proper-rigid transform, owner-only modes,
@@ -332,10 +344,10 @@ Last updated: 2026-08-28 21:15 PDT
   warnings. The browser console was empty, and server requests were limited to loopback
   UI/context plus the three allowlisted NRRDs. Synthetic fixtures and review evidence
   were moved to recoverable Trash.
-- Strawberry Linux runtime and engine test: the patient-free offline ZIP verified and
+- Strawberry Linux runtime and engine test: the patient-free v0.2.0 offline ZIP verified and
   installed with `PIP_NO_INDEX=1`, `--no-index`, and required hashes on Ubuntu 26.04
-  x86_64/Python 3.14.4. It resolved the embedded UI and all 20 schemas, indexed a
-  two-instance synthetic MR series with direct identifiers excluded, and returned HTTP
+  x86_64/Python 3.14.4. It resolved the embedded UI and all 21 schemas, indexed a
+  three-instance synthetic MR series with direct identifiers excluded, and returned HTTP
   200 for embedded UI and bearer-authorized manifest over loopback. The official Slicer
   5.12.3 Linux amd64 archive matched its immutable bitstream size and published SHA-512;
   all 10,572 members and 385 links passed safe-root preflight before owner-only install.
@@ -346,6 +358,16 @@ Last updated: 2026-08-28 21:15 PDT
   completed no-data preflight and both real-engine synthetic registrations. A live probe denied `AF_INET`
   socket creation with `EPERM`, no X11 TCP listener remained, Linux `renameat2` atomic
   publication succeeded once and refused overwrite, and no Mila data was transferred.
+- Source-bound ROI cross-language release gate: the real pinned Cornerstone/dcmjs
+  adapter serialized a sparse first/last-slice binary SEG Part-10 object. ScanView
+  repaired the adapter's missing SOP Class/derivation/purpose references, reversed
+  frame-position association, source Slice Thickness, and forbidden per-frame bit
+  padding before serialization. The independent packaged Python validator matched
+  all three exact synthetic source byte hashes, recovered 2 marked voxels and exactly
+  4.0 mm³ / 0.004 mL, and kept every clinical/longitudinal lock false. The exact same
+  artifact passed on macOS and Strawberry; changing one source byte failed nonzero,
+  withheld all computed volume fields, and set evidence use to `none`. No Mila data
+  was transferred to Strawberry.
 - Synthetic browser smoke test: two canvases render; all five viewer controls activate.
 - Real-data production smoke test: copied JPEG 2000 MRI and CT pixels render in two
   1162×1200 canvases; the full folder produces 57 pixel series; local server logs show
@@ -487,8 +509,9 @@ Last updated: 2026-08-28 21:15 PDT
   identity, or replaces review in the clinical imaging system.
 - Clinical-organization identity authentication, digital signatures, and medical-
   record sign-off remain. The current review chain is self-attested and explicitly
-  unverified. Elliptical ROI is a 2D manual draft, not segmentation or volume
-  measurement.
+  unverified. Elliptical ROI is a 2D manual draft; the new binary ROI is a source-bound
+  computed, unreviewed region draft, not reviewed tumor segmentation or clinical
+  volume measurement.
 - Bearer reads of live viewer state do not yet have an append-only access audit.
   Any future audit must exclude tokens, payloads, and patient content.
 - Signed/notarized macOS/Linux release packaging remains pending. The wheel, offline
@@ -501,4 +524,5 @@ Last updated: 2026-08-28 21:15 PDT
   moving sampling-support gating now exist. A real same-modality patient run, qualified
   real-case decision, and signed ScanView release remain pending. Sampling support is
   not shared-anatomy or registration-quality evidence, and there is still no tumor segmentation, response
-  criteria, or automated medical conclusion.
+  criteria, reviewed component-specific tumor segmentation, or automated medical
+  conclusion.

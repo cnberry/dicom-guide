@@ -26,10 +26,63 @@ interoperability foundation.
 ## Selected version pins for the MVP
 
 - `@cornerstonejs/core`, `tools`, and `dicom-image-loader`: 5.8.2
+- `@cornerstonejs/adapters`: 5.8.2
+- `dcmjs`: 0.52.0
 - `dicom-parser`: 1.8.21
 - Vite: 8.2.2
 - Vitest: 4.1.11
 - pydicom: 3.0.x
+
+`@cornerstonejs/adapters` currently brings deprecated `core-js` 2.6.12 transitively.
+It is bundled only at build time and no dependency install script is allowed, but the
+pin remains a dependency/license review item before a signed distribution.
+
+## Manual ROI DICOM SEG profile
+
+DICOM defines Segmentation objects as pixel classifications derived from referenced
+images and permits segmentation sampling that differs from the source
+([PS3.3 A.51](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_a.51.html)).
+ScanView v1 deliberately chooses a narrower profile: one binary, manually entered
+segment on the exact regular native source grid, uncompressed Explicit VR Little
+Endian, with sparse SEG frames permitted only when each one resolves to an exact
+source SOP class/instance and plane position. The sidecar keeps the complete ordered
+source-byte set so an independent local validator can rebuild the dense mask and
+recompute volume.
+
+The pinned Cornerstone adapter is post-processed locally before serialization. Its
+5.8.2 binary-SEG path omits the per-frame source SOP Class and required derivation/
+purpose codes, can associate sparse source UIDs with reversed plane positions, uses
+projected spacing as Slice Thickness, and byte-pads sub-byte frames individually.
+ScanView repairs those fields from the exact loaded source geometry and repacks the
+complete multi-frame bitstream. DICOM requires native multi-frame frames to be
+concatenated without per-frame padding, with padding applied only to the complete
+Pixel Data value ([PS3.5 8.2](https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_8.2.html)).
+Slice Thickness remains distinct from projected center-to-center spacing: the former
+is preserved in SEG Pixel Measures while volume arithmetic uses the latter. A real-
+adapter Part-10 fixture is validated cross-language by pydicom to prevent either
+implementation from becoming its own oracle.
+
+DICOM defines `MANUAL` as a user-entered segment and specifies Segment Label, coded
+property, Tracking ID, and Tracking UID semantics
+([PS3.3 C.8.20.4](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_c.8.20.4.html));
+for a binary SEG, a stored value of one means the represented property is present at
+that pixel
+([PS3.3 C.8.20.2.3](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_c.8.20.2.3.html)).
+ScanView uses generic SCT abnormal-structure and lesion concepts from
+[CID 7150](https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_cid_7150.html)
+and [CID 7159](https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_cid_7159.html).
+They are interoperability coding, not proof of neoplasm, malignancy, histology,
+enhancement, tumor component, or diagnosis.
+
+Volume is binary foreground count multiplied by the determinant of the native
+source-grid voxel dimensions. Source geometry follows DICOM Pixel Spacing, Image
+Position (Patient), and Image Orientation (Patient) semantics
+([PS3.3 C.7.6.2](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_c.7.6.2.html)).
+Boundary uncertainty, partial-volume effects, acquisition suitability, and represented
+tissue are not quantified. V1 exports SEG plus JSON, not a DICOM Structured Report.
+A future interoperable numeric path should evaluate a TID 1500 Measurement Report
+with a [TID 1411 Volumetric ROI measurement group](https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_tid_1411.html),
+not silently treat the v1 sidecar as SR.
 
 ## Registration engine verification
 

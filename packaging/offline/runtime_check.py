@@ -13,7 +13,7 @@ from scanview_agent.consultation_packets import ARTIFACT_TYPE
 
 
 def main() -> None:
-    if version("scanview-agent") != "0.1.0" or version("pydicom") != "3.0.2":
+    if version("scanview-agent") != "0.2.0" or version("pydicom") != "3.0.2":
         raise SystemExit("installed ScanView runtime versions are invalid")
     if ARTIFACT_TYPE != "clinician_consultation_packet":
         raise SystemExit("installed ScanView consultation contract is unavailable")
@@ -25,13 +25,13 @@ def main() -> None:
         raise SystemExit("installed ScanView UI is unavailable")
     schemas = list(files("scanview_agent").joinpath("schemas").iterdir())
     schema_count = len([path for path in schemas if path.name.endswith(".json")])
-    if schema_count != 20:
+    if schema_count != 21:
         raise SystemExit("installed ScanView schemas are incomplete")
     print(
         json.dumps(
             {
                 "valid": True,
-                "scanview_agent": "0.1.0",
+                "scanview_agent": "0.2.0",
                 "pydicom": "3.0.2",
                 "embedded_ui": True,
                 "schema_count": schema_count,

@@ -4,4 +4,5 @@ packages:
 onlyBuiltDependencies:
   - core-js-pure
 allowBuilds:
+  core-js: false
   core-js-pure: true
