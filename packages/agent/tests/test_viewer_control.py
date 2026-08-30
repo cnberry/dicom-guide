@@ -16,6 +16,7 @@ from scanview_agent.viewer_control import (
     response,
     validate_command,
     validate_observation,
+    apply_discussion_marks_patch,
 )
 
 
@@ -25,11 +26,13 @@ INSTANCE_IDS = [
     "instance_abcdef0123456789abcd",
 ]
 COMMAND_ID = "control_0123456789abcdef0123456789abcdef"
+VIEWER_ID = "viewer_0123456789abcdef0123"
 
 
 def catalog() -> dict:
     return {
         "schema_version": "1.0.0",
+        "viewer_id": VIEWER_ID,
         "source": {"dicom_instances": 2},
         "studies": [
             {
@@ -38,7 +41,17 @@ def catalog() -> dict:
                     {
                         "id": SERIES_ID,
                         "modality": "MR",
-                        "instances": [{"id": value} for value in INSTANCE_IDS],
+                        "rows": 512,
+                        "columns": 512,
+                        "pixel_spacing": [0.5, 0.75],
+                        "image_orientation_patient": [1, 0, 0, 0, 1, 0],
+                        "instances": [
+                            {
+                                "id": value,
+                                "image_position_patient": [0, 0, index * 5],
+                            }
+                            for index, value in enumerate(INSTANCE_IDS)
+                        ],
                     }
                 ],
             }
@@ -62,6 +75,7 @@ def command() -> dict:
 def observation(*, agent: bool = True) -> dict:
     return {
         "schema_version": "1.0.0",
+        "viewer_id": VIEWER_ID,
         "applied_command_id": COMMAND_ID if agent else None,
         "applied_revision": 4 if agent else 0,
         "interaction_source": "agent" if agent else "person",
@@ -113,6 +127,9 @@ def test_validates_exact_local_command_and_observation() -> None:
     assert observed["permissions"]["agent_view_navigation_authorized"] is True
     assert observed["permissions"]["diagnosis_authorized"] is False
     assert observed["privacy"]["contains_pixels"] is False
+
+    targeted = validate_command({**command(), "target_viewer_id": VIEWER_ID}, catalog())
+    assert targeted["target_viewer_id"] == VIEWER_ID
 
     # An MPR point is exact in patient space. The nearest native source slice can
     # differ from the command's anchor after volume reconstruction.
@@ -172,14 +189,127 @@ def test_refuses_wrong_membership_tool_provenance_and_point_flag() -> None:
         )
 
 
-def test_allows_display_crop_for_mpr_but_not_native() -> None:
-    crop_command = {**command(), "tool": "crop", "patient_point_lps_mm": None}
-    assert validate_command(crop_command, catalog())["tool"] == "crop"
-    with pytest.raises(ValueError, match="unsupported"):
+def test_validates_bounded_patient_space_discussion_overlay() -> None:
+    mark = {
+        "id": "mark_0123456789abcdef0123",
+        "orientation": "sagittal",
+        "color": "cyan",
+        "author": "agent",
+        "points_lps_mm": [[1.25, -2.5, 3.75], [2.0, -2.0, 4.0]],
+    }
+    highlighted = validate_command(
+        {
+            **command(),
+            "tool": "highlight",
+            "discussion_marks_patch": {
+                "add": [
+                    {
+                        "id": mark["id"],
+                        "orientation": mark["orientation"],
+                        "color": mark["color"],
+                        "points_lps_mm": mark["points_lps_mm"],
+                    }
+                ]
+            },
+        },
+        catalog(),
+    )
+    current = {
+        **highlighted,
+        "discussion_marks": apply_discussion_marks_patch(
+            [], highlighted["discussion_marks_patch"]
+        ),
+        "revision": 4,
+        "issued_at": "2026-08-29T12:00:00Z",
+    }
+    current.pop("discussion_marks_patch")
+    observed = validate_observation(
+        {**observation(), "tool": "highlight", "discussion_marks": [mark]},
+        catalog(),
+        current_command=current,
+    )
+    assert observed["discussion_marks"] == [mark]
+    with pytest.raises(ValueError, match="color"):
         validate_command(
-            {**crop_command, "view_mode": "native"},
+            {
+                **command(),
+                "discussion_marks_patch": {
+                    "add": [
+                        {
+                            "id": mark["id"],
+                            "orientation": mark["orientation"],
+                            "color": "red",
+                            "points_lps_mm": mark["points_lps_mm"],
+                        }
+                    ]
+                },
+            },
             catalog(),
         )
+
+    native = validate_command(
+        {**command(), "view_mode": "native", "tool": "highlight"},
+        catalog(),
+    )
+    assert native["tool"] == "highlight"
+
+
+def test_atomic_highlight_patch_preserves_person_marks_and_converts_image_pixels() -> None:
+    person = {
+        "id": "mark_aaaaaaaaaaaaaaaaaaaa",
+        "orientation": "axial",
+        "color": "green",
+        "author": "person",
+        "points_lps_mm": [[1.0, 2.0, 5.0]],
+    }
+    patched = validate_command(
+        {
+            **command(),
+            "view_mode": "native",
+            "tool": "highlight",
+            "discussion_marks_patch": {
+                "add": [
+                    {
+                        "id": "mark_bbbbbbbbbbbbbbbbbbbb",
+                        "color": "cyan",
+                        "points_image_px": [[4, 6], [8, 10]],
+                    }
+                ]
+            },
+        },
+        catalog(),
+    )
+    result = apply_discussion_marks_patch([person], patched["discussion_marks_patch"])
+    assert result[0] == person
+    assert result[1]["author"] == "agent"
+    assert result[1]["orientation"] == "axial"
+    assert result[1]["points_lps_mm"] == [[3.0, 3.0, 5.0], [6.0, 5.0, 5.0]]
+
+    normalized = validate_command(
+        {
+            **command(),
+            "view_mode": "native",
+            "tool": "highlight",
+            "discussion_marks_patch": {
+                "add": [
+                    {
+                        "id": "mark_cccccccccccccccccccc",
+                        "color": "yellow",
+                        "points_image_normalized": [[0.5, 0.25]],
+                    }
+                ]
+            },
+        },
+        catalog(),
+    )
+    normalized_mark = normalized["discussion_marks_patch"]["add"][0]
+    assert normalized_mark["points_lps_mm"] == [[191.625, 63.875, 5.0]]
+
+    cleared = apply_discussion_marks_patch(
+        result,
+        {"add": [], "remove_ids": [], "clear_agent": True},
+    )
+    assert cleared == [person]
 
 
 def test_response_withholds_stale_observation() -> None:
@@ -211,7 +341,12 @@ def test_loopback_control_separates_bearer_command_from_browser_observation(
         "Content-Type": MEDIA_TYPE,
     }
     try:
-        status, body = post(port, "/v1/viewer-control", command(), bearer)
+        status, body = post(
+            port,
+            "/v1/viewer-control",
+            {**command(), "target_viewer_id": VIEWER_ID},
+            bearer,
+        )
         assert status == HTTPStatus.OK
         assert body["accepted"] is True
         assert body["revision"] == 1
@@ -243,6 +378,22 @@ def test_loopback_control_separates_bearer_command_from_browser_observation(
         )
         assert status == HTTPStatus.OK
         assert body["accepted"] is True
+
+        status, body = post(
+            port,
+            "/v1/viewer-control/observation",
+            {
+                **observation(agent=False),
+                "viewer_id": "viewer_aaaaaaaaaaaaaaaaaaaa",
+            },
+            {
+                "Host": f"127.0.0.1:{port}",
+                "Origin": f"http://127.0.0.1:{port}",
+                "Content-Type": MEDIA_TYPE,
+            },
+        )
+        assert status == HTTPStatus.OK
+        assert body["accepted"] is False
 
         status, body = get(
             port,

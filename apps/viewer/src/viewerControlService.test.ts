@@ -11,6 +11,8 @@ import {
 
 afterEach(() => vi.unstubAllGlobals());
 
+const viewerId = 'viewer_0123456789abcdef0123';
+
 const series = (): DicomSeries => ({
   id: 'series_0123456789abcdef0123',
   studyId: 'study_0123456789abcdef0123',
@@ -28,6 +30,7 @@ const series = (): DicomSeries => ({
 describe('Codex viewer control bridge', () => {
   it('builds a privacy-declared exact MPR observation', () => {
     const observation = buildViewerControlObservation({
+      viewerId,
       series: series(),
       index: 0,
       viewMode: 'mpr',
@@ -64,10 +67,12 @@ describe('Codex viewer control bridge', () => {
       tool: 'window',
       patient_point_lps_mm: null,
       reset_view: false,
+      target_viewer_id: viewerId,
       revision: 3,
       issued_at: '2026-08-29T12:00:00Z',
     } as const;
     const observation = buildViewerControlObservation({
+      viewerId,
       series: series(),
       index: 0,
       viewMode: 'native',
@@ -98,17 +103,63 @@ describe('Codex viewer control bridge', () => {
     });
   });
 
-  it('reports display-only crop mode only for MPR', () => {
+  it('publishes patient-space discussion marks for agent-readable highlighting', () => {
     expect(
       buildViewerControlObservation({
+        viewerId,
         series: series(),
         index: 0,
         viewMode: 'mpr',
         nativeTool: 'window',
-        mprTool: 'crop',
+        mprTool: 'highlight',
         renderStatus: 'ready',
+        discussionMarks: [
+          {
+            id: 'mark_0123456789abcdef0123',
+            orientation: 'axial',
+            color: 'yellow',
+            author: 'person',
+            points_lps_mm: [[1, 2, 3]],
+          },
+        ],
       }),
-    ).toMatchObject({ view_mode: 'mpr', tool: 'crop' });
+    ).toMatchObject({
+      tool: 'highlight',
+      discussion_marks: [
+        {
+          orientation: 'axial',
+          color: 'yellow',
+          points_lps_mm: [[1, 2, 3]],
+        },
+      ],
+    });
+  });
+
+  it('publishes discussion marks from a native single view', () => {
+    expect(
+      buildViewerControlObservation({
+        viewerId,
+        series: series(),
+        index: 0,
+        viewMode: 'native',
+        nativeTool: 'highlight',
+        mprTool: 'crosshairs',
+        renderStatus: 'ready',
+        discussionMarks: [
+          {
+            id: 'mark_abcdef0123456789abcd',
+            orientation: 'axial',
+            color: 'green',
+            author: 'person',
+            points_lps_mm: [[1, 2, 0]],
+          },
+        ],
+      }),
+    ).toMatchObject({
+      view_mode: 'native',
+      tool: 'highlight',
+      discussion_marks: [{ color: 'green', author: 'person' }],
+    });
   });
 
   it('rejects malformed commands before applying them', async () => {

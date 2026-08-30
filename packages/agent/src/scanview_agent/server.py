@@ -101,6 +101,7 @@ from .viewer_control import (
     utc_now as viewer_control_utc_now,
     validate_command as validate_viewer_control_command,
     validate_observation as validate_viewer_control_observation,
+    apply_discussion_marks_patch,
 )
 
 
@@ -466,6 +467,16 @@ class ScanViewServer(ThreadingHTTPServer):
 
     def set_viewer_control_command(self, command: dict[str, Any]) -> dict[str, Any]:
         with self.viewer_control_lock:
+            patch = command.pop("discussion_marks_patch", None)
+            if patch is not None:
+                current_marks = (
+                    self.viewer_control_observation.get("discussion_marks", [])
+                    if self.viewer_control_observation is not None
+                    else []
+                )
+                command["discussion_marks"] = apply_discussion_marks_patch(
+                    current_marks, patch
+                )
             self.viewer_control_revision += 1
             issued = {
                 **command,
@@ -477,8 +488,24 @@ class ScanViewServer(ThreadingHTTPServer):
 
     def validate_and_publish_viewer_control_observation(
         self, value: Any
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         with self.viewer_control_lock:
+            target_viewer_id = (
+                self.viewer_control_command.get("target_viewer_id")
+                if self.viewer_control_command is not None
+                else None
+            )
+            observed_viewer_id = value.get("viewer_id") if isinstance(value, dict) else None
+            target_is_current = bool(
+                target_viewer_id is not None
+                and self.viewer_control_observation is not None
+                and self.viewer_control_observation.get("viewer_id") == target_viewer_id
+                and self.viewer_control_observation_received_monotonic is not None
+                and time.monotonic() - self.viewer_control_observation_received_monotonic
+                <= VIEWER_CONTROL_OBSERVATION_TTL_SECONDS
+            )
+            if target_is_current and observed_viewer_id != target_viewer_id:
+                return None
             observation = validate_viewer_control_observation(
                 value,
                 self.catalog,
@@ -1509,13 +1536,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             command = validate_viewer_control_command(value, self.server.catalog)
+            issued = self.server.set_viewer_control_command(command)
         except (TypeError, ValueError) as error:
             self._send_json(
                 {"error": "invalid_viewer_control", "detail": str(error)},
                 HTTPStatus.UNPROCESSABLE_ENTITY,
             )
             return
-        issued = self.server.set_viewer_control_command(command)
         self._send_json(
             {
                 "schema_version": VIEWER_CONTROL_SCHEMA_VERSION,
@@ -1534,7 +1561,7 @@ class Handler(BaseHTTPRequestHandler):
         if value is None:
             return
         try:
-            self.server.validate_and_publish_viewer_control_observation(value)
+            observation = self.server.validate_and_publish_viewer_control_observation(value)
         except (TypeError, ValueError) as error:
             self._send_json(
                 {"error": "invalid_viewer_observation", "detail": str(error)},
@@ -1544,7 +1571,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(
             {
                 "schema_version": VIEWER_CONTROL_SCHEMA_VERSION,
-                "accepted": True,
+                "accepted": observation is not None,
                 "viewer_connected_for_seconds": int(
                     VIEWER_CONTROL_OBSERVATION_TTL_SECONDS
                 ),

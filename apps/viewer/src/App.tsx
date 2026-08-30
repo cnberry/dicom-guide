@@ -88,6 +88,7 @@ import {
   sourceIndexForPatientPoint,
   type ViewerControlTool,
 } from './viewerControlService';
+import { discussionMarksAfterCommand, type DiscussionMark } from './discussionMarkup';
 
 type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
@@ -201,6 +202,10 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const [patientPoint, setPatientPoint] = useState<MprPatientPoint>();
   const [requestedMprPoint, setRequestedMprPoint] = useState<MprPatientPoint>();
   const [mprTool, setMprTool] = useState<ViewerControlTool>('crosshairs');
+  const [discussionMarks, setDiscussionMarks] = useState<DiscussionMark[]>([]);
+  const viewerControlIdRef = useRef(
+    `viewer_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`,
+  );
   const [viewerRenderStatus, setViewerRenderStatus] =
     useState<'loading' | 'ready' | 'error'>('loading');
   const [appliedAgentCommand, setAppliedAgentCommand] =
@@ -1496,6 +1501,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         if (!effectActive) return;
         const command = response.command;
         if (!command || command.revision <= lastViewerControlRevisionRef.current) return;
+        if (
+          command.target_viewer_id !== undefined &&
+          command.target_viewer_id !== viewerControlIdRef.current
+        ) {
+          return;
+        }
         const selected = series.find((item) => item.id === command.series_id);
         const selectedIndex = selected?.instances.findIndex(
           (item) => item.instanceId === command.instance_id,
@@ -1509,6 +1520,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         setBaselineIndex(selectedIndex);
         if (command.view_mode === 'mpr') {
           setMprTool(command.tool);
+          setDiscussionMarks((current) =>
+            discussionMarksAfterCommand(current, command.discussion_marks),
+          );
           const requestedPoint =
             command.patient_point_lps_mm ?? instanceCenterPatientPoint(selected, selectedIndex);
           setRequestedMprPoint(requestedPoint);
@@ -1519,6 +1533,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           setRequestedMprPoint(undefined);
           setMprSeriesId(undefined);
           setPatientPoint(command.patient_point_lps_mm ?? undefined);
+          setDiscussionMarks((current) =>
+            discussionMarksAfterCommand(current, command.discussion_marks),
+          );
         }
         if (command.reset_view) setResetNonce((value) => value + 1);
         setViewerControlMessage(
@@ -1551,6 +1568,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         patientPoint,
         renderStatus: viewerRenderStatus,
         appliedCommand: appliedAgentCommand,
+        discussionMarks,
+        viewerId: viewerControlIdRef.current,
       }),
     [
       activeTool,
@@ -1561,6 +1580,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       mprTool,
       patientPoint,
       viewerRenderStatus,
+      discussionMarks,
     ],
   );
 
@@ -1648,6 +1668,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                         setMprSeriesId(undefined);
                         setPatientPoint(undefined);
                         setRequestedMprPoint(undefined);
+                        setDiscussionMarks([]);
                         setViewerRenderStatus('loading');
                         setBaselineId(id);
                         setBaselineIndex(Math.floor((selected?.instances.length ?? 1) / 2));
@@ -1701,6 +1722,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                             ['window', 'Window'],
                             ['pan', 'Pan'],
                             ['zoom', 'Zoom'],
+                            ['highlight', 'Highlight'],
                           ] as const
                         ).map(([tool, label]) => (
                           <button
@@ -1733,7 +1755,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                             ['window', 'Window'],
                             ['pan', 'Pan'],
                             ['zoom', 'Zoom'],
-                            ['crop', 'Crop'],
+                            ['highlight', 'Highlight'],
                           ] as const
                         ).map(([tool, label]) => (
                           <button
@@ -1743,8 +1765,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                             title={
                               tool === 'zoom'
                                 ? 'Drag vertically or use the wheel to zoom'
-                                : tool === 'crop'
-                                  ? 'Drag a box, or click two corners, to crop all three panes'
+                                : tool === 'highlight'
+                                    ? 'Brush a reversible discussion overlay; not a segmentation'
                                   : undefined
                             }
                             onClick={() => {
@@ -1791,6 +1813,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     onPatientPointChange={setPatientPoint}
                     requestedPatientPoint={requestedMprPoint}
                     requestedTool={mprTool}
+                    discussionMarks={discussionMarks}
+                    onDiscussionMarksChange={setDiscussionMarks}
                     resetNonce={resetNonce}
                     onRenderStatusChange={setViewerRenderStatus}
                     onPersonInteraction={notePersonInteraction}
@@ -1832,6 +1856,9 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                       }}
                       onRenderStatusChange={setViewerRenderStatus}
                       controlRevision={appliedAgentCommand?.revision}
+                      discussionMarks={discussionMarks}
+                      onDiscussionMarksChange={setDiscussionMarks}
+                      onPersonInteraction={notePersonInteraction}
                     />
                   </div>
                 )}

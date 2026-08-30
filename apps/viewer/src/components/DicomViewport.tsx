@@ -1,4 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { Enums, type RenderingEngine, type Types } from '@cornerstonejs/core';
 import {
   createMeasurementEvidencePacket,
@@ -25,6 +33,15 @@ import type {
   PresentationStatePoint,
 } from '../presentationStates';
 import { presentationPixelPointToImageIndex } from '../presentationStates';
+import {
+  DISCUSSION_MARK_COLORS,
+  MAX_DISCUSSION_MARKS,
+  MAX_DISCUSSION_MARK_POINTS,
+  discussionOrientationForImage,
+  roundedPatientPoint,
+  type DiscussionMark,
+  type DiscussionMarkColor,
+} from '../discussionMarkup';
 
 type Props = {
   id: 'baseline' | 'followup';
@@ -45,6 +62,9 @@ type Props = {
   patientPoint?: MprPatientPoint;
   onRenderStatusChange?: (status: 'loading' | 'ready' | 'error') => void;
   controlRevision?: number;
+  discussionMarks?: DiscussionMark[];
+  onDiscussionMarksChange?: (marks: DiscussionMark[]) => void;
+  onPersonInteraction?: () => void;
 };
 
 type CanvasPresentationOverlay = {
@@ -112,6 +132,9 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     patientPoint,
     onRenderStatusChange,
     controlRevision,
+    discussionMarks = [],
+    onDiscussionMarksChange,
+    onPersonInteraction,
   }: Props,
   ref,
 ) {
@@ -134,6 +157,11 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
   const [keyImageError, setKeyImageError] = useState('');
   const [sourceOverlay, setSourceOverlay] = useState<CanvasPresentationOverlay>();
   const [pinnedCanvasPoint, setPinnedCanvasPoint] = useState<[number, number]>();
+  const [discussionColor, setDiscussionColor] = useState<DiscussionMarkColor>('yellow');
+  const [draftDiscussionMark, setDraftDiscussionMark] = useState<DiscussionMark>();
+  const draftDiscussionMarkRef = useRef<DiscussionMark | undefined>(undefined);
+  const discussionPointerIdRef = useRef<number | undefined>(undefined);
+  const [, setDiscussionOverlayRevision] = useState(0);
   const presentationLocked = interactionLocked || Boolean(presentationState);
 
   useEffect(() => {
@@ -403,6 +431,163 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     };
   }, [label, presentationState, series]);
 
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    const update = () => setDiscussionOverlayRevision((value) => value + 1);
+    element.addEventListener(Enums.Events.IMAGE_RENDERED, update);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener(Enums.Events.IMAGE_RENDERED, update);
+      observer.disconnect();
+    };
+  }, [series?.id]);
+
+  const updateDraftDiscussionMark = (mark?: DiscussionMark) => {
+    draftDiscussionMarkRef.current = mark;
+    setDraftDiscussionMark(mark);
+  };
+
+  const pointInViewport = (
+    element: HTMLDivElement,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ): [number, number] => {
+    const bounds = element.getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)),
+      Math.max(0, Math.min(bounds.height, event.clientY - bounds.top)),
+    ];
+  };
+
+  const startDiscussionMark = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const viewport = viewportRef.current;
+    const orientation = discussionOrientationForImage(series?.geometry.orientation);
+    if ((event.target as Element).closest('.discussion-palette')) return;
+    if (
+      activeTool !== 'highlight' ||
+      event.button !== 0 ||
+      !viewport ||
+      !orientation ||
+      discussionMarks.length >= MAX_DISCUSSION_MARKS
+    ) {
+      return;
+    }
+    const point = viewport.canvasToWorld(pointInViewport(event.currentTarget, event));
+    if (point.length !== 3 || !point.every(Number.isFinite)) return;
+    onPersonInteraction?.();
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    discussionPointerIdRef.current = event.pointerId;
+    updateDraftDiscussionMark({
+      id: `mark_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`,
+      orientation,
+      color: discussionColor,
+      author: 'person',
+      points_lps_mm: [roundedPatientPoint(point as MprPatientPoint)],
+    });
+  };
+
+  const moveDiscussionMark = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const viewport = viewportRef.current;
+    const draft = draftDiscussionMarkRef.current;
+    if (
+      activeTool !== 'highlight' ||
+      discussionPointerIdRef.current !== event.pointerId ||
+      !viewport ||
+      !draft
+    ) {
+      return;
+    }
+    const point = viewport.canvasToWorld(pointInViewport(event.currentTarget, event));
+    if (point.length !== 3 || !point.every(Number.isFinite)) return;
+    event.preventDefault();
+    const rounded = roundedPatientPoint(point as MprPatientPoint);
+    const previous = draft.points_lps_mm.at(-1)!;
+    if (
+      draft.points_lps_mm.length >= MAX_DISCUSSION_MARK_POINTS ||
+      Math.hypot(...rounded.map((coordinate, axis) => coordinate - previous[axis])) < 1.2
+    ) {
+      return;
+    }
+    updateDraftDiscussionMark({
+      ...draft,
+      points_lps_mm: [...draft.points_lps_mm, rounded],
+    });
+  };
+
+  const finishDiscussionMark = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (discussionPointerIdRef.current !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const draft = draftDiscussionMarkRef.current;
+    if (draft && discussionMarks.length < MAX_DISCUSSION_MARKS) {
+      onDiscussionMarksChange?.([...discussionMarks, draft]);
+    }
+    updateDraftDiscussionMark(undefined);
+    discussionPointerIdRef.current = undefined;
+  };
+
+  const cancelDiscussionMark = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (discussionPointerIdRef.current !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    updateDraftDiscussionMark(undefined);
+    discussionPointerIdRef.current = undefined;
+  };
+
+  const discussionCanvasPoints = (mark: DiscussionMark): Array<[number, number]> => {
+    const viewport = viewportRef.current;
+    const orientation = discussionOrientationForImage(series?.geometry.orientation);
+    if (!viewport || !orientation || mark.orientation !== orientation) return [];
+    const camera = viewport.getCamera();
+    const normal = camera.viewPlaneNormal;
+    const focalPoint = camera.focalPoint;
+    if (!normal || !focalPoint) return [];
+    const tolerance = Math.max(0.5, Math.abs(series?.geometry.sliceThickness ?? 1) * 0.8);
+    return mark.points_lps_mm
+      .filter((point) => {
+        const distance = Math.abs(
+          point.reduce(
+            (sum, coordinate, axis) => sum + (coordinate - focalPoint[axis]) * normal[axis],
+            0,
+          ),
+        );
+        return Number.isFinite(distance) && distance <= tolerance;
+      })
+      .map((point) => viewport.worldToCanvas(point as Types.Point3))
+      .filter(
+        (point): point is [number, number] =>
+          point.length === 2 && point.every(Number.isFinite),
+      );
+  };
+
+  const renderDiscussionMark = (mark: DiscussionMark) => {
+    const points = discussionCanvasPoints(mark);
+    if (points.length === 0) return null;
+    const color = DISCUSSION_MARK_COLORS[mark.color];
+    if (points.length === 1) {
+      return <circle key={mark.id} cx={points[0][0]} cy={points[0][1]} r="11" fill={color} fillOpacity="0.55" />;
+    }
+    return (
+      <path
+        key={mark.id}
+        d={points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point[0]} ${point[1]}`).join(' ')}
+        fill="none"
+        stroke={color}
+        strokeWidth="22"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeOpacity="0.55"
+      />
+    );
+  };
+
   const maxIndex = Math.max(0, (series?.instances.length ?? 1) - 1);
   const orientationLabels = getPatientOrientationLabels(series?.geometry.orientation);
   const mprEligibility = assessMprEligibility(series);
@@ -593,10 +778,14 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
         </div>
       </div>
       <div
-        className="dicom-viewport"
+        className={`dicom-viewport ${activeTool === 'highlight' ? 'highlight-active' : ''}`}
+        onPointerDown={startDiscussionMark}
+        onPointerMove={moveDiscussionMark}
+        onPointerUp={finishDiscussionMark}
+        onPointerCancel={cancelDiscussionMark}
         onClick={(event) => {
           const viewport = viewportRef.current;
-          if (!series || !viewport || presentationLocked) return;
+          if (!series || !viewport || presentationLocked || activeTool === 'highlight') return;
           const rect = event.currentTarget.getBoundingClientRect();
           try {
             const world = viewport.canvasToWorld([
@@ -620,6 +809,50 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
           ref={elementRef}
           className={`cornerstone-host ${presentationLocked ? 'presentation-locked' : ''}`}
         />
+        {activeTool === 'highlight' && (
+          <div className="discussion-palette" aria-label="Discussion highlight colors">
+            {(Object.keys(DISCUSSION_MARK_COLORS) as DiscussionMarkColor[]).map((color) => (
+              <button
+                key={color}
+                className={discussionColor === color ? 'active' : ''}
+                aria-label={`${color} highlight`}
+                aria-pressed={discussionColor === color}
+                style={{ '--mark-color': DISCUSSION_MARK_COLORS[color] } as CSSProperties}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDiscussionColor(color);
+                }}
+              />
+            ))}
+            <button
+              className="discussion-text-button"
+              disabled={discussionMarks.length === 0}
+              onClick={(event) => {
+                event.stopPropagation();
+                onPersonInteraction?.();
+                onDiscussionMarksChange?.(discussionMarks.slice(0, -1));
+              }}
+            >
+              Undo
+            </button>
+            <button
+              className="discussion-text-button"
+              disabled={discussionMarks.length === 0}
+              onClick={(event) => {
+                event.stopPropagation();
+                onPersonInteraction?.();
+                onDiscussionMarksChange?.([]);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+        <svg className="discussion-overlay" aria-hidden="true">
+          {[...discussionMarks, ...(draftDiscussionMark ? [draftDiscussionMark] : [])].map(
+            renderDiscussionMark,
+          )}
+        </svg>
         {pinnedCanvasPoint && (
           <div
             className="native-point-marker"
