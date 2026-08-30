@@ -100,8 +100,6 @@ jobs:
     needs: build
     runs-on: ubuntu-22.04
     permissions:
-      artifact-metadata: write
-      attestations: write
       contents: write
       id-token: write
     env:
@@ -157,16 +155,40 @@ jobs:
             gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
               -f ref="refs/tags/$RELEASE_TAG" -f sha="$GITHUB_SHA"
           fi
-      - id: provenance
-        name: Sign build provenance
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-checksums: release/SHA256SUMS
-      - name: Add the portable Sigstore bundle
+      - name: Create the SLSA provenance predicate
         shell: bash
-        run: >-
-          cp "${{ steps.provenance.outputs.bundle-path }}"
-          "release/dicom-guide-${RELEASE_TAG}-provenance.sigstore.json"
+        run: |
+          python scripts/create_release_provenance.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --repository-id "$GITHUB_REPOSITORY_ID" \
+            --repository-owner-id "$GITHUB_REPOSITORY_OWNER_ID" \
+            --ref "$GITHUB_REF" \
+            --sha "$GITHUB_SHA" \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --release-tag "$RELEASE_TAG" \
+            "$RUNNER_TEMP/release-provenance.json"
+      - name: Install the Sigstore client
+        run: python -m pip install "sigstore==4.5.0"
+      - name: Sign and verify build provenance
+        shell: bash
+        run: |
+          bundle="release/dicom-guide-${RELEASE_TAG}-provenance.sigstore.json"
+          python -m sigstore attest \
+            --predicate "$RUNNER_TEMP/release-provenance.json" \
+            --predicate-type "https://slsa.dev/provenance/v1" \
+            --bundle "$bundle" \
+            release/SHA256SUMS
+          python -m sigstore verify github \
+            --bundle "$bundle" \
+            --cert-identity "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/.github/workflows/release.yml@$GITHUB_REF" \
+            --repository "$GITHUB_REPOSITORY" \
+            --trigger "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA" \
+            --name "$GITHUB_WORKFLOW" \
+            --ref "$GITHUB_REF" \
+            release/SHA256SUMS
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
