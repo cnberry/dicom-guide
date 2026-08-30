@@ -191,7 +191,16 @@ export const publishViewerControlObservation = async (
     body: JSON.stringify(observation),
   });
   if (!response.ok) {
-    throw new Error(`Viewer observation was rejected (${response.status}).`);
+    let detail = '';
+    try {
+      const value = (await response.json()) as Record<string, unknown>;
+      if (typeof value.detail === 'string' && value.detail.trim()) {
+        detail = ` ${value.detail.trim()}`;
+      }
+    } catch {
+      // The status remains useful when the local service cannot return JSON.
+    }
+    throw new Error(`Viewer observation was rejected (${response.status}).${detail}`);
   }
 };
 

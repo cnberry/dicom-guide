@@ -267,6 +267,32 @@ def command_for_observation(
     return command
 
 
+def navigation_command(
+    observation: dict[str, Any],
+    *,
+    series_id: str,
+    instance_id: str,
+    view: str,
+    tool: str,
+    patient_point_lps_mm: list[float] | None,
+    reset_view: bool,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "1.0.0",
+        "command_id": f"control_{secrets.token_hex(16)}",
+        "view_mode": view,
+        "series_id": series_id,
+        "instance_id": instance_id,
+        "tool": tool,
+        "patient_point_lps_mm": patient_point_lps_mm,
+        "reset_view": reset_view,
+        "target_viewer_id": observation["viewer_id"],
+        # A no-op patch makes the server carry every current person and agent mark
+        # into the command so navigation and a transient reconnect cannot drop them.
+        "discussion_marks_patch": {"add": []},
+    }
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         prog="dicom-guide",
@@ -401,17 +427,16 @@ def main() -> None:
         tool = arguments.tool or ("crosshairs" if arguments.view == "mpr" else "window")
         if arguments.view == "native" and tool == "crosshairs":
             raise ValueError("crosshairs are available only in MPR")
-        command_id = f"control_{secrets.token_hex(16)}"
-        command = {
-            "schema_version": "1.0.0",
-            "command_id": command_id,
-            "view_mode": arguments.view,
-            "series_id": arguments.series_id,
-            "instance_id": arguments.instance_id,
-            "tool": tool,
-            "patient_point_lps_mm": arguments.lps,
-            "reset_view": arguments.reset,
-        }
+        observation = ready_observation(client.json("/v1/viewer-control"))
+        command = navigation_command(
+            observation,
+            series_id=arguments.series_id,
+            instance_id=arguments.instance_id,
+            view=arguments.view,
+            tool=tool,
+            patient_point_lps_mm=arguments.lps,
+            reset_view=arguments.reset,
+        )
         print_json(issue_and_wait(client, command, arguments.wait_seconds, started))
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
         print(f"dicom-guide: {error}", file=sys.stderr)

@@ -61,6 +61,11 @@ macOS and Linux packages contain `install.sh` and install to
 `/usr/local/lib/dicom-guide/<version>` with `/usr/local/bin/dicom-guide`. Run the
 installer normally first. If it explicitly reports that `/usr/local` is not writable,
 rerun that exact installer with `sudo`; do not silently choose a hidden home folder.
+On macOS, an elevated process may be denied access to an extracted bundle under
+`Desktop`, `Documents`, or another privacy-protected folder. If that happens, verify
+the archive again, extract it to a fresh owner-only directory under `/private/tmp`,
+and rerun the same installer there. Never ask the person to paste an administrator
+password into chat.
 
 Windows packages contain `install.ps1` and install per-user to
 `%LOCALAPPDATA%\Programs\DICOM Guide`, with a command shim in its `bin` directory.

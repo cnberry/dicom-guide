@@ -81,8 +81,18 @@ nearby tissue.” State a specific limitation only when it changes the answer.
 ### “What is this colored area?”
 
 Treat a person-drawn brush path as an attention region, not a segmentation or exact
-anatomical boundary. Follow it through relevant nearby slices when useful. Lead with
-the structure or visible feature, then explain its relationship to stable landmarks.
+anatomical boundary. If the current ready native slice and nearby landmarks make the
+location clear, answer from that source view without rebuilding the display. When the
+location is ambiguous, derive one representative LPS point from the mark's recorded
+path, open MPR through `dicom-guide show`, and require the exact ready revision before
+using the reconstructed planes. Lead with the structure or visible feature, then
+explain its relationship to stable landmarks.
+
+If an observation is rejected or a display command times out, read `dicom-guide state`
+and preserve the current native instance and every person mark. Do not reload the page
+as a generic recovery step: marks are intentionally memory-only, and a reload can
+discard the person's context. Restore the last ready native view through the local
+control interface or report the exact validation blocker.
 
 ### “What would this other series tell an expert?”
 
