@@ -1,20 +1,20 @@
 # Agent API
 
-ScanView exposes a small loopback HTTP API so an agent can observe and control the
+DICOM Guide exposes a small loopback HTTP API so an agent can observe and control the
 same viewer a person sees. It is memory-only and source-read-only.
 
 ## Connection
 
 - Base URL: `http://127.0.0.1:<port>` (also `localhost` or `[::1]`).
-- Start it with `scanview-agent launch <dicom-folder>`.
+- Start it with `dicom-guide open <dicom-folder>`.
 - `GET /v1/health` and the browser UI need no authentication.
 - All agent reads and commands use `Authorization: Bearer <launcher-token>`.
 - `POST /v1/viewer-control` uses
-  `Content-Type: application/vnd.scanview.viewer-control+json`.
+  `Content-Type: application/vnd.dicom-guide.viewer-control+json`.
 
-Use `skills/scanview-control/scripts/scanview_control.py` instead of writing a client
-from scratch. It rejects non-loopback URLs, disables proxies and redirects, verifies
-DICOM response hashes, and reads the token from `SCANVIEW_AGENT_TOKEN`.
+Use the installed `dicom-guide` commands instead of writing a client from scratch.
+They reject non-loopback URLs, disable proxies and redirects, verify DICOM response
+hashes, and securely discover the active owner-only local session.
 
 ## Control loop
 
@@ -138,22 +138,22 @@ by `GET /v1/viewer-control` contains the resolved complete `discussion_marks` li
 the browser can apply and confirm the exact result.
 
 Copy `observation.viewer_id` into `target_viewer_id` for every command derived from
-visible state. Other open ScanView tabs ignore that command and cannot replace its
+visible state. Other open DICOM Guide tabs ignore that command and cannot replace its
 ready confirmation while the targeted viewer remains connected. The helper does this
 automatically.
 
 The helper provides the common fast path:
 
 ```bash
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py highlight add \
+dicom-guide highlight add \
   --color cyan \
   --image-normalized 0.46 0.46 --image-normalized 0.49 0.44 \
   --image-normalized 0.54 0.43
 
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py highlight remove \
+dicom-guide highlight remove \
   --mark-id mark_0123456789abcdef0123
 
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py highlight clear
+dicom-guide highlight clear
 ```
 
 `highlight` reads the current ready viewer target, applies one command, waits for the
@@ -185,22 +185,20 @@ Returns basic local service health without a token.
 ## Examples
 
 ```bash
-export SCANVIEW_AGENT_TOKEN='<launcher token>'
-
 # Exact visible state
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py state
+dicom-guide state
 
 # Local series summary
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py series
+dicom-guide series
 
 # Open an exact native source slice
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py show \
+dicom-guide show \
   --series-id series_0123456789abcdef0123 \
   --instance-id instance_0123456789abcdef0123 \
   --view native --tool window --reset
 
 # Read selected non-identifier headers locally
-.venv/bin/python skills/scanview-control/scripts/scanview_control.py metadata \
+dicom-guide metadata \
   --instance-id instance_0123456789abcdef0123
 ```
 

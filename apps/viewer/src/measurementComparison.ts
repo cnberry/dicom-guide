@@ -249,7 +249,7 @@ export const downloadMeasurementComparisonDraft = (draft: MeasurementComparisonD
   );
   const link = document.createElement('a');
   link.href = url;
-  link.download = `scanview-comparison-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `dicom-guide-comparison-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
   URL.revokeObjectURL(url);
 };

@@ -14,9 +14,9 @@ from jsonschema import Draft202012Validator, FormatChecker
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, generate_uid
 
-from scanview_agent.catalog import build_catalog, opaque_id
-from scanview_agent.cli import main
-from scanview_agent.presentation_states import (
+from dicom_guide.catalog import build_catalog, opaque_id
+from dicom_guide.cli import main
+from dicom_guide.presentation_states import (
     ARTIFACT_TYPE,
     GSPS_SOP_CLASS_UID,
     build_presentation_state_catalog,
@@ -24,7 +24,7 @@ from scanview_agent.presentation_states import (
     registry_source_loader,
     validate_presentation_state_catalog,
 )
-from scanview_agent.server import create_server
+from dicom_guide.server import create_server
 
 
 def _file_dataset(path: Path, sop_class_uid: str, sop_instance_uid: str) -> FileDataset:
@@ -188,7 +188,7 @@ def _schema() -> dict:
         (
             Path(__file__).parents[3]
             / "schemas"
-            / "scanview-presentation-state-catalog-v1.schema.json"
+            / "dicom-guide-presentation-state-catalog-v1.schema.json"
         ).read_text()
     )
 
@@ -231,7 +231,7 @@ def test_supported_gsps_is_schema_valid_exact_and_not_reinterpreted(tmp_path: Pa
     ]
     assert state["annotations"][0]["texts"][0]["unformatted_text"] == "12.3 mm"
     assert state["author_identity_authenticated"] is False
-    assert state["scanview_interpretation_added"] is False
+    assert state["dicom_guide_interpretation_added"] is False
     assert state["source_text_clinical_meaning"] == "not_assessed"
     assert artifact["permissions"]["interpret_annotation_text_as_measurement_authorized"] is False
     assert validate_presentation_state_catalog(
@@ -356,7 +356,7 @@ def test_cli_writes_owner_only_artifact_and_privacy_minimized_validation(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "presentation-states",
             str(tmp_path / "source"),
             "--output",
@@ -371,7 +371,7 @@ def test_cli_writes_owner_only_artifact_and_privacy_minimized_validation(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "validate-presentation-states",
             str(tmp_path / "source"),
             str(artifact_path),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a self-contained ScanView wheel without modifying the source tree."""
+"""Build a self-contained DICOM Guide wheel without modifying the source tree."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def main() -> None:
 
     output = args.output_dir.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="scanview-release-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="dicom-guide-release-") as temporary:
         staged_agent = Path(temporary) / "agent"
         shutil.copytree(
             agent_source,
@@ -38,10 +38,10 @@ def main() -> None:
                 "__pycache__", ".pytest_cache", "*.pyc", "*.pyo", "*.egg-info"
             ),
         )
-        shutil.copytree(viewer_dist, staged_agent / "src" / "scanview_agent" / "ui")
+        shutil.copytree(viewer_dist, staged_agent / "src" / "dicom_guide" / "ui")
         shutil.copytree(
             repository / "schemas",
-            staged_agent / "src" / "scanview_agent" / "schemas",
+            staged_agent / "src" / "dicom_guide" / "schemas",
         )
         subprocess.run(
             [

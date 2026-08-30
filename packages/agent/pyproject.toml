@@ -3,9 +3,9 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "scanview-agent"
-version = "0.14.0"
-description = "Privacy-conscious, source-read-only DICOM catalog and local API for ScanView"
+name = "dicom-guide"
+version = "0.15.0"
+description = "Local MRI and CT viewer built for people and their agents"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -29,11 +29,11 @@ dcmqi-interop = [
 ]
 
 [project.scripts]
-scanview-agent = "scanview_agent.cli:main"
+dicom-guide = "dicom_guide.public_cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/scanview_agent"]
+packages = ["src/dicom_guide"]

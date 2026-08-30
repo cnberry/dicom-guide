@@ -41,7 +41,7 @@ def files_under(root: Path) -> dict[str, Path]:
 def copy_atomic(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{destination.name}.scanview-part-", dir=destination.parent
+        prefix=f".{destination.name}.dicom-guide-part-", dir=destination.parent
     )
     os.close(descriptor)
     temporary = Path(temporary_name)
@@ -66,7 +66,7 @@ def main() -> int:
     parser.add_argument(
         "--manifest",
         type=Path,
-        help="Manifest path (default: destination/.scanview-copy-manifest.json)",
+        help="Manifest path (default: destination/.dicom-guide-copy-manifest.json)",
     )
     args = parser.parse_args()
 
@@ -127,7 +127,7 @@ def main() -> int:
         "extra_destination_files_not_removed": extras,
         "files": entries,
     }
-    manifest_path = args.manifest or destination / ".scanview-copy-manifest.json"
+    manifest_path = args.manifest or destination / ".dicom-guide-copy-manifest.json"
     manifest_temporary = manifest_path.with_name(f".{manifest_path.name}.{os.getpid()}.tmp")
     try:
         manifest_temporary.write_text(json.dumps(manifest, indent=2) + "\n")

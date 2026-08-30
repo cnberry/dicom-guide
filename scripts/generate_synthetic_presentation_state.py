@@ -114,7 +114,7 @@ def generate(output: Path) -> None:
     state.SeriesDescription = "SYNTHETIC READ-ONLY GSPS"
     state.InstanceNumber = 1
     state.ContentLabel = "SYNTHETIC"
-    state.ContentDescription = "Patient-free ScanView GSPS fixture"
+    state.ContentDescription = "Patient-free DICOM Guide GSPS fixture"
     state.ImageRotation = 0
     state.ImageHorizontalFlip = "N"
     state.PresentationLUTShape = "IDENTITY"

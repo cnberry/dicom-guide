@@ -26,15 +26,15 @@ from pydicom.uid import (
     generate_uid,
 )
 
-from scanview_agent.catalog import build_catalog
-from scanview_agent import source_segmentations
-from scanview_agent.cli import main
-from scanview_agent.source_segmentations import (
+from dicom_guide.catalog import build_catalog
+from dicom_guide import source_segmentations
+from dicom_guide.cli import main
+from dicom_guide.source_segmentations import (
     build_source_segmentation_catalog,
     registry_segmentation_source_loader,
     source_segmentation_summary,
 )
-from scanview_agent.source_segmentation_reviews import (
+from dicom_guide.source_segmentation_reviews import (
     ATTESTATION as SOURCE_SEG_REVIEW_ATTESTATION,
     REQUEST_ARTIFACT_TYPE as SOURCE_SEG_REVIEW_REQUEST_ARTIFACT_TYPE,
     REQUEST_MEDIA_TYPE as SOURCE_SEG_REVIEW_REQUEST_MEDIA_TYPE,
@@ -43,8 +43,8 @@ from scanview_agent.source_segmentation_reviews import (
     validate_source_segmentation_review_request,
     write_source_segmentation_review,
 )
-from scanview_agent.server import create_server
-from scanview_agent.viewer_state import VIEWER_STATE_MEDIA_TYPE, VIEWER_STATE_PERMISSIONS
+from dicom_guide.server import create_server
+from dicom_guide.viewer_state import VIEWER_STATE_MEDIA_TYPE, VIEWER_STATE_PERMISSIONS
 
 
 def _code(value: str, meaning: str, scheme: str = "DCM") -> Dataset:
@@ -309,13 +309,13 @@ def test_builds_multi_segment_read_only_native_masks(tmp_path: Path) -> None:
     assert state["segments"][1]["computed_volume_ml"] == 0.016
     assert state["creator_identity_authenticated"] is False
     assert state["source_segment_clinical_meaning"] == "not_assessed"
-    assert state["scanview_interpretation_added"] is False
+    assert state["dicom_guide_interpretation_added"] is False
     assert len(guarded) == 4
     schema = json.loads(
         (
             Path(__file__).resolve().parents[3]
             / "schemas"
-            / "scanview-source-segmentation-catalog-v2.schema.json"
+            / "dicom-guide-source-segmentation-catalog-v2.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(schema)
@@ -333,7 +333,7 @@ def test_builds_multi_segment_read_only_native_masks(tmp_path: Path) -> None:
     )
     assert summary == {
         "schema_version": "2.0.0",
-        "artifact_type": "scanview.source-segmentation-summary",
+        "artifact_type": "dicom-guide.source-segmentation-summary",
         "valid": True,
         "errors": [],
         "supported_segmentation_count": 1,
@@ -613,7 +613,7 @@ def test_cli_writes_owner_only_catalog_and_privacy_minimized_validation(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "source-segmentations",
             str(root),
             "--output",
@@ -628,7 +628,7 @@ def test_cli_writes_owner_only_catalog_and_privacy_minimized_validation(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "validate-source-segmentations",
             str(root),
             str(artifact_path),
@@ -698,7 +698,7 @@ def test_server_serves_catalog_and_mask_on_loopback_and_detects_change(
             mask_path,
         )
         assert status == 200
-        assert headers["Content-Type"] == "application/vnd.scanview.source-binary-mask"
+        assert headers["Content-Type"] == "application/vnd.dicom-guide.source-binary-mask"
         assert headers["X-Content-SHA256"] == segment["mask_sha256"]
         assert len(mask) == 18
         assert sum(mask) == 2
@@ -738,7 +738,7 @@ def test_server_serves_catalog_and_mask_on_loopback_and_detects_change(
                 "creator_identity_authenticated": False,
                 "segment_accuracy_verified": False,
                 "source_segment_clinical_meaning": "not_assessed",
-                "scanview_interpretation_added": False,
+                "dicom_guide_interpretation_added": False,
             },
             "measurement_count": 0,
             "comparison_draft_present": False,
@@ -833,7 +833,7 @@ def test_server_serves_catalog_and_mask_on_loopback_and_detects_change(
         assert status == 200
         assert headers["Cache-Control"] == "no-store"
         assert headers["Content-Type"] == "application/zip"
-        assert "scanview-source-segmentation-review-" in headers["Content-Disposition"]
+        assert "dicom-guide-source-segmentation-review-" in headers["Content-Disposition"]
         assert source_segmentation_review_summary(
             io.BytesIO(review_body),
             catalog=catalog,
@@ -940,7 +940,7 @@ def test_source_segmentation_review_is_distinct_source_bound_and_privacy_minimiz
     )
     assert summary == {
         "schema_version": "1.0.0",
-        "artifact_type": "scanview.source-segmentation-review-summary",
+        "artifact_type": "dicom-guide.source-segmentation-review-summary",
         "valid": True,
         "errors": [],
         "review_status": "accepted_for_discussion",
@@ -973,7 +973,7 @@ def test_source_segmentation_review_is_distinct_source_bound_and_privacy_minimiz
             "README.txt",
         }
         record = json.loads(archive.read("review.json"))
-        assert record["artifact_type"] == "scanview.source-segmentation-review"
+        assert record["artifact_type"] == "dicom-guide.source-segmentation-review"
         assert record["privacy"]["contains_original_dicom"] is True
         assert record["privacy"]["may_contain_direct_identifiers"] is True
         assert record["source_snapshot"]["source_creator_identity_authenticated"] is False
@@ -983,7 +983,7 @@ def test_source_segmentation_review_is_distinct_source_bound_and_privacy_minimiz
             (
                 Path(__file__).resolve().parents[3]
                 / "schemas"
-                / "scanview-source-segmentation-review-v1.schema.json"
+                / "dicom-guide-source-segmentation-review-v1.schema.json"
             ).read_text()
         )
         Draft202012Validator.check_schema(schema)
@@ -1086,7 +1086,7 @@ def test_source_segmentation_review_cli_writer_is_owner_only_and_non_overwriting
 
     incomplete_output = tmp_path / "incomplete-output.zip"
     monkeypatch.setattr(
-        "scanview_agent.source_segmentation_reviews.os.write",
+        "dicom_guide.source_segmentation_reviews.os.write",
         lambda _descriptor, _payload: (_ for _ in ()).throw(OSError("synthetic write failure")),
     )
     with pytest.raises(OSError, match="synthetic write failure"):

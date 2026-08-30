@@ -1,6 +1,6 @@
 import type { DicomSeries } from './dicom';
 
-export const NAVIGATION_FRAGMENT_PREFIX = '#scanview-v1?';
+export const NAVIGATION_FRAGMENT_PREFIX = '#dicom-guide-v1?';
 export const MAX_NAVIGATION_FRAGMENT_LENGTH = 320;
 
 const seriesIdPattern = /^series_[0-9a-f]{20}$/;

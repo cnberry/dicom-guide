@@ -3,7 +3,7 @@ import { downloadArchive } from './keyImages';
 
 export const CONSULTATION_BOARD_ENDPOINT = '/v1/consultation-boards';
 export const CONSULTATION_BOARD_INPUT_MEDIA_TYPE =
-  'application/vnd.scanview.consultation-board-input+zip';
+  'application/vnd.dicom-guide.consultation-board-input+zip';
 export const CONSULTATION_BOARD_MIN_ITEMS = 2;
 export const CONSULTATION_BOARD_MAX_ITEMS = 8;
 export const CONSULTATION_BOARD_MAX_LABEL_CHARACTERS = 80;
@@ -97,7 +97,7 @@ const responseFilename = (header: string | null): string => {
   const candidate = header?.match(/filename="?([A-Za-z0-9._-]+)"?/i)?.[1];
   return candidate?.endsWith('.zip')
     ? candidate
-    : `scanview-consultation-board-${new Date().toISOString().slice(0, 10)}.zip`;
+    : `dicom-guide-consultation-board-${new Date().toISOString().slice(0, 10)}.zip`;
 };
 
 export const requestConsultationBoard = async (

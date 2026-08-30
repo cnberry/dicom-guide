@@ -523,7 +523,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           ? 'Agent viewer state stopped because the active source-carried GSPS presentation is not represented by the current state schema.'
           : sourceSegmentationOpening
             ? 'Agent viewer state stopped while the source-carried DICOM SEG mask is being fetched and verified.'
-          : 'Agent viewer state stopped: the local ScanView service is unavailable.',
+          : 'Agent viewer state stopped: the local DICOM Guide service is unavailable.',
       );
       const revokedPublisherId = agentPublisherId;
       setAgentPublisherId(createViewerStatePublisherId());
@@ -633,11 +633,11 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       if (!catalog) {
         setPresentationStateLoading(false);
         setPresentationStateMessage(
-          'Source-carried GSPS states are unavailable until the local ScanView service is running.',
+          'Source-carried GSPS states are unavailable until the local DICOM Guide service is running.',
         );
         setSourceSegmentationLoading(false);
         setSourceSegmentationMessage(
-          'Source-carried DICOM SEG masks are unavailable until the local ScanView service is running.',
+          'Source-carried DICOM SEG masks are unavailable until the local DICOM Guide service is running.',
         );
         setSourceReady(true);
         return;
@@ -781,12 +781,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setSourceSegmentationLoading(false);
     setSourceSegmentationOpening(false);
     setSourceSegmentationMessage(
-      'Source-carried DICOM SEG masks require the local ScanView service.',
+      'Source-carried DICOM SEG masks require the local DICOM Guide service.',
     );
     setPresentationStateCatalog(undefined);
     setPresentationStateLoading(false);
     setPresentationStateMessage(
-      'Source-saved views require the local ScanView service.',
+      'Source-saved views require the local DICOM Guide service.',
     );
     setBaselinePresentationState(undefined);
     setFollowupPresentationState(undefined);
@@ -869,7 +869,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           ? 'Clear source-carried GSPS states before sharing viewer state; the current state schema does not encode GSPS provenance.'
           : sourceSegmentationOpening
             ? 'Wait until the source-carried DICOM SEG mask finishes local verification before sharing viewer state.'
-          : 'Agent viewer state requires the local ScanView service.',
+          : 'Agent viewer state requires the local DICOM Guide service.',
       );
       return;
     }
@@ -891,7 +891,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     );
     const link = document.createElement('a');
     link.href = url;
-    link.download = `scanview-measurements-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `dicom-guide-measurements-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
     setMeasurementMessage(
@@ -1109,7 +1109,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       setFollowupPresentationState(application);
     }
     setPresentationStateMessage(
-      `Opened a supported GSPS subset on exact referenced ${target.modality} image ${target.stackPosition} / ${target.stackCount} in ${slot === 'image_a' ? 'Image A' : 'Image B'}. Creator identity and source-text meaning are not assessed. No ScanView measurement, finding, diagnosis, or conclusion was created.`,
+      `Opened a supported GSPS subset on exact referenced ${target.modality} image ${target.stackPosition} / ${target.stackCount} in ${slot === 'image_a' ? 'Image A' : 'Image B'}. Creator identity and source-text meaning are not assessed. No DICOM Guide measurement, finding, diagnosis, or conclusion was created.`,
     );
   };
 
@@ -1629,7 +1629,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
 
     return (
       <main className="simple-app">
-        <h1 className="sr-only">ScanView</h1>
+        <h1 className="sr-only">DICOM Guide</h1>
         <input
           ref={inputRef}
           className="hidden-input"
@@ -1878,7 +1878,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
             SV
           </div>
           <div>
-            <h1>ScanView</h1>
+            <h1>DICOM Guide</h1>
             <p>{consultPrepMode ? 'Consult preparation workspace' : 'Longitudinal imaging workspace'}</p>
           </div>
         </div>
@@ -1925,7 +1925,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           <span className="eyebrow">Start with source fidelity</span>
           <h2>Open a copied DICOM folder</h2>
           <p>
-            ScanView reads headers and pixels locally. It does not upload studies, modify source
+            DICOM Guide reads headers and pixels locally. It does not upload studies, modify source
             files, or claim a clinical interpretation.
           </p>
           <button className="primary-action" onClick={openFolder}>
@@ -2044,7 +2044,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                       ? 'Unavailable until source-carried GSPS states are cleared'
                       : sourceSegmentationOpening
                         ? 'Unavailable until the source-carried DICOM SEG mask finishes local verification'
-                    : 'Available only while the local ScanView service is running'
+                    : 'Available only while the local DICOM Guide service is running'
                 }
                 onClick={toggleAgentStateSharing}
               >
@@ -2158,7 +2158,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
             <section className="measurement-paste-panel" aria-label="Paste local measurement JSON">
               <div>
                 <span className="eyebrow">Agent-friendly local import · strict validation</span>
-                <h2>Paste a ScanView measurement draft</h2>
+                <h2>Paste a DICOM Guide measurement draft</h2>
                 <p>
                   The text stays in this browser session. Unsupported fields, altered arithmetic,
                   reviewed state, and invalid source provenance are rejected.
@@ -2169,7 +2169,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                 value={measurementPasteValue}
                 maxLength={maxPastedMeasurementBytes}
                 spellCheck={false}
-                placeholder="Paste versioned ScanView measurement JSON"
+                placeholder="Paste versioned DICOM Guide measurement JSON"
                 onChange={(event) => setMeasurementPasteValue(event.target.value)}
               />
               <div className="measurement-paste-actions">
@@ -2374,7 +2374,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     Review an agent-proposed consultation plan
                   </h2>
                   <p>
-                    Paste a plan created locally with <code>scanview-agent</code>. The
+                    Paste a plan created locally with <code>dicom-guide</code>. The
                     local service must match its catalog hash and every exact source before
                     navigation controls appear.
                   </p>
@@ -2389,7 +2389,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                   <textarea
                     rows={7}
                     value={agentConsultationPlanText}
-                    placeholder="Paste scanview.agent-consultation-plan JSON"
+                    placeholder="Paste dicom-guide.agent-consultation-plan JSON"
                     disabled={agentConsultationPlanState === 'working'}
                     onChange={(event) => {
                       setAgentConsultationPlanText(event.target.value);
@@ -2687,7 +2687,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       )}
 
       <footer>
-        <span>ScanView 0.14 · local-first prototype</span>
+        <span>DICOM Guide 0.15 · local-first</span>
         <span>Every automated result is unreviewed until a qualified clinician accepts it.</span>
       </footer>
     </main>

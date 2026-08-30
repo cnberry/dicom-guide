@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
-from scanview_agent import consultation_boards as boards
-from scanview_agent import consultation_packets as consultation
+from dicom_guide import consultation_boards as boards
+from dicom_guide import consultation_packets as consultation
 
 
 CREATED_AT = "2026-08-28T01:02:03Z"
@@ -632,7 +632,7 @@ def test_output_is_owner_only_and_existing_file_or_symlink_is_not_overwritten(
 ) -> None:
     view_a, view_b, catalog, registry = _fixture(tmp_path)
     monkeypatch.setattr(
-        "scanview_agent.catalog.build_catalog",
+        "dicom_guide.catalog.build_catalog",
         lambda _root, *, include_hashes: (catalog, registry),
     )
     output = tmp_path / "consultation.zip"
@@ -782,7 +782,7 @@ def test_consultation_board_is_source_bound_static_neutral_and_schema_valid(
     schema_path = (
         Path(__file__).parents[3]
         / "schemas"
-        / "scanview-clinician-consultation-board-v1.schema.json"
+        / "dicom-guide-clinician-consultation-board-v1.schema.json"
     )
     schema = json.loads(schema_path.read_text())
     Draft202012Validator.check_schema(schema)
@@ -1033,7 +1033,7 @@ def test_write_consultation_board_is_owner_only_and_never_overwrites(
 ) -> None:
     items, catalog, registry = _board_fixture(tmp_path)
     monkeypatch.setattr(
-        "scanview_agent.catalog.build_catalog",
+        "dicom_guide.catalog.build_catalog",
         lambda _root, *, include_hashes: (catalog, registry),
     )
     output = tmp_path / "consultation-board.zip"

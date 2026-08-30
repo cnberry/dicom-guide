@@ -52,7 +52,7 @@ export function PresentationStatePanel({
           <p>
             Open a supported state deliberately to navigate to an exact referenced image, apply
             its supported linear window, and render supported source coordinates and text.
-            ScanView does not authenticate the creator or infer clinical meaning.
+            DICOM Guide does not authenticate the creator or infer clinical meaning.
           </p>
         </div>
         <span className="unreviewed-badge">
@@ -183,10 +183,10 @@ export function PresentationStatePanel({
         {message}
       </p>
       <p className="presentation-state-safety">
-        Source text may contain identifiers or clinical language. ScanView does not verify the
+        Source text may contain identifiers or clinical language. DICOM Guide does not verify the
         creator, credentials, signature, review status, accuracy, or meaning. Orange is a
         high-contrast rendering of supported source coordinates; source color, style, layer
-        behavior, and full GSPS fidelity are not claimed. The graphic is not a ScanView ROI or
+        behavior, and full GSPS fidelity are not claimed. The graphic is not a DICOM Guide ROI or
         measurement. While a state is active, viewport manipulation, measurement drafts, agent
         state, MPR, and evidence exports are locked. The original image and GSPS object remain
         authoritative.

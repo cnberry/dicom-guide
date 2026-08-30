@@ -5,7 +5,7 @@ import { parseDiscussionMarks, type DiscussionMark } from './discussionMarkup';
 
 export const VIEWER_CONTROL_ENDPOINT = '/v1/viewer-control';
 export const VIEWER_CONTROL_OBSERVATION_ENDPOINT = '/v1/viewer-control/observation';
-export const VIEWER_CONTROL_MEDIA_TYPE = 'application/vnd.scanview.viewer-control+json';
+export const VIEWER_CONTROL_MEDIA_TYPE = 'application/vnd.dicom-guide.viewer-control+json';
 
 export type ViewerControlViewMode = 'native' | 'mpr';
 export type ViewerControlTool =

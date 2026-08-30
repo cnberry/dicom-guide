@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Verify ScanView SEG import against independently executed dcmqi tools.
+"""Verify DICOM Guide SEG import against independently executed dcmqi tools.
 
 This optional gate creates patient-free data only. The exact dcmqi executables run
-inside OS-enforced external-network isolation and never enter the ScanView runtime.
+inside OS-enforced external-network isolation and never enter the DICOM Guide runtime.
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "packages" / "agent" / "src"))
 
 from pydicom import dcmread  # noqa: E402
 
-from scanview_agent.catalog import build_catalog  # noqa: E402
-from scanview_agent.source_segmentations import (  # noqa: E402
+from dicom_guide.catalog import build_catalog  # noqa: E402
+from dicom_guide.source_segmentations import (  # noqa: E402
     build_source_segmentation_catalog,
     registry_segmentation_source_loader,
     source_segmentation_summary,
@@ -195,11 +195,11 @@ def _write_inputs(private_root: Path, mask: bytes) -> tuple[Path, Path]:
                     "https://raw.githubusercontent.com/qiicr/dcmqi/master/"
                     "doc/schemas/seg-schema.json#"
                 ),
-                "ContentCreatorName": "ScanView^InteropFixture",
+                "ContentCreatorName": "DICOM Guide^InteropFixture",
                 "ClinicalTrialSeriesID": "SYNTHETIC",
                 "ClinicalTrialTimePointID": "1",
                 "ClinicalTrialCoordinatingCenterName": (
-                    "ScanView patient-free interoperability"
+                    "DICOM Guide patient-free interoperability"
                 ),
                 "SeriesDescription": "dcmqi independent patient-free SEG",
                 "SeriesNumber": "92",
@@ -218,7 +218,7 @@ def _write_inputs(private_root: Path, mask: bytes) -> tuple[Path, Path]:
                             "SegmentLabel": "Independent synthetic test region",
                             "SegmentAlgorithmType": "MANUAL",
                             "SegmentAlgorithmName": (
-                                "ScanView patient-free fixture"
+                                "DICOM Guide patient-free fixture"
                             ),
                             "recommendedDisplayRGBValue": [255, 100, 60],
                             "SegmentedPropertyCategoryCodeSequence": {
@@ -380,7 +380,7 @@ def main() -> None:
     if _converter_revision(reader) != revision:
         raise RuntimeError("dcmqi writer and reader revisions differ")
 
-    with tempfile.TemporaryDirectory(prefix="scanview-dcmqi-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="dicom-guide-dcmqi-") as temporary:
         private_root = Path(temporary)
         private_root.chmod(0o700)
         (private_root / "tmp").mkdir(mode=0o700)
@@ -465,12 +465,12 @@ def main() -> None:
             load_source=loader,
         )
         if not summary["valid"] or artifact["supported_segmentation_count"] != 1:
-            raise RuntimeError("ScanView did not accept the independent dcmqi SEG")
+            raise RuntimeError("DICOM Guide did not accept the independent dcmqi SEG")
         state = artifact["segmentations"][0]
         segment = state["segments"][0]
-        scanview_mask = masks[(state["segmentation_id"], 1)]
+        dicom_guide_mask = masks[(state["segmentation_id"], 1)]
         if (
-            scanview_mask != expected_mask
+            dicom_guide_mask != expected_mask
             or state["spatial_location_evidence"]
             != "optional_tag_absent_exact_native_geometry"
             or state["frame_count"] != 11
@@ -480,11 +480,11 @@ def main() -> None:
             or segment["mask_sha256"] != EXPECTED_MASK_SHA256
             or len(guarded) != 25
         ):
-            raise RuntimeError("ScanView dcmqi provenance or arithmetic differs")
+            raise RuntimeError("DICOM Guide dcmqi provenance or arithmetic differs")
         print(
             json.dumps(
                 {
-                    "artifact_type": "scanview.dcmqi-source-segmentation-interop",
+                    "artifact_type": "dicom-guide.dcmqi-source-segmentation-interop",
                     "valid": True,
                     "patient_data_used": False,
                     "external_network_denied": True,

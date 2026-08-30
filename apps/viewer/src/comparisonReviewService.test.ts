@@ -76,7 +76,7 @@ describe('local comparison-review service', () => {
         headers: {
           'Content-Type': 'application/zip',
           'Content-Disposition':
-            'attachment; filename="scanview-comparison-review-test.zip"',
+            'attachment; filename="dicom-guide-comparison-review-test.zip"',
         },
       }),
     );
@@ -90,7 +90,7 @@ describe('local comparison-review service', () => {
 
     expect(COMPARISON_REVIEW_ENDPOINT).toBe('/v1/comparison-reviews');
     expect(result).toEqual({
-      filename: 'scanview-comparison-review-test.zip',
+      filename: 'dicom-guide-comparison-review-test.zip',
       bytes: new Uint8Array([9, 8, 7]),
     });
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];

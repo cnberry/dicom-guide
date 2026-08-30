@@ -1,4 +1,0 @@
-interface:
-  display_name: "ScanView Control"
-  short_description: "Guide local MRI and CT exploration"
-  default_prompt: "Use $scanview-control to guide me through the active scan with terse anatomical explanations and API-only navigation."

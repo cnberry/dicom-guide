@@ -2,7 +2,7 @@ import { zipSync } from 'fflate';
 import { downloadArchive } from './keyImages';
 
 export const VISIT_PACKET_ENDPOINT = '/v1/visit-packets';
-export const VISIT_PACKET_INPUT_MEDIA_TYPE = 'application/vnd.scanview.visit-input+zip';
+export const VISIT_PACKET_INPUT_MEDIA_TYPE = 'application/vnd.dicom-guide.visit-input+zip';
 
 export type VisitPacketArchive = {
   filename: string;
@@ -25,7 +25,7 @@ const responseFilename = (header: string | null): string => {
   const candidate = header?.match(/filename="?([A-Za-z0-9._-]+)"?/i)?.[1];
   return candidate?.endsWith('.zip')
     ? candidate
-    : `scanview-visit-packet-${new Date().toISOString().slice(0, 10)}.zip`;
+    : `dicom-guide-visit-packet-${new Date().toISOString().slice(0, 10)}.zip`;
 };
 
 export const requestVisitPacket = async (

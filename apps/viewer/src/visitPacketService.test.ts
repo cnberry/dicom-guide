@@ -27,7 +27,7 @@ describe('local visit-packet service', () => {
         status: 200,
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Disposition': 'attachment; filename="scanview-visit-packet-test.zip"',
+          'Content-Disposition': 'attachment; filename="dicom-guide-visit-packet-test.zip"',
         },
       }),
     );
@@ -37,7 +37,7 @@ describe('local visit-packet service', () => {
 
     expect(VISIT_PACKET_ENDPOINT).toBe('/v1/visit-packets');
     expect(result).toEqual({
-      filename: 'scanview-visit-packet-test.zip',
+      filename: 'dicom-guide-visit-packet-test.zip',
       bytes: new Uint8Array([9, 8, 7]),
     });
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];

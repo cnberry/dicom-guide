@@ -4,7 +4,7 @@ import type { MeasurementComparisonDraft } from './measurementComparison';
 
 export const COMPARISON_REVIEW_ENDPOINT = '/v1/comparison-reviews';
 export const COMPARISON_REVIEW_INPUT_MEDIA_TYPE =
-  'application/vnd.scanview.comparison-review-input+zip';
+  'application/vnd.dicom-guide.comparison-review-input+zip';
 
 export type ComparisonReviewArchive = {
   filename: string;
@@ -29,7 +29,7 @@ const responseFilename = (header: string | null): string => {
   const candidate = header?.match(/filename="?([A-Za-z0-9._-]+)"?/i)?.[1];
   return candidate?.endsWith('.zip')
     ? candidate
-    : `scanview-comparison-review-${new Date().toISOString().slice(0, 10)}.zip`;
+    : `dicom-guide-comparison-review-${new Date().toISOString().slice(0, 10)}.zip`;
 };
 
 export const requestComparisonReview = async (

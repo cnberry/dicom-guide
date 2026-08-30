@@ -6,9 +6,9 @@ import type {
 
 export const SOURCE_SEGMENTATION_REVIEW_ENDPOINT = '/v1/source-segmentation-reviews';
 export const SOURCE_SEGMENTATION_REVIEW_REQUEST_MEDIA_TYPE =
-  'application/vnd.scanview.source-segmentation-review-request+json';
+  'application/vnd.dicom-guide.source-segmentation-review-request+json';
 export const SOURCE_SEGMENTATION_REVIEW_ATTESTATION =
-  'I attest that I personally reviewed the complete source-carried DICOM SEG boundary on the original local source images within the scope of my stated role. I treated the source label, codes, creator, and algorithm as unauthenticated and unverified. ScanView has not verified my identity or credentials.';
+  'I attest that I personally reviewed the complete source-carried DICOM SEG boundary on the original local source images within the scope of my stated role. I treated the source label, codes, creator, and algorithm as unauthenticated and unverified. DICOM Guide has not verified my identity or credentials.';
 export const SOURCE_SEGMENTATION_REVIEW_MAX_REQUEST_BYTES = 32 * 1024;
 export const SOURCE_SEGMENTATION_REVIEW_MAX_ARCHIVE_BYTES = 420 * 1024 * 1024;
 
@@ -123,7 +123,7 @@ export const buildSourceSegmentationReviewRequest = (
 
   return {
     schema_version: '1.0.0',
-    artifact_type: 'scanview.source-segmentation-review-request',
+    artifact_type: 'dicom-guide.source-segmentation-review-request',
     source: {
       catalog_content_sha256: input.catalogContentSha256,
       segmentation_id: input.segmentationId,
@@ -164,7 +164,7 @@ const responseFilename = (header: string | null): string => {
   const candidate = header?.match(/filename="?([A-Za-z0-9._-]+)"?/i)?.[1];
   return candidate?.endsWith('.zip')
     ? candidate
-    : `scanview-source-segmentation-review-${new Date().toISOString().slice(0, 10)}.zip`;
+    : `dicom-guide-source-segmentation-review-${new Date().toISOString().slice(0, 10)}.zip`;
 };
 
 export const requestSourceSegmentationReview = async (

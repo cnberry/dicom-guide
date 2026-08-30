@@ -95,7 +95,7 @@ def main() -> None:
     output = args.output.expanduser().resolve()
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
 
-    patient_id = "SCANVIEW-SYNTHETIC-SEG"
+    patient_id = "DICOM_GUIDE-SYNTHETIC-SEG"
     study_uid = generate_uid()
     source_series_uid = generate_uid()
     segmentation_series_uid = generate_uid()
@@ -108,7 +108,7 @@ def main() -> None:
         dataset.SOPClassUID = MRImageStorage
         dataset.SOPInstanceUID = sop_uid
         dataset.PatientID = patient_id
-        dataset.PatientName = "ScanView^SyntheticSeg"
+        dataset.PatientName = "DICOM Guide^SyntheticSeg"
         dataset.StudyInstanceUID = study_uid
         dataset.SeriesInstanceUID = source_series_uid
         dataset.FrameOfReferenceUID = frame_uid
@@ -153,7 +153,7 @@ def main() -> None:
     segmentation.SOPClassUID = SegmentationStorage
     segmentation.SOPInstanceUID = segmentation_uid
     segmentation.PatientID = patient_id
-    segmentation.PatientName = "ScanView^SyntheticSeg"
+    segmentation.PatientName = "DICOM Guide^SyntheticSeg"
     segmentation.StudyInstanceUID = study_uid
     segmentation.SeriesInstanceUID = segmentation_series_uid
     segmentation.FrameOfReferenceUID = frame_uid
@@ -164,9 +164,9 @@ def main() -> None:
     segmentation.ImageType = ["DERIVED", "PRIMARY"]
     segmentation.ContentLabel = "SYNTHETIC_SEG"
     segmentation.ContentDescription = "Patient-free local source SEG validation"
-    segmentation.Manufacturer = "ScanView local"
-    segmentation.ManufacturerModelName = "ScanView synthetic generator"
-    segmentation.SoftwareVersions = "0.14.0"
+    segmentation.Manufacturer = "DICOM Guide local"
+    segmentation.ManufacturerModelName = "DICOM Guide synthetic generator"
+    segmentation.SoftwareVersions = "0.15.0"
     segmentation.Rows = ROWS
     segmentation.Columns = COLUMNS
     segmentation.NumberOfFrames = len(nonempty)

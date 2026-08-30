@@ -231,7 +231,7 @@ export function LesionVolumeComparisonPanel({
           <span className="eyebrow">Agent-readable longitudinal boundary evidence</span>
           <h2 id="volume-pair-heading">Pair two accepted manual ROI boundaries</h2>
           <p>
-            ScanView derives chronology from the current local DICOM catalog and recursively
+            DICOM Guide derives chronology from the current local DICOM catalog and recursively
             revalidates both complete review archives. A person—not software—must confirm the same
             lesion and represented tissue. Numeric change never becomes a response classification.
           </p>

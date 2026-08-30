@@ -15,14 +15,14 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scanview_agent.visit_packets import (
+from dicom_guide.visit_packets import (
     EXPECTED_FILES,
     build_visit_packet,
     visit_packet_from_transport,
     visit_packet_summary,
     write_visit_packet,
 )
-from scanview_agent.server import create_server
+from dicom_guide.server import create_server
 
 
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
@@ -113,7 +113,7 @@ def _write_key_image(
             "sha256": hashlib.sha256(measurement_bytes).hexdigest(),
         },
         "implementation": {
-            "name": "ScanView key-image exporter",
+            "name": "DICOM Guide key-image exporter",
             "version": "0.2.0",
             "renderer": "Cornerstone3D 5.8.2",
         },
@@ -201,13 +201,13 @@ def test_visit_packet_round_trip_is_static_source_linked_and_schema_valid(
         (
             repository_root
             / "schemas"
-            / "scanview-clinician-visit-packet-v1.schema.json"
+            / "dicom-guide-clinician-visit-packet-v1.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(packet)
     key_image_schema = json.loads(
-        (repository_root / "schemas" / "scanview-key-image-v2.schema.json").read_text()
+        (repository_root / "schemas" / "dicom-guide-key-image-v2.schema.json").read_text()
     )
     with zipfile.ZipFile(baseline) as archive:
         baseline_packet = json.loads(archive.read("key-image.json"))
@@ -249,7 +249,7 @@ def test_authenticated_same_origin_loopback_endpoint_returns_valid_packet_in_mem
     headers = {
         "Authorization": "Bearer test-session-token",
         "Origin": f"http://127.0.0.1:{port}",
-        "Content-Type": "application/vnd.scanview.visit-input+zip",
+        "Content-Type": "application/vnd.dicom-guide.visit-input+zip",
         "Accept": "application/zip",
     }
     try:

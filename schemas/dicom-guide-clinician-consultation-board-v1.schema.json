@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dicom-guide.local/schemas/dicom-guide-clinician-consultation-board-v1.schema.json",
+  "title": "DICOM Guide unreviewed clinician consultation evidence board v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_at",
+    "review_status",
+    "artifact_type",
+    "purpose",
+    "relationship",
+    "observations",
+    "computed_results",
+    "candidate_interpretations",
+    "limitations",
+    "missing_context",
+    "questions_for_clinician",
+    "implementation",
+    "files"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "review_status": { "const": "unreviewed" },
+    "artifact_type": { "const": "clinician_consultation_board" },
+    "purpose": {
+      "const": "two_to_eight_source_views_for_clinician_discussion_only"
+    },
+    "relationship": { "$ref": "#/$defs/relationship" },
+    "observations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/observation" }
+    },
+    "computed_results": { "type": "array", "maxItems": 0 },
+    "candidate_interpretations": { "type": "array", "maxItems": 0 },
+    "limitations": {
+      "const": [
+        "The selected images are unreviewed reference views only; their order and discussion labels do not establish chronology, anatomy, lesion identity, diagnosis, or treatment response.",
+        "MR and CT have different acquisition physics and intensity meaning and must not be compared as if their pixel values were equivalent.",
+        "The images are not registered, spatially aligned, or guaranteed to show the same anatomy, lesion, or tumor component.",
+        "Discussion labels are person-entered headings and have not been clinically authenticated or interpreted by DICOM Guide.",
+        "Measurements are manual, source-linked, and unreviewed; they do not establish diagnosis, lesion identity, treatment response, or clinical significance.",
+        "Original DICOM instances remain authoritative; all included PNG and JSON files are derived evidence and may retain identifying pixel content."
+      ]
+    },
+    "missing_context": {
+      "const": [
+        "Clinical confirmation of patient identity, diagnosis, pathology, treatment timeline, symptoms, medications, and operative history.",
+        "Qualified identification of the anatomy, lesion, tumor component, and purpose represented by each selected view.",
+        "The intended same-modality MRI sequence and timepoints for any future longitudinal response assessment."
+      ]
+    },
+    "questions_for_clinician": {
+      "const": [
+        "Are these the correct source exams, series, and images for this consultation?",
+        "What anatomy or tumor-related feature, if any, is clinically relevant in each labeled view?",
+        "Which labels should be corrected before this material is used for discussion?",
+        "What different questions do the MRI and CT answer, and what should not be compared between them?",
+        "Which MRI sequence and follow-up timepoint should be used for a future treatment-response comparison?",
+        "What findings, uncertainties, and next-step questions should be recorded in the medical record?"
+      ]
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "DICOM Guide clinician consultation-board assembler" },
+        "version": { "const": "0.1.0" }
+      }
+    },
+    "files": { "$ref": "#/$defs/files" }
+  },
+  "$defs": {
+    "studyId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|study_[0-9a-f]{20})$"
+    },
+    "seriesId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|series_[0-9a-f]{20})$"
+    },
+    "instanceId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|instance_[0-9a-f]{20})$"
+    },
+    "patientContextId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|patient_[0-9a-f]{20})$"
+    },
+    "frameId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{16}|frame_[0-9a-f]{20})$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_method",
+        "same_patient_context",
+        "item_count",
+        "modalities_present",
+        "modality_relationship",
+        "distinct_source_study_count",
+        "distinct_source_instances",
+        "temporal_relationship",
+        "registration_status",
+        "spatial_relationship",
+        "longitudinal_comparison_authorized",
+        "response_assessment_authorized"
+      ],
+      "properties": {
+        "selection_method": { "const": "explicit_2_to_8_view_selection" },
+        "same_patient_context": { "const": true },
+        "item_count": { "type": "integer", "minimum": 2, "maximum": 8 },
+        "modalities_present": { "const": ["MR", "CT"] },
+        "modality_relationship": { "const": "cross_modality_context_only" },
+        "distinct_source_study_count": { "type": "integer", "minimum": 2, "maximum": 8 },
+        "distinct_source_instances": { "const": true },
+        "temporal_relationship": { "const": "not_asserted" },
+        "registration_status": { "const": "not_registered" },
+        "spatial_relationship": { "const": "not_aligned" },
+        "longitudinal_comparison_authorized": { "const": false },
+        "response_assessment_authorized": { "const": false }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "study_id",
+        "series_id",
+        "instance_id",
+        "patient_context_id",
+        "modality",
+        "series_description",
+        "instance_number"
+      ],
+      "properties": {
+        "study_id": { "$ref": "#/$defs/studyId" },
+        "series_id": { "$ref": "#/$defs/seriesId" },
+        "instance_id": { "$ref": "#/$defs/instanceId" },
+        "patient_context_id": { "$ref": "#/$defs/patientContextId" },
+        "frame_of_reference_id": { "$ref": "#/$defs/frameId" },
+        "modality": { "enum": ["MR", "CT"] },
+        "acquisition_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "series_description": { "type": "string", "minLength": 1 },
+        "instance_number": { "type": "integer" }
+      }
+    },
+    "orientation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "right", "top", "bottom"],
+      "properties": {
+        "left": { "type": "string", "pattern": "^[RLAPHF]{1,3}$" },
+        "right": { "type": "string", "pattern": "^[RLAPHF]{1,3}$" },
+        "top": { "type": "string", "pattern": "^[RLAPHF]{1,3}$" },
+        "bottom": { "type": "string", "pattern": "^[RLAPHF]{1,3}$" }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "voi_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lower", "upper"],
+          "properties": {
+            "lower": { "type": "number" },
+            "upper": { "type": "number" }
+          }
+        },
+        "invert": { "type": "boolean" },
+        "zoom": { "type": "number", "exclusiveMinimum": 0 },
+        "pan": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "number" }
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_slot",
+        "stack_position",
+        "stack_count",
+        "source_kind",
+        "viewport_width_px",
+        "viewport_height_px",
+        "presentation"
+      ],
+      "properties": {
+        "selection_slot": { "enum": ["view_a", "view_b"] },
+        "stack_position": { "type": "integer", "minimum": 1 },
+        "stack_count": { "type": "integer", "minimum": 1 },
+        "source_kind": { "const": "loopback-service" },
+        "viewport_width_px": { "type": "integer", "minimum": 1 },
+        "viewport_height_px": { "type": "integer", "minimum": 1 },
+        "patient_orientation": { "$ref": "#/$defs/orientation" },
+        "presentation": { "$ref": "#/$defs/presentation" }
+      }
+    },
+    "sourceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog_match", "dicom_bytes", "dicom_sha256"],
+      "properties": {
+        "catalog_match": { "const": true },
+        "dicom_bytes": { "type": "integer", "minimum": 1 },
+        "dicom_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "discussion_label",
+        "capture_slot",
+        "source",
+        "source_anchor",
+        "display",
+        "key_image_path",
+        "key_image_sidecar_path",
+        "measurement_path",
+        "measurement_count",
+        "tracking_ids",
+        "review_status"
+      ],
+      "properties": {
+        "item_id": { "type": "string", "pattern": "^item_0[1-8]$" },
+        "discussion_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?!\\s)(?!.*\\s$)[^\\u0000-\\u001F\\u007F-\\u009F\\u00AD\\u061C\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\uD800-\\uDFFF\\uFEFF]+$"
+        },
+        "capture_slot": { "enum": ["view_a", "view_b"] },
+        "source": { "$ref": "#/$defs/source" },
+        "source_anchor": { "$ref": "#/$defs/sourceAnchor" },
+        "display": { "$ref": "#/$defs/display" },
+        "key_image_path": {
+          "type": "string",
+          "pattern": "^items/item-0[1-8]/key-image\\.png$"
+        },
+        "key_image_sidecar_path": {
+          "type": "string",
+          "pattern": "^items/item-0[1-8]/key-image\\.json$"
+        },
+        "measurement_path": {
+          "type": "string",
+          "pattern": "^items/item-0[1-8]/measurements\\.json$"
+        },
+        "measurement_count": { "type": "integer", "minimum": 0 },
+        "tracking_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "review_status": { "const": "unreviewed" }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_type", "byte_count", "sha256"],
+      "properties": {
+        "media_type": { "enum": ["application/json", "image/png", "text/html", "text/plain"] },
+        "byte_count": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "minProperties": 8,
+      "maxProperties": 26,
+      "required": ["review.html", "README.txt"],
+      "properties": {
+        "review.html": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "text/html" } } }
+          ]
+        },
+        "README.txt": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "text/plain" } } }
+          ]
+        }
+      },
+      "patternProperties": {
+        "^items/item-0[1-8]/key-image\\.json$": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "application/json" } } }
+          ]
+        },
+        "^items/item-0[1-8]/key-image\\.png$": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "image/png" } } }
+          ]
+        },
+        "^items/item-0[1-8]/measurements\\.json$": {
+          "allOf": [
+            { "$ref": "#/$defs/file" },
+            { "properties": { "media_type": { "const": "application/json" } } }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

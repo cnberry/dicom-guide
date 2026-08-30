@@ -130,12 +130,12 @@ const dataset = generated.dataset;
 Object.assign(dataset, {
   SegmentsOverlap: 'NO',
   SpecificCharacterSet: 'ISO_IR 192',
-  ContentLabel: 'SCANVIEW_SEG',
+  ContentLabel: 'DICOM_GUIDE_SEG',
   ContentDescription: 'Unreviewed local manual lesion ROI evidence',
-  SeriesDescription: 'ScanView unreviewed manual lesion ROI',
-  Manufacturer: 'ScanView local',
-  ManufacturerModelName: 'ScanView',
-  SoftwareVersions: '0.14.0',
+  SeriesDescription: 'DICOM Guide unreviewed manual lesion ROI',
+  Manufacturer: 'DICOM Guide local',
+  ManufacturerModelName: 'DICOM Guide',
+  SoftwareVersions: '0.15.0',
 });
 const segment = Array.isArray(dataset.SegmentSequence)
   ? dataset.SegmentSequence[0]

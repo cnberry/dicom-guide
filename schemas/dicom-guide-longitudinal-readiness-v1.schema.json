@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dicom-guide.local/schemas/dicom-guide-longitudinal-readiness-v1.schema.json",
+  "title": "DICOM Guide longitudinal readiness report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "generated_at",
+    "catalog_sha256",
+    "local_only",
+    "review_status",
+    "state",
+    "privacy",
+    "source_summary",
+    "modality_readiness",
+    "candidate_pairs",
+    "missing_data",
+    "required_human_decisions",
+    "required_technical_gates",
+    "permissions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "artifact_type": { "const": "dicom-guide.longitudinal-readiness" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "catalog_sha256": { "$ref": "#/$defs/sha256" },
+    "local_only": { "const": true },
+    "review_status": { "const": "unreviewed" },
+    "state": {
+      "enum": [
+        "no_dicom_studies",
+        "no_same_modality_longitudinal_pair",
+        "candidate_pairs_require_human_review"
+      ]
+    },
+    "privacy": { "$ref": "#/$defs/privacy" },
+    "source_summary": { "$ref": "#/$defs/source_summary" },
+    "modality_readiness": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "#/$defs/mr_readiness" },
+        { "$ref": "#/$defs/ct_readiness" }
+      ],
+      "items": false
+    },
+    "candidate_pairs": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/candidate_pair" }
+    },
+    "missing_data": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "dicom_studies",
+          "eligible_mr_or_ct_stack",
+          "future_distinct_study_same_modality_series",
+          "complete_acquisition_dates",
+          "same_patient_context_across_exams",
+          "distinct_exam_dates"
+        ]
+      }
+    },
+    "required_human_decisions": {
+      "const": [
+        "confirm_patient_identity_in_the_clinical_imaging_system",
+        "assign_clinical_baseline_and_followup_roles",
+        "confirm_matching_sequence_contrast_coverage_and_artifact",
+        "confirm_same_lesion_and_represented_tissue",
+        "select_response_criteria_with_the_treating_clinician"
+      ]
+    },
+    "required_technical_gates": {
+      "const": [
+        "verify_exact_source_bytes",
+        "review_registration_need_for_different_frames",
+        "complete_qualified_registration_qa_before_spatial_comparison",
+        "review_each_manual_boundary_independently"
+      ]
+    },
+    "permissions": { "$ref": "#/$defs/permissions" },
+    "limitations": {
+      "const": [
+        "This is a metadata-only readiness report, not an accepted clinical pairing.",
+        "A candidate score cannot establish lesion identity, response, or treatment effect.",
+        "Current MRI and CT studies must remain neutral reference views when no same-modality pair exists."
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "direct_identifier_tags_excluded",
+        "deidentified",
+        "contains_pixels",
+        "contains_paths"
+      ],
+      "properties": {
+        "classification": { "const": "sensitive_local_medical_data" },
+        "direct_identifier_tags_excluded": { "const": true },
+        "deidentified": { "const": false },
+        "contains_pixels": { "const": false },
+        "contains_paths": { "const": false }
+      }
+    },
+    "source_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "study_count",
+        "dated_study_count",
+        "series_count",
+        "eligible_series_count",
+        "dicom_instance_count",
+        "patient_context_count",
+        "candidate_pair_count",
+        "reported_candidate_pair_count",
+        "candidate_pairs_truncated"
+      ],
+      "properties": {
+        "study_count": { "$ref": "#/$defs/count" },
+        "dated_study_count": { "$ref": "#/$defs/count" },
+        "series_count": { "$ref": "#/$defs/count" },
+        "eligible_series_count": { "$ref": "#/$defs/count" },
+        "dicom_instance_count": { "$ref": "#/$defs/count" },
+        "patient_context_count": { "$ref": "#/$defs/count" },
+        "candidate_pair_count": { "$ref": "#/$defs/count" },
+        "reported_candidate_pair_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "candidate_pairs_truncated": { "type": "boolean" }
+      }
+    },
+    "modality_state": {
+      "enum": [
+        "not_present",
+        "no_eligible_series",
+        "needs_distinct_study",
+        "needs_complete_dates",
+        "needs_same_patient_context",
+        "needs_distinct_dates",
+        "candidate_pairs_require_human_review"
+      ]
+    },
+    "modality_readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modality",
+        "state",
+        "study_count",
+        "eligible_study_count",
+        "series_count",
+        "eligible_series_count",
+        "dated_study_count",
+        "patient_context_count",
+        "candidate_pair_count"
+      ],
+      "properties": {
+        "modality": { "enum": ["MR", "CT"] },
+        "state": { "$ref": "#/$defs/modality_state" },
+        "study_count": { "$ref": "#/$defs/count" },
+        "eligible_study_count": { "$ref": "#/$defs/count" },
+        "series_count": { "$ref": "#/$defs/count" },
+        "eligible_series_count": { "$ref": "#/$defs/count" },
+        "dated_study_count": { "$ref": "#/$defs/count" },
+        "patient_context_count": { "$ref": "#/$defs/count" },
+        "candidate_pair_count": { "$ref": "#/$defs/count" }
+      }
+    },
+    "mr_readiness": {
+      "allOf": [
+        { "$ref": "#/$defs/modality_readiness" },
+        {
+          "type": "object",
+          "properties": { "modality": { "const": "MR" } }
+        }
+      ]
+    },
+    "ct_readiness": {
+      "allOf": [
+        { "$ref": "#/$defs/modality_readiness" },
+        {
+          "type": "object",
+          "properties": { "modality": { "const": "CT" } }
+        }
+      ]
+    },
+    "candidate_pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseline_series_id",
+        "followup_series_id",
+        "score",
+        "compatibility",
+        "warnings",
+        "review_status",
+        "auto_approved"
+      ],
+      "properties": {
+        "baseline_series_id": { "$ref": "#/$defs/series_id" },
+        "followup_series_id": { "$ref": "#/$defs/series_id" },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "compatibility": { "enum": ["compatible", "review", "incompatible"] },
+        "warnings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "different_modality",
+              "sequence_description_mismatch",
+              "contrast_mismatch",
+              "body_part_mismatch",
+              "matrix_mismatch",
+              "orientation_mismatch",
+              "repetition_time_mismatch",
+              "echo_time_mismatch",
+              "inversion_time_mismatch",
+              "flip_angle_mismatch",
+              "registration_required"
+            ]
+          }
+        },
+        "review_status": { "const": "unreviewed" },
+        "auto_approved": { "const": false }
+      }
+    },
+    "series_id": {
+      "type": "string",
+      "pattern": "^series_[0-9a-f]{20}$"
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_selection_authorized",
+        "registration_authorized",
+        "spatial_comparison_authorized",
+        "lesion_link_authorized",
+        "response_classification_authorized",
+        "treatment_effect_conclusion_authorized",
+        "diagnosis_authorized",
+        "clinical_conclusion_authorized"
+      ],
+      "properties": {
+        "candidate_selection_authorized": { "const": false },
+        "registration_authorized": { "const": false },
+        "spatial_comparison_authorized": { "const": false },
+        "lesion_link_authorized": { "const": false },
+        "response_classification_authorized": { "const": false },
+        "treatment_effect_conclusion_authorized": { "const": false },
+        "diagnosis_authorized": { "const": false },
+        "clinical_conclusion_authorized": { "const": false }
+      }
+    }
+  }
+}

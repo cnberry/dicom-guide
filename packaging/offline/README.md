@@ -1,6 +1,6 @@
-# ScanView offline runtime bundle
+# DICOM Guide offline runtime bundle
 
-This bundle runs the ScanView DICOM viewer and local agent interface on macOS or
+This bundle runs the DICOM Guide DICOM viewer and local agent interface on macOS or
 Linux without a runtime network connection or external DICOM-processing API.
 
 Requirements:
@@ -18,10 +18,10 @@ sh launch.sh '/absolute/path/to/DICOM'
 sh launch.sh '/absolute/path/to/DICOM' --lesion-volume-comparison \
   '/absolute/path/to/reviewed-volume-comparison.zip'
 sh launch.sh '/absolute/path/to/DICOM' --agent-audit-log \
-  '/absolute/private/path/to/scanview-agent-access.jsonl'
+  '/absolute/private/path/to/dicom-guide-access.jsonl'
 ```
 
-Set `SCANVIEW_PYTHON=/absolute/path/to/python3` when the required interpreter is
+Set `DICOM_GUIDE_PYTHON=/absolute/path/to/python3` when the required interpreter is
 not named `python3`. Installation uses only the included wheels with `--no-index`
 and `--require-hashes`. Every launch rechecks the installed versions, embedded UI,
 all 32 schemas, consultation contracts, agent consultation-plan validation, strict
@@ -34,13 +34,13 @@ indexing DICOM. Launch binds the application
 to loopback; DICOM bytes stay on the computer. There is no cloud fallback: missing
 local capability fails closed rather than sending source or derived data elsewhere.
 Keep this directory and its
-`.scanview-runtime` private because local browser sessions and generated evidence may
+`.dicom-guide-runtime` private because local browser sessions and generated evidence may
 be sensitive.
 
 The repository's optional highdicom/NumPy and dcmqi interoperability environments are
 deliberately not included here. They are patient-free build/test oracles only; runtime
 DICOM parsing, mask reconstruction, and display continue to use the included
-ScanView/pydicom code with no external processing API or network fallback.
+DICOM Guide/pydicom code with no external processing API or network fallback.
 
 `bundle.json` and `verify.py` detect payload corruption or changes after the bundle
 was built. They are not a publisher signature, code-signing identity, medical-record

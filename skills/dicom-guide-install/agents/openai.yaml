@@ -1,0 +1,4 @@
+interface:
+  display_name: "Install DICOM Guide"
+  short_description: "Install and launch the local DICOM viewer"
+  default_prompt: "Use $dicom-guide-install to install DICOM Guide and open my local DICOM folder."

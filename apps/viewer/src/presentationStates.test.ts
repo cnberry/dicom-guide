@@ -36,7 +36,7 @@ const localSeries = (): DicomSeries[] => [
 
 const catalog = () => ({
   schema_version: '1.0.0',
-  artifact_type: 'scanview.presentation-state-catalog',
+  artifact_type: 'dicom-guide.presentation-state-catalog',
   generated_at: '2026-08-29T12:00:00Z',
   catalog_content_sha256: 'a'.repeat(64),
   local_only: true,
@@ -89,7 +89,7 @@ const catalog = () => ({
           bottom_right: [512, 512],
           presentation_size_mode: 'SCALE TO FIT',
         },
-        annotation_style: 'scanview_high_contrast_source_geometry',
+        annotation_style: 'dicom_guide_high_contrast_source_geometry',
       },
       annotations: [
         {
@@ -120,7 +120,7 @@ const catalog = () => ({
       graphic_count: 1,
       text_count: 1,
       author_identity_authenticated: false,
-      scanview_interpretation_added: false,
+      dicom_guide_interpretation_added: false,
       source_text_clinical_meaning: 'not_assessed',
     },
   ],

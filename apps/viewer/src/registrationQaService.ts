@@ -1,9 +1,9 @@
 export const REGISTRATION_QA_PREVIEW_ENDPOINT = '/v1/registration-qa/preview';
 export const REGISTRATION_REVIEW_ENDPOINT = '/v1/registration-reviews';
 export const REGISTRATION_REVIEW_INPUT_MEDIA_TYPE =
-  'application/vnd.scanview.registration-review-input+json';
+  'application/vnd.dicom-guide.registration-review-input+json';
 export const REGISTRATION_REVIEW_MEDIA_TYPE =
-  'application/vnd.scanview.registration-review+json';
+  'application/vnd.dicom-guide.registration-review+json';
 export const MAX_REGISTRATION_QA_ENCODED_VOLUME_BYTES = 512 * 1024 * 1024;
 export const MAX_REGISTRATION_QA_ENCODED_MASK_BYTES = 512 * 1024 * 1024;
 export const MAX_REGISTRATION_QA_ENCODED_TOTAL_BYTES = 1024 * 1024 * 1024;

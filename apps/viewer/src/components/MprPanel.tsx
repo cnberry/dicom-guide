@@ -293,7 +293,7 @@ export function MprPanel({
     setStatus('Building local volume from source slices…');
     renderStatusChangeRef.current?.('loading');
     void createMprViewports(
-      `scanview-mpr-${series.id}-${crypto.randomUUID()}`,
+      `dicom-guide-mpr-${series.id}-${crypto.randomUUID()}`,
       elements,
       series,
       'crosshairs',
@@ -788,7 +788,7 @@ export function MprPanel({
             </strong>
             <span>
               Creator identity is not authenticated; algorithm identity and accuracy are not
-              verified. Editing, conversion into ScanView manual measurement evidence,
+              verified. Editing, conversion into DICOM Guide manual measurement evidence,
               longitudinal linking, and response assessment are disabled.
             </span>
           </div>
@@ -1171,7 +1171,7 @@ export function MprPanel({
       </div>
       <p className="mpr-footnote">
         {readonlySourceSegmentation
-          ? 'These planes are reconstructed locally from the exact referenced source series. The overlay is a locally decoded, source-byte-anchored dense reconstruction of one DICOM SEG segment. Its label, coded meaning, algorithm declaration, and boundary are source content—not a ScanView measurement, finding, diagnosis, response label, or clinical conclusion. Confirm the original DICOM objects in the clinical imaging system.'
+          ? 'These planes are reconstructed locally from the exact referenced source series. The overlay is a locally decoded, source-byte-anchored dense reconstruction of one DICOM SEG segment. Its label, coded meaning, algorithm declaration, and boundary are source content—not a DICOM Guide measurement, finding, diagnosis, response label, or clinical conclusion. Confirm the original DICOM objects in the clinical imaging system.'
           : 'These planes are reconstructed locally from one source series. A painted region is only a person-painted manual region draft; it does not establish tumor identity, included tissue, longitudinal alignment, or treatment response. Export rehashes exact source instances and includes an uncompressed DICOM SEG plus a strict local evidence sidecar for independent validation. A separate self-attested boundary review can qualify that one timepoint for discussion, but cannot link it to another scan or calculate treatment response.'}
       </p>
     </section>

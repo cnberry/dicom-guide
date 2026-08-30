@@ -41,9 +41,9 @@ export function SourceSegmentationPanel({
           <span className="eyebrow">Source-carried DICOM masks · SEG · local read-only</span>
           <h2 id="source-segmentation-heading">Source-carried DICOM segmentations</h2>
           <p>
-            Open one source segment that passed ScanView&apos;s narrow technical import profile on its
+            Open one source segment that passed DICOM Guide&apos;s narrow technical import profile on its
             exact native MR/CT grid. Full DICOM conformance is not certified. Labels, coded
-            properties, algorithms, and boundaries come from the object; ScanView does not
+            properties, algorithms, and boundaries come from the object; DICOM Guide does not
             authenticate or clinically interpret them.
           </p>
         </div>

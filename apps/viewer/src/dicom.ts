@@ -75,7 +75,7 @@ const numberListTag = (dataset: dicomParser.DataSet, tag: string): number[] | un
 };
 
 const safeId = async (namespace: string, value: string): Promise<string> => {
-  const bytes = new TextEncoder().encode(`scanview-v1:${namespace}:${value}`);
+  const bytes = new TextEncoder().encode(`dicom-guide-v1:${namespace}:${value}`);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest).slice(0, 8))
     .map((byte) => byte.toString(16).padStart(2, '0'))

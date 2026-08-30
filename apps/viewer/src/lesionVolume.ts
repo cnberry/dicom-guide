@@ -22,7 +22,7 @@ export type SourceInstanceEvidence = {
 
 export type LesionVolumeEvidence = {
   schema_version: '1.0.0';
-  artifact_type: 'scanview.lesion-volume-evidence';
+  artifact_type: 'dicom-guide.lesion-volume-evidence';
   artifact_id: string;
   created_at: string;
   state: 'draft_unreviewed';
@@ -279,7 +279,7 @@ export const buildLesionVolumeArchive = async ({
   const normalDirection = cross(rowDirection, columnDirection);
   const evidence: LesionVolumeEvidence = {
     schema_version: '1.0.0',
-    artifact_type: 'scanview.lesion-volume-evidence',
+    artifact_type: 'dicom-guide.lesion-volume-evidence',
     artifact_id: artifactId,
     created_at: createdAt,
     state: 'draft_unreviewed',
@@ -361,19 +361,19 @@ export const buildLesionVolumeArchive = async ({
   const evidenceBytes = strToU8(`${JSON.stringify(evidence, null, 2)}\n`);
   const readme = strToU8(
     [
-      'ScanView local lesion ROI volume evidence',
+      'DICOM Guide local lesion ROI volume evidence',
       '',
       'SENSITIVE PATIENT-IDENTIFIABLE DATA. KEEP LOCAL.',
       'This is a manually painted, unreviewed region on one native MR or CT source grid.',
       'It is not a diagnosis, tumor identity, treatment-response result, or clinical conclusion.',
       '',
       'Validate against the exact local source directory:',
-      "  scanview-agent validate-lesion-volume lesion-volume.zip '/path/to/DICOM-root'",
+      "  dicom-guide validate-lesion-volume lesion-volume.zip '/path/to/DICOM-root'",
       '',
     ].join('\n'),
   );
   return {
-    filename: `scanview-lesion-volume-${artifactId.slice(4, 12)}.zip`,
+    filename: `dicom-guide-lesion-volume-${artifactId.slice(4, 12)}.zip`,
     bytes: zipSync(
       {
         'evidence.json': [evidenceBytes, { level: 6 }],
