@@ -1,6 +1,6 @@
 # DICOM Guide
 
-![A person using DICOM Guide while a friendly agent points out regions on three scan views](docs/assets/dicom-guide-guided-tour.png)
+![DICOM Guide connects a Codex agent to axial, coronal, and sagittal MRI views with a coral discussion highlight](docs/assets/dicom-guide-guided-tour.png)
 
 **You have medical scan files. DICOM Guide helps you open them, see what matters,
 and ask better questions.**
@@ -119,8 +119,8 @@ Repository-scoped workflows live in [.agents/skills](.agents/skills):
 
 - `$dicom-guide-install` — turn a folder path into a running local session.
 - `$dicom-guide` — explain and control the current imagery.
-- `$dicom-guide-develop` — set up the repository, make a change, test it, and prepare
-  an upstream contribution with synthetic data.
+- `$dicom-guide-develop` — set up the repository, make a change, test and deploy the
+  packaged app with synthetic data, and prepare an upstream contribution.
 
 ## Built on
 
@@ -139,7 +139,7 @@ Start with an outcome instead of setup instructions:
 ```text
 $dicom-guide-develop Set up this repository, run its checks, and tell me the smallest useful first contribution.
 $dicom-guide-develop Fix <problem>, verify it on every affected platform, and prepare a PR.
-$dicom-guide-develop Build a release for this computer and smoke-test it with synthetic DICOM.
+$dicom-guide-develop Build and deploy this checkout in an isolated local session, then smoke-test it with synthetic DICOM.
 ```
 
 Patient scans, local paths, tokens, reports, findings, and screenshots do not belong

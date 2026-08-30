@@ -1,6 +1,6 @@
 ---
 name: dicom-guide-develop
-description: Set up, change, test, package, and contribute to the DICOM Guide repository with Codex. Use when a contributor wants Codex to prepare the development environment, understand the architecture, fix a viewer or agent-interface problem, add a local DICOM capability, run checks, build native macOS/Linux/Windows releases, dogfood a change with synthetic scans, or prepare and respond to a pull request. Preserve user changes, follow repository instructions, keep all patient data out of development, verify affected behavior proportionally, and leave a concise upstream-ready handoff.
+description: Set up, change, test, package, deploy, and contribute to the DICOM Guide repository with Codex. Use when a contributor wants Codex to prepare the development environment, understand the architecture, fix a viewer or agent-interface problem, add a local DICOM capability, run checks, build or deploy native macOS/Linux/Windows releases, dogfood a change with synthetic scans, or prepare and respond to a pull request. Preserve user changes, follow repository instructions, keep all patient data out of development, verify affected behavior proportionally, and leave a concise upstream-ready handoff.
 ---
 
 # Develop DICOM Guide with Codex
@@ -73,11 +73,35 @@ inspection and an install/launch smoke test on every affected platform, using na
 CI where local hardware is unavailable. Viewer changes require at least one rendered
 synthetic MRI or CT path plus the relevant state/control test.
 
+## Deploy a development build
+
+Deploy the exact packaged artifact, not the source entry point or contributor virtual
+environment:
+
+1. Run `pnpm build` and create a fresh temporary output directory.
+2. Run `python3 scripts/build_native_distribution.py --output-dir <temporary-output>`
+   (`python` on Windows) and verify the adjacent `.sha256` file.
+3. Extract the archive into a fresh staging directory. Do not run `install.sh` or
+   `install.ps1` for an ordinary developer deployment.
+4. Set `DICOM_GUIDE_STATE_HOME` to a private temporary directory and launch
+   `app/dicom-guide open <synthetic-dicom-folder> --port <unused-loopback-port>`;
+   on Windows use `app\dicom-guide.exe`. Use the same state variable for control
+   commands so an installed or person-owned session is never disturbed.
+5. Check `/v1/health`, open the viewer, and use that same staged binary's `state`
+   command. Require `viewer_connected: true` and `render_status: ready` for a rendered
+   synthetic series.
+
+Use synthetic DICOM by default. Use a person-owned scan only when they explicitly ask
+for that dogfood path; keep it outside the repository and out of logs and commits.
+Stop the isolated process and remove its staging and state directories when finished,
+unless the contributor asks to keep the development deployment running.
+
 ## Dogfood and contribute
 
-Use `$dicom-guide-install` to install a locally built package and `$dicom-guide` to
-exercise the public first-session prompts. Check that a person can start with only a
-folder path and receive a useful explanation without knowing DICOM vocabulary.
+Use the isolated developer deployment above and `$dicom-guide` to exercise the public
+first-session prompts. Check that a person can start with only a folder path and
+receive a useful explanation without knowing DICOM vocabulary. Reserve
+`$dicom-guide-install` for explicitly testing the non-developer installation journey.
 
 Before opening or updating a PR:
 
