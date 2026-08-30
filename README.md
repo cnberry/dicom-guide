@@ -87,9 +87,10 @@ sh install.sh
 dicom-guide open '/path/to/DICOM-folder'
 ```
 
-This installs under `/usr/local/lib/dicom-guide` with the command at
-`/usr/local/bin/dicom-guide`. The installer asks you to rerun with `sudo` only when
-`/usr/local` requires it. macOS packages are currently ad-hoc signed rather than
+This installs under `/usr/local` when it is writable and otherwise falls back to a
+per-user install under `~/.local`, without requiring `sudo`. The installer prints the
+exact command to run and the package also includes `uninstall.sh`. macOS packages are
+currently ad-hoc signed rather than
 Apple-notarized, so the first launch may require **Open Anyway** in Privacy & Security.
 Signed build provenance authenticates the release archive but does not replace
 platform publisher signing.

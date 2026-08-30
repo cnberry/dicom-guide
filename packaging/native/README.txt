@@ -1,11 +1,12 @@
 DICOM Guide @VERSION@
 
-Install into the standard /usr/local prefix:
+Install with one command:
 
     sh install.sh
 
-If /usr/local is not writable, the installer will ask you to rerun that command
-with sudo. Set DICOM_GUIDE_PREFIX only when managing a different system prefix.
+The installer uses /usr/local when it is writable and otherwise installs for the
+current user under ~/.local, without asking for an administrator password. Set
+DICOM_GUIDE_PREFIX only when managing a different prefix.
 
 Then open a local DICOM folder:
 
@@ -16,6 +17,9 @@ DICOM Guide searches nested folders; filenames do not need .dcm extensions.
 
 All DICOM parsing and display remain on this computer. No Python, Node.js,
 account, or external processing API is required by this packaged application.
+
+To remove this version, run `sh uninstall.sh` from this extracted folder. Use the
+same DICOM_GUIDE_PREFIX value if you supplied one during installation.
 
 Official GitHub releases include Sigstore-signed build provenance and a SHA-256
 checksum for the downloaded archive. Verify both before installing; instructions:

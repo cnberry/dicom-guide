@@ -132,13 +132,18 @@ def main() -> None:
                 ("README.windows.txt", "README.txt"),
             )
         else:
-            templates = (("install.sh", "install.sh"), ("README.txt", "README.txt"))
+            templates = (
+                ("install.sh", "install.sh"),
+                ("uninstall.sh", "uninstall.sh"),
+                ("README.txt", "README.txt"),
+            )
         for source_name, target_name in templates:
             template = (repository / "packaging" / "native" / source_name).read_text()
             target = root / target_name
             target.write_text(template.replace("@VERSION@", VERSION))
         if not tag.startswith("windows-"):
             (root / "install.sh").chmod(0o755)
+            (root / "uninstall.sh").chmod(0o755)
             executable = root / "app" / "dicom-guide"
             executable.chmod(executable.stat().st_mode | 0o111)
         write_archive(root, archive, tag)

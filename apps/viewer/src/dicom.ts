@@ -53,6 +53,56 @@ export type MprEligibility = {
   sliceSpacingMm?: number;
 };
 
+export type ImagePlaneMetadata = {
+  frameOfReferenceUID: string;
+  rows: number;
+  columns: number;
+  imagePositionPatient: number[];
+  imageOrientationPatient: number[];
+  rowCosines: number[];
+  columnCosines: number[];
+  rowPixelSpacing: number;
+  columnPixelSpacing: number;
+  pixelSpacing: number[];
+  sliceThickness?: number;
+};
+
+export const imagePlaneMetadataForInstance = (
+  series: DicomSeries,
+  instance: DicomInstance,
+): ImagePlaneMetadata | undefined => {
+  const orientation = instance.orientation ?? series.geometry.orientation;
+  const spacing = instance.pixelSpacing ?? series.geometry.pixelSpacing;
+  const rows = instance.rows ?? series.geometry.rows;
+  const columns = instance.columns ?? series.geometry.columns;
+  if (
+    !series.frameOfReferenceId ||
+    instance.imagePosition?.length !== 3 ||
+    !instance.imagePosition.every(Number.isFinite) ||
+    orientation?.length !== 6 ||
+    !orientation.every(Number.isFinite) ||
+    spacing?.length !== 2 ||
+    !spacing.every((value) => Number.isFinite(value) && value > 0) ||
+    !Number.isInteger(rows) ||
+    !Number.isInteger(columns)
+  ) {
+    return undefined;
+  }
+  return {
+    frameOfReferenceUID: series.frameOfReferenceId,
+    rows: rows!,
+    columns: columns!,
+    imagePositionPatient: [...instance.imagePosition],
+    imageOrientationPatient: [...orientation],
+    rowCosines: orientation.slice(0, 3),
+    columnCosines: orientation.slice(3, 6),
+    rowPixelSpacing: spacing[0],
+    columnPixelSpacing: spacing[1],
+    pixelSpacing: [...spacing],
+    sliceThickness: instance.sliceThickness ?? series.geometry.sliceThickness,
+  };
+};
+
 type ParsedHeader = Omit<DicomSeries, 'instances'> & DicomInstance;
 
 const textTag = (dataset: dicomParser.DataSet, tag: string): string | undefined => {

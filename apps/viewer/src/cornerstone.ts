@@ -33,7 +33,12 @@ import {
   utilities as toolUtilities,
 } from '@cornerstonejs/tools';
 import dcmjs from 'dcmjs';
-import { assessLesionVolumeEligibility, type DicomSeries } from './dicom';
+import {
+  assessLesionVolumeEligibility,
+  imagePlaneMetadataForInstance,
+  type DicomSeries,
+  type ImagePlaneMetadata,
+} from './dicom';
 import { repairDicomSegFrameSourceClasses } from './dicomSeg';
 import {
   buildMeasurementEvidencePacket,
@@ -57,6 +62,7 @@ import {
 let initialization: Promise<void> | undefined;
 const imageReferences = new Map<string, ImageSourceReference>();
 const instanceImageIds = new Map<string, string>();
+const imagePlaneMetadata = new Map<string, ImagePlaneMetadata>();
 
 export type ViewerTool =
   | 'window'
@@ -135,6 +141,11 @@ export const initializeCornerstone = (): Promise<void> => {
       await initDicomImageLoader({
         maxWebWorkers: Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1)),
       });
+      metaData.addProvider(
+        (type, imageId) =>
+          type === Enums.MetadataModules.IMAGE_PLANE ? imagePlaneMetadata.get(imageId) : undefined,
+        10_000,
+      );
       initTools();
       Object.values(toolClasses).forEach((toolClass) => addTool(toolClass));
       addTool(StackScrollTool);
@@ -184,6 +195,8 @@ const imageIdsForSeries = (series: DicomSeries): string[] =>
       ),
     });
     instanceImageIds.set(instance.instanceId, imageId);
+    const plane = imagePlaneMetadataForInstance(series, instance);
+    if (plane) imagePlaneMetadata.set(imageId, plane);
     return imageId;
   });
 
