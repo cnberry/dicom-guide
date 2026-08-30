@@ -27,6 +27,12 @@ The repository expects Python 3.11+, Node.js 22+, and pnpm 11+. Adapt commands t
 current OS and available tools. A contributor-only virtual environment is acceptable;
 the shipped application must remain self-contained and must not require one.
 
+In Codex desktop, load the bundled workspace dependencies before setup and ensure the
+bundled Node directory and pnpm directory are on the same `PATH`. Check both
+`node --version` and `pnpm --version` before `pnpm install`; if a lifecycle script says
+`node: command not found`, correct `PATH` and rerun the frozen install instead of
+installing another runtime.
+
 Typical setup:
 
 ```bash
@@ -95,6 +101,16 @@ Use synthetic DICOM by default. Use a person-owned scan only when they explicitl
 for that dogfood path; keep it outside the repository and out of logs and commits.
 Stop the isolated process and remove its staging and state directories when finished,
 unless the contributor asks to keep the development deployment running.
+
+Generate the standard patient-free CT fixture from the prepared contributor
+environment when a rendered smoke path is needed:
+
+```bash
+.venv/bin/python scripts/generate_synthetic_presentation_state.py <empty-temp-folder>
+```
+
+On Windows use `.venv\Scripts\python.exe`. Do not create a second environment only for
+the fixture generator.
 
 ## Dogfood and contribute
 

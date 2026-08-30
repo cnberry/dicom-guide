@@ -142,6 +142,31 @@ def test_validates_exact_local_command_and_observation() -> None:
     assert observed["instance_id"] == INSTANCE_IDS[0]
 
 
+def test_allows_submillimetric_mpr_display_placement_but_rejects_a_wrong_center() -> None:
+    current = {
+        **command(),
+        "revision": 4,
+        "issued_at": "2026-08-29T12:00:00Z",
+    }
+    subvoxel_display_point = {
+        **observation(),
+        "patient_point_lps_mm": [1.65, -2.1, 3.75],
+    }
+    observed = validate_observation(
+        subvoxel_display_point,
+        catalog(),
+        current_command=current,
+    )
+    assert observed["patient_point_lps_mm"] == [1.65, -2.1, 3.75]
+
+    wrong_center = {
+        **observation(),
+        "patient_point_lps_mm": [9.25, -10.5, 3.75],
+    }
+    with pytest.raises(ValueError, match="requested patient point"):
+        validate_observation(wrong_center, catalog(), current_command=current)
+
+
 def test_native_observation_requires_the_exact_command_instance() -> None:
     current = {
         **command(),

@@ -1601,10 +1601,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               : 'Codex control ready · exact local state is available',
           );
         }
-      } catch {
+      } catch (error) {
         if (effectActive) {
           setViewerControlMessage(
-            'Codex control API is unavailable until the local viewer is relaunched.',
+            error instanceof Error
+              ? error.message
+              : 'The local viewer could not publish its exact state.',
           );
         }
       }

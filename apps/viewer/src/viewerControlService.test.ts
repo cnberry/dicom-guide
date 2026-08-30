@@ -103,6 +103,35 @@ describe('Codex viewer control bridge', () => {
     });
   });
 
+  it('surfaces the local validation reason for a rejected observation', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: 'invalid_viewer_observation',
+            detail: 'viewer observation did not apply the requested patient point',
+          }),
+          { status: 422 },
+        ),
+      ),
+    );
+    const value = buildViewerControlObservation({
+      viewerId,
+      series: series(),
+      index: 0,
+      viewMode: 'mpr',
+      nativeTool: 'window',
+      mprTool: 'crosshairs',
+      patientPoint: [1, 2, 3],
+      renderStatus: 'ready',
+    })!;
+
+    await expect(publishViewerControlObservation(value)).rejects.toThrow(
+      'Viewer observation was rejected (422). viewer observation did not apply the requested patient point',
+    );
+  });
+
   it('publishes patient-space discussion marks for agent-readable highlighting', () => {
     expect(
       buildViewerControlObservation({

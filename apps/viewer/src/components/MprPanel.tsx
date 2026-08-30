@@ -23,6 +23,7 @@ import {
   type MprCanvasPoint,
   type MprPatientPoint,
 } from '../mpr';
+import { applyRequestedPatientPoint } from '../mprControl';
 import type { ManualSegmentationStats } from '../lesionVolume';
 import {
   LESION_VOLUME_REVIEW_ATTESTATION,
@@ -214,7 +215,7 @@ export function MprPanel({
     const controller = controllerRef.current;
     if (!controller || !requestedPatientPoint) return;
     try {
-      controller.setPatientPoint(requestedPatientPoint);
+      applyRequestedPatientPoint(controller, requestedPatientPoint, setPatientPoint);
     } catch {
       renderStatusChangeRef.current?.('error');
     }
@@ -252,7 +253,9 @@ export function MprPanel({
     if (!controller) return;
     try {
       controller.setPrimaryTool(requestedTool ?? activeToolRef.current);
-      if (requestedPatientPoint) controller.setPatientPoint(requestedPatientPoint);
+      if (requestedPatientPoint) {
+        applyRequestedPatientPoint(controller, requestedPatientPoint, setPatientPoint);
+      }
       renderStatusChangeRef.current?.('ready');
     } catch {
       renderStatusChangeRef.current?.('error');
@@ -321,7 +324,11 @@ export function MprPanel({
         );
         if (!readonlySourceSegmentation) controller.setBrushSize(brushSize);
         if (requestedPatientPointRef.current) {
-          controller.setPatientPoint(requestedPatientPointRef.current);
+          applyRequestedPatientPoint(
+            controller,
+            requestedPatientPointRef.current,
+            setPatientPoint,
+          );
         }
         setStatus('');
         renderStatusChangeRef.current?.('ready');

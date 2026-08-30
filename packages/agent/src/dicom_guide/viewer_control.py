@@ -10,6 +10,7 @@ SCHEMA_VERSION = "1.0.0"
 MEDIA_TYPE = "application/vnd.dicom-guide.viewer-control+json"
 MAX_REQUEST_BYTES = 128 * 1024
 OBSERVATION_TTL_SECONDS = 5.0
+PATIENT_POINT_DISPLAY_TOLERANCE_MM = 1.0
 
 COMMAND_ID = re.compile(r"^control_[0-9a-f]{32}$")
 SERIES_ID = re.compile(r"^series_[0-9a-f]{20}$")
@@ -117,6 +118,11 @@ def _patient_point(value: Any) -> list[float] | None:
     if not all(math.isfinite(item) and abs(item) <= 1_000_000 for item in point):
         raise ValueError("patient point must contain exactly three finite LPS coordinates")
     return point
+
+
+def _patient_points_match(observed: list[float], requested: list[float]) -> bool:
+    """Allow display placement at most one millimeter from the requested point."""
+    return math.dist(observed, requested) <= PATIENT_POINT_DISPLAY_TOLERANCE_MM
 
 
 def _discussion_marks(value: Any) -> list[dict[str, Any]]:
@@ -545,8 +551,7 @@ def validate_observation(
     if command_id is not None and current_command is not None:
         requested_point = current_command["patient_point_lps_mm"]
         if requested_point is not None and (
-            point is None
-            or any(abs(point[axis] - requested_point[axis]) > 0.001 for axis in range(3))
+            point is None or not _patient_points_match(point, requested_point)
         ):
             raise ValueError("viewer observation did not apply the requested patient point")
         requested_marks = current_command.get("discussion_marks")
