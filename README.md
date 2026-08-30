@@ -28,7 +28,7 @@ local viewer, and opens it beside the conversation. If you want the skills avail
 from any Codex task first, ask:
 
 ```text
-$skill-installer Install the DICOM Guide skills from https://github.com/cnberry/scan-view/tree/main/.agents/skills
+$skill-installer Install the DICOM Guide skills from https://github.com/cnberry/dicom-guide/tree/main/.agents/skills
 ```
 
 Then try one of these:
