@@ -15,23 +15,21 @@ can inventory the study, choose a useful series, move through exact slices, poin
 anatomy with colored highlights, and explain what a sequence commonly helps experts
 assess. The scan pixels and metadata stay on your computer.
 
-## Start with the folder you have
+## Start with one prompt
 
-Open this repository in Codex and ask:
-
-```text
-$dicom-guide-install Install DICOM Guide and give me a tour using /path/to/DICOM-folder
-```
-
-The install skill chooses the correct macOS, Linux, or Windows package, starts the
-local viewer, and opens it beside the conversation. If you want the skills available
-from any Codex task first, ask:
+Open Codex anywhere and send this, replacing the folder path with the folder you
+received from the imaging center:
 
 ```text
-$skill-installer Install the DICOM Guide skills from https://github.com/cnberry/dicom-guide/tree/main/.agents/skills
+Install DICOM Guide from https://github.com/cnberry/dicom-guide and start a guided tour using /absolute/path/to/DICOM-folder
 ```
 
-Then try one of these:
+That one prompt is the bootstrap. Codex fetches the repository, follows its included
+agent instructions, installs the matching macOS, Linux, or Windows application and
+guide skills, opens the scan folder locally, and begins the tour. You do not need to
+clone the repository, install a skill first, or identify which files are DICOM.
+
+Once it is running, try one of these:
 
 ```text
 $dicom-guide What does the series I am looking at mean?

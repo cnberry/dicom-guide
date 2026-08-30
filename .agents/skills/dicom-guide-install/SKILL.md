@@ -1,12 +1,37 @@
 ---
 name: dicom-guide-install
-description: Turn a local folder from an imaging disc, portal download, or copied MRI/CT study into a running DICOM Guide session on macOS, Linux, or Windows. Use when a person says they have medical scan files but does not know whether they are DICOM; asks to install, update, open, or troubleshoot DICOM Guide; provides a folder path and asks for a tour; or needs the viewer URL. Detect the platform, preserve the source folder, prefer a verified self-contained release, build from source when necessary, validate the local service and first rendered series, and hand off to $dicom-guide without requiring the person to understand terminals, Python environments, DICOMDIR, extensions, or series names.
+description: Bootstrap DICOM Guide from its GitHub repository and turn a local folder from an imaging disc, portal download, or copied MRI/CT study into a running session on macOS, Linux, or Windows. Use when a person gives the DICOM Guide repository URL and a scan path; says they have medical scan files but does not know whether they are DICOM; asks to install, update, open, or troubleshoot DICOM Guide; provides a folder path and asks for a tour; or needs the viewer URL. Fetch the repository when needed, detect the platform, preserve the source folder, prefer a verified self-contained release, install the person-facing skills, validate the local service and first rendered series, and begin the guided handoff without requiring separate setup prompts or knowledge of terminals, Python environments, DICOMDIR, extensions, or series names.
 ---
 
 # Install and open DICOM Guide
 
 Own the setup from folder path to useful first view. Use plain language and keep the
 person's scan data local.
+
+## Bootstrap from one remote prompt
+
+Treat this as a complete request, not documentation for the person to translate:
+
+```text
+Install DICOM Guide from https://github.com/cnberry/dicom-guide and start a guided tour using /absolute/path/to/DICOM-folder
+```
+
+If the task starts outside a DICOM Guide checkout:
+
+1. Fetch the canonical repository into a fresh temporary checkout, using existing
+   GitHub access when the repository requires it.
+2. Read the root `AGENTS.md` and this skill. Do not ask the person to clone or open
+   the repository themselves.
+3. Use the system skill-installer workflow when available to install
+   `.agents/skills/dicom-guide-install` and `.agents/skills/dicom-guide` for future
+   turns. Newly installed skills become selectable on the next turn, but do not stop
+   or require a restart before completing the current installation and first tour.
+4. Continue through application installation, launch, validation, and the first useful
+   explanation in this same task. Remove only a temporary checkout created for this
+   bootstrap after it is no longer needed.
+
+If the repository cannot be fetched, report the access problem directly and leave the
+scan folder untouched. If already operating in a checkout, skip the fetch.
 
 ## Accept the folder they have
 
