@@ -21,6 +21,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 MEDIA_TYPE = "application/vnd.scanview.viewer-control+json"
 SERIES_ID = re.compile(r"^series_[0-9a-f]{20}$")
 INSTANCE_ID = re.compile(r"^instance_[0-9a-f]{20}$")
+MARK_ID = re.compile(r"^mark_[0-9a-f]{20}$")
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -203,6 +204,69 @@ def owner_only_write(path: Path, payload: bytes) -> None:
         raise RuntimeError("output permissions are not owner-only")
 
 
+def ready_observation(state: dict[str, Any]) -> dict[str, Any]:
+    observation = state.get("observation")
+    if (
+        state.get("viewer_connected") is not True
+        or not isinstance(observation, dict)
+        or observation.get("render_status") != "ready"
+    ):
+        raise RuntimeError("the local viewer is not connected and ready")
+    return observation
+
+
+def issue_and_wait(
+    client: Client, command: dict[str, Any], wait_seconds: float, started: float
+) -> dict[str, Any]:
+    accepted_at = time.monotonic()
+    accepted = client.json("/v1/viewer-control", body=command)
+    revision = accepted.get("revision")
+    posted_at = time.monotonic()
+    deadline = posted_at + max(0.0, wait_seconds)
+    while time.monotonic() <= deadline:
+        current = client.json("/v1/viewer-control")
+        observation = current.get("observation")
+        if (
+            current.get("viewer_connected") is True
+            and isinstance(observation, dict)
+            and observation.get("applied_command_id") == command["command_id"]
+            and observation.get("applied_revision") == revision
+            and observation.get("render_status") == "ready"
+        ):
+            finished = time.monotonic()
+            return {
+                "accepted": accepted,
+                "applied": observation,
+                "timing_ms": {
+                    "prepare": round((accepted_at - started) * 1000),
+                    "accept": round((posted_at - accepted_at) * 1000),
+                    "render_ready": round((finished - posted_at) * 1000),
+                    "total": round((finished - started) * 1000),
+                },
+            }
+        time.sleep(0.1)
+    raise RuntimeError("viewer did not confirm the exact ready command before timeout")
+
+
+def command_for_observation(
+    observation: dict[str, Any], *, tool: str, patch: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    command = {
+        "schema_version": "1.0.0",
+        "command_id": f"control_{secrets.token_hex(16)}",
+        "view_mode": observation["view_mode"],
+        "series_id": observation["series_id"],
+        "instance_id": observation["instance_id"],
+        "tool": tool,
+        "patient_point_lps_mm": observation.get("patient_point_lps_mm"),
+        "reset_view": False,
+        "target_viewer_id": observation["viewer_id"],
+    }
+    if patch is not None:
+        command["discussion_marks_patch"] = patch
+    return command
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description="Inspect and drive a local ScanView workspace")
     root.add_argument("--base-url", default="http://127.0.0.1:8765/")
@@ -214,10 +278,45 @@ def parser() -> argparse.ArgumentParser:
     show.add_argument("--series-id", required=True)
     show.add_argument("--instance-id", required=True)
     show.add_argument("--view", choices=["native", "mpr"], required=True)
-    show.add_argument("--tool", choices=["window", "pan", "zoom", "crosshairs", "crop"])
+    show.add_argument(
+        "--tool",
+        choices=["window", "pan", "zoom", "crosshairs", "highlight"],
+    )
     show.add_argument("--lps", nargs=3, type=float)
     show.add_argument("--reset", action="store_true")
     show.add_argument("--wait-seconds", type=float, default=12.0)
+    highlight = commands.add_parser("highlight")
+    highlight.add_argument("--wait-seconds", type=float, default=8.0)
+    highlight_commands = highlight.add_subparsers(dest="highlight_command", required=True)
+    add = highlight_commands.add_parser("add")
+    add.add_argument("--color", choices=["yellow", "cyan", "violet", "green"], required=True)
+    add.add_argument("--mark-id")
+    points = add.add_mutually_exclusive_group(required=True)
+    points.add_argument(
+        "--image-point",
+        nargs=2,
+        type=float,
+        action="append",
+        metavar=("COLUMN", "ROW"),
+    )
+    points.add_argument(
+        "--lps-point",
+        nargs=3,
+        type=float,
+        action="append",
+        metavar=("L", "P", "S"),
+    )
+    points.add_argument(
+        "--image-normalized",
+        nargs=2,
+        type=float,
+        action="append",
+        metavar=("X", "Y"),
+    )
+    add.add_argument("--orientation", choices=["axial", "coronal", "sagittal"])
+    remove = highlight_commands.add_parser("remove")
+    remove.add_argument("--mark-id", action="append", required=True)
+    highlight_commands.add_parser("clear")
     inspect = commands.add_parser("metadata")
     inspect.add_argument("--instance-id", required=True)
     fetch = commands.add_parser("fetch-instance")
@@ -228,6 +327,7 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     arguments = parser().parse_args()
+    started = time.monotonic()
     try:
         client = Client(arguments.base_url, arguments.token or "")
         if arguments.command == "state":
@@ -235,6 +335,38 @@ def main() -> None:
             return
         if arguments.command == "series":
             print_json(series_summary(client.json("/v1/manifest")))
+            return
+        if arguments.command == "highlight":
+            observation = ready_observation(client.json("/v1/viewer-control"))
+            if arguments.highlight_command == "add":
+                mark_id = arguments.mark_id or f"mark_{secrets.token_hex(10)}"
+                if not MARK_ID.fullmatch(mark_id):
+                    raise ValueError("mark ID is not a supported opaque ID")
+                addition: dict[str, Any] = {"id": mark_id, "color": arguments.color}
+                if arguments.image_point:
+                    if observation["view_mode"] != "native":
+                        raise ValueError("image-pixel highlights require the native Single view")
+                    addition["points_image_px"] = arguments.image_point
+                elif arguments.image_normalized:
+                    if observation["view_mode"] != "native":
+                        raise ValueError(
+                            "normalized image highlights require the native Single view"
+                        )
+                    addition["points_image_normalized"] = arguments.image_normalized
+                else:
+                    if arguments.orientation is None:
+                        raise ValueError("--orientation is required with --lps-point")
+                    addition["orientation"] = arguments.orientation
+                    addition["points_lps_mm"] = arguments.lps_point
+                patch = {"add": [addition]}
+            elif arguments.highlight_command == "remove":
+                if any(not MARK_ID.fullmatch(mark_id) for mark_id in arguments.mark_id):
+                    raise ValueError("mark ID is not a supported opaque ID")
+                patch = {"remove_ids": arguments.mark_id}
+            else:
+                patch = {"clear_agent": True}
+            command = command_for_observation(observation, tool="highlight", patch=patch)
+            print_json(issue_and_wait(client, command, arguments.wait_seconds, started))
             return
         if not INSTANCE_ID.fullmatch(arguments.instance_id):
             raise ValueError("instance ID is not a supported opaque ID")
@@ -270,23 +402,7 @@ def main() -> None:
             "patient_point_lps_mm": arguments.lps,
             "reset_view": arguments.reset,
         }
-        accepted = client.json("/v1/viewer-control", body=command)
-        revision = accepted.get("revision")
-        deadline = time.monotonic() + max(0.0, arguments.wait_seconds)
-        while time.monotonic() <= deadline:
-            current = client.json("/v1/viewer-control")
-            observation = current.get("observation")
-            if (
-                current.get("viewer_connected") is True
-                and isinstance(observation, dict)
-                and observation.get("applied_command_id") == command_id
-                and observation.get("applied_revision") == revision
-                and observation.get("render_status") == "ready"
-            ):
-                print_json({"accepted": accepted, "applied": observation})
-                return
-            time.sleep(0.25)
-        raise RuntimeError("viewer did not confirm the exact ready command before timeout")
+        print_json(issue_and_wait(client, command, arguments.wait_seconds, started))
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
         print(f"scanview-control: {error}", file=sys.stderr)
         raise SystemExit(1) from error

@@ -1,13 +1,19 @@
 import { normalFromOrientation, type DicomSeries } from './dicom';
 import type { ViewerTool } from './cornerstone';
 import type { MprPatientPoint } from './mpr';
+import { parseDiscussionMarks, type DiscussionMark } from './discussionMarkup';
 
 export const VIEWER_CONTROL_ENDPOINT = '/v1/viewer-control';
 export const VIEWER_CONTROL_OBSERVATION_ENDPOINT = '/v1/viewer-control/observation';
 export const VIEWER_CONTROL_MEDIA_TYPE = 'application/vnd.scanview.viewer-control+json';
 
 export type ViewerControlViewMode = 'native' | 'mpr';
-export type ViewerControlTool = 'window' | 'pan' | 'zoom' | 'crosshairs' | 'crop';
+export type ViewerControlTool =
+  | 'window'
+  | 'pan'
+  | 'zoom'
+  | 'crosshairs'
+  | 'highlight';
 
 export type ViewerControlCommand = {
   schema_version: '1.0.0';
@@ -18,6 +24,8 @@ export type ViewerControlCommand = {
   tool: ViewerControlTool;
   patient_point_lps_mm: MprPatientPoint | null;
   reset_view: boolean;
+  target_viewer_id?: string;
+  discussion_marks?: DiscussionMark[];
   revision: number;
   issued_at: string;
 };
@@ -30,6 +38,7 @@ export type ViewerControlResponse = {
 
 export type ViewerControlObservation = {
   schema_version: '1.0.0';
+  viewer_id: string;
   applied_command_id: string | null;
   applied_revision: number;
   interaction_source: 'person' | 'agent';
@@ -42,10 +51,12 @@ export type ViewerControlObservation = {
   tool: ViewerControlTool;
   patient_point_lps_mm: MprPatientPoint | null;
   point_pinned: boolean;
+  discussion_marks: DiscussionMark[];
   permissions: {
     agent_view_navigation_authorized: true;
     agent_display_tool_control_authorized: true;
     agent_patient_point_control_authorized: true;
+    agent_discussion_overlay_control_authorized: true;
     source_mutation_authorized: false;
     measurement_creation_authorized: false;
     diagnosis_authorized: false;
@@ -68,9 +79,16 @@ export type ViewerControlObservation = {
 const seriesPattern = /^series_[0-9a-f]{20}$/;
 const instancePattern = /^instance_[0-9a-f]{20}$/;
 const commandPattern = /^control_[0-9a-f]{32}$/;
+const viewerPattern = /^viewer_[0-9a-f]{20}$/;
 const toolsByView = {
-  native: new Set<ViewerControlTool>(['window', 'pan', 'zoom']),
-  mpr: new Set<ViewerControlTool>(['crosshairs', 'window', 'pan', 'zoom', 'crop']),
+  native: new Set<ViewerControlTool>(['window', 'pan', 'zoom', 'highlight']),
+  mpr: new Set<ViewerControlTool>([
+    'crosshairs',
+    'window',
+    'pan',
+    'zoom',
+    'highlight',
+  ]),
 };
 
 const patientPoint = (value: unknown): MprPatientPoint | null | undefined => {
@@ -108,6 +126,23 @@ const parseCommand = (value: unknown): ViewerControlCommand | undefined => {
   }
   const point = patientPoint(command.patient_point_lps_mm);
   if (point === undefined) return undefined;
+  if (
+    command.target_viewer_id !== undefined &&
+    (typeof command.target_viewer_id !== 'string' ||
+      !viewerPattern.test(command.target_viewer_id))
+  ) {
+    return undefined;
+  }
+  const marks =
+    command.discussion_marks === undefined
+      ? undefined
+      : parseDiscussionMarks(command.discussion_marks);
+  if (
+    command.discussion_marks !== undefined &&
+    marks === undefined
+  ) {
+    return undefined;
+  }
   return {
     schema_version: '1.0.0',
     command_id: command.command_id,
@@ -117,6 +152,10 @@ const parseCommand = (value: unknown): ViewerControlCommand | undefined => {
     tool: command.tool as ViewerControlTool,
     patient_point_lps_mm: point,
     reset_view: command.reset_view,
+    ...(command.target_viewer_id
+      ? { target_viewer_id: command.target_viewer_id }
+      : {}),
+    ...(marks ? { discussion_marks: marks } : {}),
     revision: Number(command.revision),
     issued_at: command.issued_at,
   };
@@ -186,6 +225,8 @@ export const buildViewerControlObservation = ({
   patientPoint: value,
   renderStatus,
   appliedCommand,
+  discussionMarks = [],
+  viewerId,
 }: {
   series?: DicomSeries;
   index: number;
@@ -195,8 +236,11 @@ export const buildViewerControlObservation = ({
   patientPoint?: MprPatientPoint;
   renderStatus: ViewerControlObservation['render_status'];
   appliedCommand?: { commandId: string; revision: number };
+  discussionMarks?: DiscussionMark[];
+  viewerId: string;
 }): ViewerControlObservation | undefined => {
   if (!series || series.sourceKind !== 'loopback-service') return undefined;
+  if (!viewerPattern.test(viewerId)) return undefined;
   const resolvedIndex =
     viewMode === 'mpr' ? sourceIndexForPatientPoint(series, index, value) : index;
   if (!Number.isInteger(resolvedIndex) || !series.instances[resolvedIndex]) return undefined;
@@ -206,6 +250,7 @@ export const buildViewerControlObservation = ({
   const tool = selectedTool as ViewerControlTool;
   return {
     schema_version: '1.0.0',
+    viewer_id: viewerId,
     applied_command_id: appliedCommand?.commandId ?? null,
     applied_revision: appliedCommand?.revision ?? 0,
     interaction_source: appliedCommand ? 'agent' : 'person',
@@ -218,10 +263,12 @@ export const buildViewerControlObservation = ({
     tool,
     patient_point_lps_mm: point,
     point_pinned: point !== null,
+    discussion_marks: discussionMarks ?? [],
     permissions: {
       agent_view_navigation_authorized: true,
       agent_display_tool_control_authorized: true,
       agent_patient_point_control_authorized: true,
+      agent_discussion_overlay_control_authorized: true,
       source_mutation_authorized: false,
       measurement_creation_authorized: false,
       diagnosis_authorized: false,

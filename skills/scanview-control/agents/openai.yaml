@@ -1,4 +1,4 @@
 interface:
   display_name: "ScanView Control"
-  short_description: "Inspect and drive the local DICOM viewer"
-  default_prompt: "Use $scanview-control to inspect the active local scan and drive ScanView to exact source images or MPR points."
+  short_description: "Guide local MRI and CT exploration"
+  default_prompt: "Use $scanview-control to guide me through the active scan with terse anatomical explanations and API-only navigation."

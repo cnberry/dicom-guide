@@ -52,12 +52,15 @@ Use the repository skills for guided operation:
 ## What is here now
 
 - Native MRI/CT stack viewing with window, pan, zoom, and reset.
-- Linked three-plane MPR with crosshairs, window, pan, zoom, crop, and reset.
+- Linked three-plane MPR with crosshairs, window, pan, zoom, and reset.
+- Reversible color highlights in Single and 3-plane views: people or Codex can brush a bounded
+  region in any MPR plane, while the local API reports its exact patient-space path.
+  Highlights are explicitly not segmentations or measurements.
 - Local folder selection and automatic fit when the panel changes size.
 - Exact local viewer state for agents: source series and instance, slice position,
   view mode, render status, selected tool, and DICOM LPS point.
 - Agent commands for series/slice selection, native or MPR mode, display-tool
-  selection, patient-space navigation, and reset.
+  selection, patient-space navigation, discussion highlights, and reset.
 - Local retrieval of privacy-minimized metadata or one exact DICOM instance when an
   agent needs deeper on-device analysis.
 

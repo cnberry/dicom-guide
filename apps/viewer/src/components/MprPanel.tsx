@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Enums } from '@cornerstonejs/core';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   createMprViewports,
   type MprOrientation,
@@ -12,7 +19,6 @@ import {
   type DicomSeries,
 } from '../dicom';
 import {
-  constrainMprCropToViewportAspect,
   formatMprPatientPoint,
   type MprCanvasPoint,
   type MprPatientPoint,
@@ -33,6 +39,14 @@ import {
   requestSourceSegmentationReview,
   type SourceSegmentationReviewChecklist,
 } from '../sourceSegmentationReview';
+import {
+  DISCUSSION_MARK_COLORS,
+  MAX_DISCUSSION_MARKS,
+  MAX_DISCUSSION_MARK_POINTS,
+  roundedPatientPoint,
+  type DiscussionMark,
+  type DiscussionMarkColor,
+} from '../discussionMarkup';
 
 type Props = {
   series: DicomSeries;
@@ -44,7 +58,12 @@ type Props = {
   simple?: boolean;
   onPatientPointChange?: (point?: MprPatientPoint) => void;
   requestedPatientPoint?: MprPatientPoint;
-  requestedTool?: Extract<MprTool, 'crosshairs' | 'window' | 'pan' | 'zoom' | 'crop'>;
+  requestedTool?: Extract<
+    MprTool,
+    'crosshairs' | 'window' | 'pan' | 'zoom' | 'highlight'
+  >;
+  discussionMarks?: DiscussionMark[];
+  onDiscussionMarksChange?: (marks: DiscussionMark[]) => void;
   resetNonce?: number;
   onRenderStatusChange?: (status: 'loading' | 'ready' | 'error') => void;
   onPersonInteraction?: () => void;
@@ -56,13 +75,6 @@ const orientationLabels: Array<{ id: MprOrientation; label: string }> = [
   { id: 'coronal', label: 'Coronal' },
   { id: 'sagittal', label: 'Sagittal' },
 ];
-
-type CropSelection = {
-  orientation: MprOrientation;
-  pointerId: number | null;
-  start: MprCanvasPoint;
-  end: MprCanvasPoint;
-};
 
 const reviewChecklistLabels: Array<[keyof LesionVolumeReviewChecklist, string]> = [
   ['original_images_reviewed', 'Original source images reviewed'],
@@ -123,6 +135,8 @@ export function MprPanel({
   onPatientPointChange,
   requestedPatientPoint,
   requestedTool,
+  discussionMarks = [],
+  onDiscussionMarksChange,
   resetNonce = 0,
   onRenderStatusChange,
   onPersonInteraction,
@@ -144,8 +158,12 @@ export function MprPanel({
   const activeToolRef = useRef<MprTool>('crosshairs');
   activeToolRef.current = activeTool;
   const [patientPoint, setPatientPoint] = useState<MprPatientPoint>();
-  const [cropSelection, setCropSelection] = useState<CropSelection>();
-  const cropSelectionRef = useRef<CropSelection | undefined>(undefined);
+  const [discussionColor, setDiscussionColor] =
+    useState<DiscussionMarkColor>('yellow');
+  const [draftDiscussionMark, setDraftDiscussionMark] = useState<DiscussionMark>();
+  const draftDiscussionMarkRef = useRef<DiscussionMark | undefined>(undefined);
+  const discussionPointerIdRef = useRef<number | undefined>(undefined);
+  const [, setDiscussionOverlayRevision] = useState(0);
   const [status, setStatus] = useState('Building local volume from source slices…');
   const [brushSize, setBrushSize] = useState(12);
   const [segmentationStats, setSegmentationStats] = useState<ManualSegmentationStats>({
@@ -207,9 +225,26 @@ export function MprPanel({
   }, [resetNonce]);
 
   useEffect(() => {
-    cropSelectionRef.current = undefined;
-    setCropSelection(undefined);
-  }, [displayTool, resetNonce, series.id]);
+    draftDiscussionMarkRef.current = undefined;
+    setDraftDiscussionMark(undefined);
+    discussionPointerIdRef.current = undefined;
+  }, [series.id]);
+
+  useEffect(() => {
+    const elements = [axialRef.current, coronalRef.current, sagittalRef.current].filter(
+      (element): element is HTMLDivElement => Boolean(element),
+    );
+    const update = () => setDiscussionOverlayRevision((value) => value + 1);
+    elements.forEach((element) => element.addEventListener(Enums.Events.IMAGE_RENDERED, update));
+    const observer = new ResizeObserver(update);
+    elements.forEach((element) => observer.observe(element));
+    return () => {
+      observer.disconnect();
+      elements.forEach((element) =>
+        element.removeEventListener(Enums.Events.IMAGE_RENDERED, update),
+      );
+    };
+  }, [series.id]);
 
   useEffect(() => {
     if (!controlRevision) return;
@@ -364,99 +399,133 @@ export function MprPanel({
     ];
   };
 
-  const updateCropSelection = (selection?: CropSelection) => {
-    cropSelectionRef.current = selection;
-    setCropSelection(selection);
+  const updateDraftDiscussionMark = (mark?: DiscussionMark) => {
+    draftDiscussionMarkRef.current = mark;
+    setDraftDiscussionMark(mark);
   };
 
-  const constrainedCropEnd = (
-    element: HTMLDivElement,
-    start: MprCanvasPoint,
-    event: ReactPointerEvent<HTMLDivElement>,
-  ): MprCanvasPoint =>
-    constrainMprCropToViewportAspect({
-      start,
-      end: pointInHost(element, event),
-      viewportWidth: element.clientWidth,
-      viewportHeight: element.clientHeight,
-    });
-
-  const startCrop = (
+  const startDiscussionMark = (
     orientation: MprOrientation,
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
-    onPersonInteraction?.();
-    if (displayTool !== 'crop' || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const point = pointInHost(event.currentTarget, event);
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const current = cropSelectionRef.current;
-    updateCropSelection(
-      current?.orientation === orientation && current.pointerId === null
-        ? { ...current, pointerId: event.pointerId, end: point }
-        : { orientation, pointerId: event.pointerId, start: point, end: point },
-    );
-  };
-
-  const moveCrop = (
-    orientation: MprOrientation,
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
-    if (
-      displayTool !== 'crop' ||
-      !cropSelectionRef.current ||
-      cropSelectionRef.current.orientation !== orientation ||
-      cropSelectionRef.current.pointerId !== event.pointerId
-    ) {
-      return;
-    }
-    event.preventDefault();
-    const current = cropSelectionRef.current;
-    updateCropSelection({
-      ...current,
-      end: constrainedCropEnd(event.currentTarget, current.start, event),
-    });
-  };
-
-  const finishCrop = (
-    orientation: MprOrientation,
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
-    if (
-      displayTool !== 'crop' ||
-      !cropSelectionRef.current ||
-      cropSelectionRef.current.orientation !== orientation ||
-      cropSelectionRef.current.pointerId !== event.pointerId
-    ) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    const current = cropSelectionRef.current;
-    const end = constrainedCropEnd(event.currentTarget, current.start, event);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    const selected = controllerRef.current?.fitToCanvasRectangle(
+    if (displayTool !== 'highlight' || event.button !== 0) return;
+    const point = controllerRef.current?.canvasToPatientPoint(
       orientation,
-      current.start,
-      end,
+      pointInHost(event.currentTarget, event),
     );
-    updateCropSelection(
-      selected
-        ? undefined
-        : { orientation, pointerId: null, start: current.start, end: current.start },
-    );
+    if (!point) return;
+    onPersonInteraction?.();
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    discussionPointerIdRef.current = event.pointerId;
+    updateDraftDiscussionMark({
+      id: `mark_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`,
+      orientation,
+      color: discussionColor,
+      author: 'person',
+      points_lps_mm: [roundedPatientPoint(point)],
+    });
   };
 
-  const cancelCrop = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (cropSelectionRef.current?.pointerId !== event.pointerId) return;
+  const moveDiscussionMark = (
+    orientation: MprOrientation,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const draft = draftDiscussionMarkRef.current;
+    if (
+      displayTool !== 'highlight' ||
+      discussionPointerIdRef.current !== event.pointerId ||
+      !draft ||
+      draft.orientation !== orientation
+    ) {
+      return;
+    }
+    const point = controllerRef.current?.canvasToPatientPoint(
+      orientation,
+      pointInHost(event.currentTarget, event),
+    );
+    if (!point) return;
+    event.preventDefault();
+    const rounded = roundedPatientPoint(point);
+    const previous = draft.points_lps_mm.at(-1)!;
+    if (
+      draft.points_lps_mm.length >= MAX_DISCUSSION_MARK_POINTS ||
+      Math.hypot(...rounded.map((coordinate, axis) => coordinate - previous[axis])) < 1.2
+    ) {
+      return;
+    }
+    updateDraftDiscussionMark({
+      ...draft,
+      points_lps_mm: [...draft.points_lps_mm, rounded],
+    });
+  };
+
+  const finishDiscussionMark = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (discussionPointerIdRef.current !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    updateCropSelection(undefined);
+    const draft = draftDiscussionMarkRef.current;
+    if (draft && discussionMarks.length < MAX_DISCUSSION_MARKS) {
+      onDiscussionMarksChange?.([...discussionMarks, draft]);
+    }
+    updateDraftDiscussionMark(undefined);
+    discussionPointerIdRef.current = undefined;
   };
+
+  const cancelDiscussionMark = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (discussionPointerIdRef.current !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    updateDraftDiscussionMark(undefined);
+    discussionPointerIdRef.current = undefined;
+  };
+
+  const markCanvasPoints = (mark: DiscussionMark): MprCanvasPoint[] =>
+    mark.points_lps_mm
+      .map((point) => controllerRef.current?.patientPointToCanvas(mark.orientation, point))
+      .filter((point): point is MprCanvasPoint => Boolean(point));
+
+  const discussionOverlay = (orientation: MprOrientation) =>
+    [...discussionMarks, ...(draftDiscussionMark ? [draftDiscussionMark] : [])]
+      .filter((mark) => mark.orientation === orientation)
+      .map((mark) => {
+        const points = markCanvasPoints(mark);
+        if (points.length === 0) return null;
+        const color = DISCUSSION_MARK_COLORS[mark.color];
+        if (points.length === 1) {
+          return (
+            <circle
+              key={mark.id}
+              cx={points[0][0]}
+              cy={points[0][1]}
+              r={10}
+              fill={color}
+              fillOpacity={0.34}
+              stroke={color}
+              strokeWidth={2}
+            />
+          );
+        }
+        return (
+          <path
+            key={mark.id}
+            d={points
+              .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point[0]} ${point[1]}`)
+              .join(' ')}
+            fill="none"
+            stroke={color}
+            strokeOpacity={0.4}
+            strokeWidth={18}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        );
+      });
 
   const downloadBoundaryReview = async () => {
     const controller = controllerRef.current;
@@ -566,9 +635,43 @@ export function MprPanel({
   if (simple) {
     return (
       <section
-        className={`mpr-panel simple-mpr ${displayTool === 'crop' ? 'crop-active' : ''}`}
+        className={`mpr-panel simple-mpr ${displayTool === 'highlight' ? 'highlight-active' : ''}`}
         aria-label={`3-plane view for ${series.description}`}
       >
+        {displayTool === 'highlight' && (
+          <div className="discussion-palette" aria-label="Discussion highlight colors">
+            {(Object.keys(DISCUSSION_MARK_COLORS) as DiscussionMarkColor[]).map((color) => (
+              <button
+                key={color}
+                className={discussionColor === color ? 'active' : ''}
+                aria-label={`${color} highlight`}
+                aria-pressed={discussionColor === color}
+                style={{ '--mark-color': DISCUSSION_MARK_COLORS[color] } as CSSProperties}
+                onClick={() => setDiscussionColor(color)}
+              />
+            ))}
+            <button
+              className="discussion-text-button"
+              disabled={discussionMarks.length === 0}
+              onClick={() => {
+                onPersonInteraction?.();
+                onDiscussionMarksChange?.(discussionMarks.slice(0, -1));
+              }}
+            >
+              Undo
+            </button>
+            <button
+              className="discussion-text-button"
+              disabled={discussionMarks.length === 0}
+              onClick={() => {
+                onPersonInteraction?.();
+                onDiscussionMarksChange?.([]);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
         <div className="mpr-grid">
           {orientationLabels.map(({ id, label }) => (
             <article className="mpr-viewport-card" key={id}>
@@ -580,31 +683,22 @@ export function MprPanel({
                 <div
                   ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}
                   className="mpr-host"
-                  onPointerDown={(event) => startCrop(id, event)}
-                  onPointerMove={(event) => moveCrop(id, event)}
-                  onPointerUp={(event) => finishCrop(id, event)}
-                  onPointerCancel={cancelCrop}
+                  onPointerDown={(event) => startDiscussionMark(id, event)}
+                  onPointerMove={(event) => moveDiscussionMark(id, event)}
+                  onPointerUp={finishDiscussionMark}
+                  onPointerCancel={cancelDiscussionMark}
                 />
-                {cropSelection?.orientation === id && (
-                  <div
-                    className="mpr-crop-selection"
-                    style={{
-                      left: Math.min(cropSelection.start[0], cropSelection.end[0]),
-                      top: Math.min(cropSelection.start[1], cropSelection.end[1]),
-                      width: Math.abs(cropSelection.end[0] - cropSelection.start[0]),
-                      height: Math.abs(cropSelection.end[1] - cropSelection.start[1]),
-                    }}
-                    aria-hidden="true"
-                  />
-                )}
+                <svg className="discussion-overlay" aria-hidden="true">
+                  {discussionOverlay(id)}
+                </svg>
               </div>
               {status && <div className="mpr-status">{status}</div>}
             </article>
           ))}
         </div>
         <span className="simple-mpr-note">
-          {displayTool === 'crop'
-            ? 'Linked crop · all 3 panes · Reset restores'
+          {displayTool === 'highlight'
+              ? 'Discussion overlay · not a segmentation'
             : 'Local MPR · not aligned'}
         </span>
       </section>
@@ -612,10 +706,7 @@ export function MprPanel({
   }
 
   return (
-    <section
-      className={`mpr-panel ${displayTool === 'crop' ? 'crop-active' : ''}`}
-      aria-label={`MPR view for ${series.description}`}
-    >
+    <section className="mpr-panel" aria-label={`MPR view for ${series.description}`}>
       <div className="mpr-heading">
         <div>
           <span className="eyebrow">
@@ -640,7 +731,6 @@ export function MprPanel({
               ['window', 'Window / level'],
               ['pan', 'Pan'],
               ['zoom', 'Zoom'],
-              ['crop', 'Crop to box'],
             ] as const
           ).map(([tool, label]) => (
             <button
@@ -1064,8 +1154,6 @@ export function MprPanel({
                 Patient-axis reslice ·{' '}
                 {activeTool === 'crosshairs'
                   ? 'click to link'
-                  : activeTool === 'crop'
-                    ? 'drag a linked crop for all panes'
                   : activeTool === 'paint' || activeTool === 'erase'
                     ? 'manual native-grid edit'
                     : 'wheel to navigate'}
@@ -1075,23 +1163,7 @@ export function MprPanel({
               <div
                 ref={id === 'axial' ? axialRef : id === 'coronal' ? coronalRef : sagittalRef}
                 className="mpr-host"
-                onPointerDown={(event) => startCrop(id, event)}
-                onPointerMove={(event) => moveCrop(id, event)}
-                onPointerUp={(event) => finishCrop(id, event)}
-                onPointerCancel={cancelCrop}
               />
-              {cropSelection?.orientation === id && (
-                <div
-                  className="mpr-crop-selection"
-                  style={{
-                    left: Math.min(cropSelection.start[0], cropSelection.end[0]),
-                    top: Math.min(cropSelection.start[1], cropSelection.end[1]),
-                    width: Math.abs(cropSelection.end[0] - cropSelection.start[0]),
-                    height: Math.abs(cropSelection.end[1] - cropSelection.start[1]),
-                  }}
-                  aria-hidden="true"
-                />
-              )}
             </div>
             {status && <div className="mpr-status">{status}</div>}
           </article>

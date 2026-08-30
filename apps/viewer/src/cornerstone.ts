@@ -42,7 +42,6 @@ import {
   type RawMeasurementAnnotation,
 } from './measurements';
 import {
-  calculateMprCropFit,
   mprCrosshairConfiguration,
   reorderDenseMaskSlices,
   type MprCanvasPoint,
@@ -59,7 +58,14 @@ let initialization: Promise<void> | undefined;
 const imageReferences = new Map<string, ImageSourceReference>();
 const instanceImageIds = new Map<string, string>();
 
-export type ViewerTool = 'window' | 'pan' | 'zoom' | 'length' | 'bidirectional' | 'roi';
+export type ViewerTool =
+  | 'window'
+  | 'pan'
+  | 'zoom'
+  | 'length'
+  | 'bidirectional'
+  | 'roi'
+  | 'highlight';
 
 const toolClasses = {
   window: WindowLevelTool,
@@ -75,7 +81,14 @@ export type ViewportToolController = {
   destroy: () => void;
 };
 
-export type MprTool = 'crosshairs' | 'window' | 'pan' | 'zoom' | 'crop' | 'paint' | 'erase';
+export type MprTool =
+  | 'crosshairs'
+  | 'window'
+  | 'pan'
+  | 'zoom'
+  | 'highlight'
+  | 'paint'
+  | 'erase';
 export type MprOrientation = 'axial' | 'coronal' | 'sagittal';
 export type NormalizedMprPoint = [number, number, number];
 export type ReadonlyMprSegmentation = {
@@ -92,11 +105,14 @@ export type MprViewportController = {
   ) => () => void;
   setPatientPoint: (point: MprPatientPoint) => void;
   setNormalizedPoint: (point: NormalizedMprPoint) => void;
-  fitToCanvasRectangle: (
+  canvasToPatientPoint: (
     orientation: MprOrientation,
-    start: MprCanvasPoint,
-    end: MprCanvasPoint,
-  ) => boolean;
+    point: MprCanvasPoint,
+  ) => MprPatientPoint | undefined;
+  patientPointToCanvas: (
+    orientation: MprOrientation,
+    point: MprPatientPoint,
+  ) => MprCanvasPoint | undefined;
   reset: () => void;
   setBrushSize: (size: number) => void;
   clearSegmentation: () => void;
@@ -323,6 +339,7 @@ export const createStackViewport = async (
     Object.values(toolClasses).forEach((toolClass) =>
       toolGroup.setToolPassive(toolClass.toolName, { removeAllBindings: true }),
     );
+    if (tool === 'highlight') return;
     toolGroup.setToolActive(toolClasses[tool].toolName, {
       bindings: [{ mouseButton: ToolEnums.MouseBindings.Primary }],
     });
@@ -807,7 +824,7 @@ export const createMprViewports = async (
       Object.values(mprToolClasses).forEach((toolName) =>
         toolGroup.setToolPassive(toolName, { removeAllBindings: true }),
       );
-      if (tool === 'crop') {
+      if (tool === 'highlight') {
         toolGroup.setToolActive(StackScrollTool.toolName, {
           bindings: [{ mouseButton: ToolEnums.MouseBindings.Wheel }],
         });
@@ -841,41 +858,6 @@ export const createMprViewports = async (
       viewport.resetCamera();
       viewport.render();
     });
-    let sharedCrop:
-      | {
-          center: Types.Point3;
-          parallelScale: number;
-        }
-      | undefined;
-    const cropSpacing = volume.spacing.filter((value) => Number.isFinite(value) && value > 0);
-    const minimumCropParallelScale = Math.max(
-      0.1,
-      (cropSpacing.length ? Math.min(...cropSpacing) : 0.1) * 4,
-    );
-    const applySharedCrop = () => {
-      if (!sharedCrop) return;
-      viewports.forEach((viewport) => {
-        viewport.resetCamera();
-        const camera = viewport.getCamera();
-        const { focalPoint, position, parallelScale } = camera;
-        if (
-          !Number.isFinite(parallelScale) ||
-          !focalPoint ||
-          focalPoint.length !== 3 ||
-          !position ||
-          position.length !== 3
-        ) {
-          return;
-        }
-        const offset = sharedCrop!.center.map((value, axis) => value - focalPoint[axis]);
-        viewport.setCamera({
-          focalPoint: [...sharedCrop!.center] as Types.Point3,
-          position: position.map((value, axis) => value + offset[axis]) as Types.Point3,
-          parallelScale: sharedCrop!.parallelScale,
-        });
-        viewport.render();
-      });
-    };
     const sliceSpacingMm = series.geometry.pixelSpacing
       ? Math.abs(volume.spacing[2])
       : Number.NaN;
@@ -968,42 +950,34 @@ export const createMprViewports = async (
         }
         crosshairs.setToolCenter([world[0], world[1], world[2]], true);
       },
-      fitToCanvasRectangle: (orientation, start, end) => {
+      canvasToPatientPoint: (orientation, point) => {
+        if (point.length !== 2 || !point.every(Number.isFinite)) return undefined;
+        const world = viewportsByOrientation[orientation].canvasToWorld(point);
+        return world.length === 3 && world.every(Number.isFinite)
+          ? [world[0], world[1], world[2]]
+          : undefined;
+      },
+      patientPointToCanvas: (orientation, point) => {
+        if (point.length !== 3 || !point.every(Number.isFinite)) return undefined;
         const viewport = viewportsByOrientation[orientation];
-        const element = elements[orientation];
         const camera = viewport.getCamera();
-        const { focalPoint, position, parallelScale } = camera;
-        if (
-          !Number.isFinite(parallelScale) ||
-          !focalPoint ||
-          focalPoint.length !== 3 ||
-          !position ||
-          position.length !== 3
-        ) {
-          return false;
-        }
-        const fit = calculateMprCropFit({
-          start,
-          end,
-          viewportWidth: element.clientWidth,
-          viewportHeight: element.clientHeight,
-          parallelScale: parallelScale!,
-        });
-        if (!fit) return false;
-        const centerWorld = viewport.canvasToWorld(fit.center);
-        if (centerWorld.length !== 3 || !centerWorld.every(Number.isFinite)) {
-          return false;
-        }
-        sharedCrop = {
-          center: [...centerWorld] as Types.Point3,
-          parallelScale: Math.max(minimumCropParallelScale, fit.parallelScale),
-        };
-        crosshairs.setToolCenter([...centerWorld] as Types.Point3, true);
-        applySharedCrop();
-        return true;
+        const normal = camera.viewPlaneNormal;
+        const focalPoint = camera.focalPoint;
+        if (!normal || !focalPoint) return undefined;
+        const distance = Math.abs(
+          point.reduce(
+            (sum, coordinate, axis) => sum + (coordinate - focalPoint[axis]) * normal[axis],
+            0,
+          ),
+        );
+        const tolerance = Math.max(...volume.spacing.map(Math.abs)) * 0.8;
+        if (!Number.isFinite(distance) || distance > tolerance) return undefined;
+        const canvas = viewport.worldToCanvas(point as Types.Point3);
+        return canvas.length === 2 && canvas.every(Number.isFinite)
+          ? [canvas[0], canvas[1]]
+          : undefined;
       },
       reset: () => {
-        sharedCrop = undefined;
         viewports.forEach((viewport) => {
           viewport.resetCamera();
           viewport.resetProperties();
@@ -1115,11 +1089,8 @@ export const createMprViewports = async (
         });
       },
       hasSegmentationDraft: () => !readonlySegmentation && segmentationDirty,
-      // Preserve ordinary manual cameras across layout changes. A linked crop keeps
-      // one physical patient-space field size and center across all three panes.
       resize: () => {
         engine.resize(true, true);
-        applySharedCrop();
       },
       destroy: () => {
         loadAbortController.abort();
