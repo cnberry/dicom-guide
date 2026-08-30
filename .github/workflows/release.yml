@@ -2,13 +2,24 @@ name: Native release
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: >-
+          Publish this exact version tag from main, for example v0.15.0;
+          leave blank for a build-only run
+        required: false
+        type: string
   pull_request:
   push:
     tags:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: native-release-${{ github.event_name }}-${{ github.ref }}-${{ inputs.release_tag }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -27,17 +38,40 @@ jobs:
             os: windows-2025
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: python scripts/build_native_distribution.py --output-dir release
+      - if: runner.os != 'Windows'
+        name: Smoke test Unix package
+        shell: bash
+        run: |
+          archives=(release/dicom-guide-*-${{ matrix.platform }}.tar.gz)
+          if [ "${#archives[@]}" -ne 1 ] || [ ! -f "${archives[0]}" ]; then
+            echo "Expected exactly one ${{ matrix.platform }} archive" >&2
+            exit 1
+          fi
+          archive="${archives[0]}"
+          (cd release && shasum -a 256 -c "$(basename "$archive").sha256")
+          extract="$RUNNER_TEMP/dicom-guide-package"
+          mkdir -p "$extract"
+          tar -xzf "$archive" -C "$extract"
+          bundles=("$extract"/dicom-guide-*-${{ matrix.platform }})
+          if [ "${#bundles[@]}" -ne 1 ] || [ ! -d "${bundles[0]}" ]; then
+            echo "Expected exactly one extracted ${{ matrix.platform }} package" >&2
+            exit 1
+          fi
+          bundle="${bundles[0]}"
+          prefix="$RUNNER_TEMP/dicom-guide-install"
+          DICOM_GUIDE_PREFIX="$prefix" sh "$bundle/install.sh"
+          "$prefix/bin/dicom-guide" --version
       - if: runner.os == 'Windows'
         name: Smoke test Windows package
         shell: pwsh
@@ -52,12 +86,89 @@ jobs:
           $installRoot = Join-Path $env:RUNNER_TEMP "DICOM Guide"
           & (Join-Path $bundle.FullName "install.ps1") -InstallRoot $installRoot
           & (Join-Path $installRoot "bin\dicom-guide.cmd") --version
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dicom-guide-${{ matrix.platform }}
           path: release/*
           if-no-files-found: error
-      - if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+
+  release:
+    name: Publish signed release
+    if: >-
+      startsWith(github.ref, 'refs/tags/') ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          files: release/*
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - if: github.event_name == 'workflow_dispatch'
+        name: Require main for a manual release
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Manual releases must run from main, not $GITHUB_REF" >&2
+            exit 1
+          fi
+      - name: Require a commit from main
+        shell: bash
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release commit $GITHUB_SHA is not on main" >&2
+            exit 1
+          fi
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: dicom-guide-*
+          path: release
+          merge-multiple: true
+      - name: Validate the complete release set
+        run: python scripts/prepare_native_release.py --tag "$RELEASE_TAG" release
+      - if: github.event_name == 'workflow_dispatch'
+        name: Create the verified release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          existing=$(
+            gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" \
+              --jq .object.sha 2>/dev/null || true
+          )
+          if [ -n "$existing" ] && [ "$existing" != "$GITHUB_SHA" ]; then
+            echo "$RELEASE_TAG already points to a different commit" >&2
+            exit 1
+          fi
+          if [ -z "$existing" ]; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$RELEASE_TAG" -f sha="$GITHUB_SHA"
+          fi
+      - id: provenance
+        name: Sign build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: release/SHA256SUMS
+      - name: Add the portable Sigstore bundle
+        shell: bash
+        run: >-
+          cp "${{ steps.provenance.outputs.bundle-path }}"
+          "release/dicom-guide-${RELEASE_TAG}-provenance.sigstore.json"
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: >-
+          gh release create "$RELEASE_TAG" release/*
+          --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+          --title "DICOM Guide ${RELEASE_TAG#v}"

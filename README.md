@@ -73,6 +73,11 @@ documents, though keeping an untouched copy of the complete original folder is w
 
 Download the package for your computer from Releases.
 
+Release archives are self-contained and include adjacent SHA-256 checksums. GitHub
+Actions also signs build provenance for every archive with Sigstore, binding its digest
+to this repository, the exact commit, and the release workflow. See
+[Native releases](docs/RELEASES.md) for verification and maintainer publishing steps.
+
 **macOS or Linux**
 
 ```bash
@@ -86,6 +91,8 @@ This installs under `/usr/local/lib/dicom-guide` with the command at
 `/usr/local/bin/dicom-guide`. The installer asks you to rerun with `sudo` only when
 `/usr/local` requires it. macOS packages are currently ad-hoc signed rather than
 Apple-notarized, so the first launch may require **Open Anyway** in Privacy & Security.
+Signed build provenance authenticates the release archive but does not replace
+platform publisher signing.
 
 **Windows**
 

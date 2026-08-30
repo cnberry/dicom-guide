@@ -16,6 +16,10 @@ then open the top-level folder copied from your imaging disc or portal download:
 All DICOM parsing and display remain on this computer. No Python, Node.js,
 virtual environment, account, or external processing API is required.
 
+Official GitHub releases include Sigstore-signed build provenance and a SHA-256
+checksum for the downloaded archive. Verify both before installing; instructions:
+https://github.com/cnberry/dicom-guide/blob/main/docs/RELEASES.md
+
 The current Windows build is not code-signed. If Windows shows an Unknown Publisher
-warning, verify the adjacent .sha256 file against the downloaded archive and proceed
-only when the package came from the official DICOM Guide release.
+warning, proceed only after verifying the signed provenance and adjacent checksum for
+the official DICOM Guide release.

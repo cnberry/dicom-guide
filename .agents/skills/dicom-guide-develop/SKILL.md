@@ -79,6 +79,11 @@ inspection and an install/launch smoke test on every affected platform, using na
 CI where local hardware is unavailable. Viewer changes require at least one rendered
 synthetic MRI or CT path plus the relevant state/control test.
 
+Publish native packages only through the repository's `Native release` workflow and
+the exact version tag documented in `docs/RELEASES.md`. Do not hand-upload partial
+platform sets or describe checksum files as signatures. Require the workflow's
+Sigstore provenance attestation and portable bundle for a published release.
+
 ## Deploy a development build
 
 Deploy the exact packaged artifact, not the source entry point or contributor virtual
