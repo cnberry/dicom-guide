@@ -182,7 +182,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
     engineRef.current?.destroy();
 
     createStackViewport(
-      `scanview-${id}-${series.id}-${crypto.randomUUID()}`,
+      `dicom-guide-${id}-${series.id}-${crypto.randomUUID()}`,
       `viewport-${id}`,
       element,
       series,
@@ -892,7 +892,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
         )}
         {presentationState && (
           <div className="presentation-state-viewport-note">
-            SOURCE GSPS COORDINATES/TEXT · SCANVIEW HIGH-CONTRAST RENDER · CREATOR NOT AUTHENTICATED
+            SOURCE GSPS COORDINATES/TEXT · DICOM_GUIDE HIGH-CONTRAST RENDER · CREATOR NOT AUTHENTICATED
           </div>
         )}
         {orientationLabels && (

@@ -2,7 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import type { LesionVolumeArchive } from './lesionVolume';
 
 export const LESION_VOLUME_REVIEW_ATTESTATION =
-  'I attest that I personally reviewed the complete manual boundary on the original local source images within the scope of my stated role. ScanView has not verified my identity or credentials.';
+  'I attest that I personally reviewed the complete manual boundary on the original local source images within the scope of my stated role. DICOM Guide has not verified my identity or credentials.';
 
 export const LESION_VOLUME_REVIEW_ROLES = [
   'radiologist',
@@ -32,7 +32,7 @@ export type LesionVolumeReviewChecklist = {
 
 export type LesionVolumeReviewRecord = {
   schema_version: '1.0.0';
-  artifact_type: 'scanview.lesion-volume-review';
+  artifact_type: 'dicom-guide.lesion-volume-review';
   review_id: string;
   created_at: string;
   review_status: LesionVolumeReviewDecision;
@@ -112,7 +112,7 @@ export type BuildLesionVolumeReviewInput = {
 };
 
 const REVIEW_LIMITATIONS = [
-  'Reviewer identity, role, and credentials are self-asserted and are not authenticated by ScanView.',
+  'Reviewer identity, role, and credentials are self-asserted and are not authenticated by DICOM Guide.',
   'Acceptance means suitable for discussion only; it is not clinical validation, medical-record sign-off, or regulatory clearance.',
   'The underlying source evidence remains a manually painted native-grid draft and its boundary uncertainty is not quantified.',
   'This review applies to one exact source series and does not establish that another scan contains the same lesion or tissue component.',
@@ -166,7 +166,7 @@ const renderReviewPage = (record: Omit<LesionVolumeReviewRecord, 'files'>): Uint
     .map(([name, checked]) => `<li>${checked ? 'Yes' : 'No'} · ${escapeHtml(name.replaceAll('_', ' '))}</li>`)
     .join('');
   const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ScanView manual ROI boundary review</title><style>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DICOM Guide manual ROI boundary review</title><style>
 body{font:16px/1.5 system-ui,sans-serif;margin:0;background:#f5f7f6;color:#17201e}.page{max-width:900px;margin:auto;padding:32px}.warning{border:3px solid #a23d35;background:#fff2f0;padding:16px;font-weight:700}.card{background:white;border:1px solid #cbd5d1;border-radius:10px;padding:20px;margin:18px 0}dt{font-weight:700}dd{margin:0 0 12px}code{overflow-wrap:anywhere}footer{font-size:13px;color:#4b5c57}@media print{body{background:white}.page{padding:0}.card{break-inside:avoid}}
 </style></head><body><main class="page"><h1>Manual ROI boundary review</h1><p class="warning">SELF-ATTESTED REVIEW FOR DISCUSSION ONLY · IDENTITY NOT VERIFIED · NOT A DIAGNOSIS · NO LONGITUDINAL OR RESPONSE CONCLUSION</p>
 <section class="card"><h2>Decision</h2><dl><dt>Status</dt><dd>${escapeHtml(record.review_status.replaceAll('_', ' '))}</dd><dt>Reviewer</dt><dd>${escapeHtml(record.reviewer.name)} · ${escapeHtml(roleLabel(record.reviewer.role))}${record.reviewer.organization ? ` · ${escapeHtml(record.reviewer.organization)}` : ''}</dd><dt>Acquisition suitability</dt><dd>${escapeHtml(review.acquisition_suitability.replaceAll('_', ' '))}</dd><dt>Reviewed volume</dt><dd>${record.source_snapshot.volume_ml.toFixed(6)} mL · ${record.source_snapshot.foreground_voxel_count.toLocaleString('en-US')} native voxels</dd></dl></section>
@@ -179,10 +179,10 @@ body{font:16px/1.5 system-ui,sans-serif;margin:0;background:#f5f7f6;color:#17201
 };
 
 const renderReadme = (): Uint8Array => strToU8(
-  'ScanView manual ROI boundary review\n\n' +
+  'DICOM Guide manual ROI boundary review\n\n' +
   'This sensitive local archive contains review.json, evidence.zip, review.html, and README.txt.\n' +
   'The nested evidence remains source-bound and must be revalidated against the original local DICOM root.\n\n' +
-  "Validate locally:\n  scanview-agent validate-lesion-volume-review review.zip '/path/to/DICOM-root'\n\n" +
+  "Validate locally:\n  dicom-guide validate-lesion-volume-review review.zip '/path/to/DICOM-root'\n\n" +
   'A valid accepted record means self-attested review for discussion only. It does not authenticate the reviewer, establish a longitudinal lesion link, calculate change, classify response, diagnose, or create a clinical conclusion.\n',
 );
 
@@ -249,7 +249,7 @@ export const buildLesionVolumeReviewArchive = async (
 
   const recordWithoutFiles: Omit<LesionVolumeReviewRecord, 'files'> = {
     schema_version: '1.0.0',
-    artifact_type: 'scanview.lesion-volume-review',
+    artifact_type: 'dicom-guide.lesion-volume-review',
     review_id: reviewId,
     created_at: createdAt,
     review_status: input.decision,
@@ -328,7 +328,7 @@ export const buildLesionVolumeReviewArchive = async (
     'README.txt': [readme, { level: 0 }],
   });
   return {
-    filename: `scanview-lesion-volume-review-${reviewId.slice(7, 15)}.zip`,
+    filename: `dicom-guide-lesion-volume-review-${reviewId.slice(7, 15)}.zip`,
     bytes,
     record,
   };

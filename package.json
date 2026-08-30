@@ -1,13 +1,13 @@
 {
-  "name": "scan-view",
+  "name": "dicom-guide",
   "private": true,
-  "version": "0.14.0",
+  "version": "0.15.0",
   "packageManager": "pnpm@11.19.0",
   "scripts": {
-    "dev": "pnpm --filter @scanview/viewer dev",
-    "build": "pnpm --filter @scanview/viewer build",
-    "test": "pnpm --filter @scanview/viewer test",
-    "typecheck": "pnpm --filter @scanview/viewer typecheck"
+    "dev": "pnpm --filter @dicom-guide/viewer dev",
+    "build": "pnpm --filter @dicom-guide/viewer build",
+    "test": "pnpm --filter @dicom-guide/viewer test",
+    "typecheck": "pnpm --filter @dicom-guide/viewer typecheck"
   },
   "engines": {
     "node": ">=22"

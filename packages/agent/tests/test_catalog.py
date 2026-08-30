@@ -14,16 +14,16 @@ from jsonschema import Draft202012Validator, FormatChecker
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, MRImageStorage, generate_uid
 
-from scanview_agent.catalog import build_catalog
-from scanview_agent.cli import main
-from scanview_agent.comparison import suggest_pairs
-from scanview_agent.key_images import key_image_archive_summary
-from scanview_agent.measurements import (
+from dicom_guide.catalog import build_catalog
+from dicom_guide.cli import main
+from dicom_guide.comparison import suggest_pairs
+from dicom_guide.key_images import key_image_archive_summary
+from dicom_guide.measurements import (
     build_measurement_comparison,
     measurement_comparison_summary,
     measurement_packet_summary,
 )
-from scanview_agent.server import serve
+from dicom_guide.server import serve
 
 
 def write_dicom(
@@ -526,13 +526,13 @@ def test_explicit_elliptical_roi_comparison_is_numeric_and_unreviewed() -> None:
 
     repository_root = Path(__file__).parents[3]
     packet_schema = json.loads(
-        (repository_root / "schemas" / "scanview-measurements-v3.schema.json").read_text()
+        (repository_root / "schemas" / "dicom-guide-measurements-v3.schema.json").read_text()
     )
     comparison_schema = json.loads(
         (
             repository_root
             / "schemas"
-            / "scanview-measurement-comparison-v1.schema.json"
+            / "dicom-guide-measurement-comparison-v1.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(packet_schema)
@@ -619,7 +619,7 @@ def write_key_image_archive(path: Path, *, image_digest: str | None = None) -> d
             "sha256": hashlib.sha256(measurement_bytes).hexdigest(),
         },
         "implementation": {
-            "name": "ScanView key-image exporter",
+            "name": "DICOM Guide key-image exporter",
             "version": "0.1.0",
             "renderer": "Cornerstone3D 5.8.2",
         },
@@ -650,7 +650,7 @@ def test_key_image_archive_validates_integrity_and_embedded_measurements(tmp_pat
     }
     repository_root = Path(__file__).parents[3]
     schema = json.loads(
-        (repository_root / "schemas" / "scanview-key-image-v1.schema.json").read_text()
+        (repository_root / "schemas" / "dicom-guide-key-image-v1.schema.json").read_text()
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(packet)
@@ -836,7 +836,7 @@ def test_comparison_cli_writes_owner_only_unreviewed_output(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "compare-measurements",
             str(baseline_path),
             str(followup_path),

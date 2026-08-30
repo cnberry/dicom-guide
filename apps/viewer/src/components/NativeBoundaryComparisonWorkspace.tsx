@@ -107,7 +107,7 @@ function NativeBoundaryMpr({
     let secondCenterFrame: number | undefined;
     setStatus('Building exact native volume and reviewed overlay…');
     void createMprViewports(
-      `scanview-reviewed-native-${loaded.timepoint.role}-${crypto.randomUUID()}`,
+      `dicom-guide-reviewed-native-${loaded.timepoint.role}-${crypto.randomUUID()}`,
       elements,
       loaded.series,
       activeTool,

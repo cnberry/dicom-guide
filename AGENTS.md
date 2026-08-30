@@ -1,11 +1,19 @@
-# ScanView Codex workspace
+# DICOM Guide Codex workspace
 
-- For requests to inspect or control the running viewer, read and follow
-  `skills/scanview-control/SKILL.md` before acting.
-- Keep DICOM reading, decoding, geometry, registration, measurement, and derived-data
-  processing local. Never add an external processing fallback or upload patient data.
-- Treat the source tree, catalog, opaque references, coordinates, and derived artifacts
-  as sensitive. Never commit patient files, findings, tokens, paths, or screenshots.
-- Keep source observations, computations, tentative interpretations, and clinician
-  conclusions explicitly separate. ScanView is investigational and not validated for
-  diagnosis.
+DICOM Guide exists for people who may know only that they have a folder from an
+imaging center and need help understanding it.
+
+- If a request involves installing, opening, or troubleshooting a scan folder, read
+  and follow `.agents/skills/dicom-guide-install/SKILL.md`.
+- If a request involves inspecting, explaining, highlighting, or controlling a
+  running viewer, read and follow `.agents/skills/dicom-guide/SKILL.md`.
+- If a request involves changing this repository, read and follow
+  `.agents/skills/dicom-guide-develop/SKILL.md`.
+- Never expect the person to identify a DICOM file, series, sequence, plane, or slice.
+  Inventory and explain those choices as part of the work.
+- Keep DICOM reading, decoding, geometry, measurement, and derived-data processing
+  local. Never add an external processing fallback or upload patient data.
+- Treat source files, metadata, coordinates, reports, screenshots, and generated
+  artifacts as sensitive. Never commit them; tests use synthetic data.
+- Keep direct image observations, DICOM metadata, anatomical inference, supplied
+  report text, and clinical conclusions explicitly separate.

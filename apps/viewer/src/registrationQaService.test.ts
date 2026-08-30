@@ -319,7 +319,7 @@ describe('registration QA local service', () => {
         headers: {
           'Content-Type': REGISTRATION_REVIEW_MEDIA_TYPE,
           'Content-Disposition':
-            'attachment; filename="scanview-registration-review-test.json"',
+            'attachment; filename="dicom-guide-registration-review-test.json"',
           'Content-Length': '51',
         },
       }),
@@ -329,7 +329,7 @@ describe('registration QA local service', () => {
     const result = await submitRegistrationReview(review);
 
     expect(REGISTRATION_REVIEW_ENDPOINT).toBe('/v1/registration-reviews');
-    expect(result.filename).toBe('scanview-registration-review-test.json');
+    expect(result.filename).toBe('dicom-guide-registration-review-test.json');
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/v1/registration-reviews');
     expect(options).toMatchObject({

@@ -1,7 +1,7 @@
 export const NATIVE_BOUNDARY_CONTEXT_ENDPOINT =
   '/v1/lesion-volume-comparison-display/context';
 export const NATIVE_BOUNDARY_MASK_MEDIA_TYPE =
-  'application/vnd.scanview.native-binary-mask';
+  'application/vnd.dicom-guide.native-binary-mask';
 export const MAX_NATIVE_BOUNDARY_MASK_BYTES = 64 * 1024 * 1024;
 
 export const NATIVE_BOUNDARY_ALWAYS_LOCKED = [

@@ -22,17 +22,17 @@ from pydicom.uid import (
     generate_uid,
 )
 
-from scanview_agent.catalog import build_catalog
-from scanview_agent.cli import main, parser
-from scanview_agent.consultation_boards import consultation_board_summary
-from scanview_agent.consultation_boards import MAX_BOARD_TRANSPORT_BYTES
-from scanview_agent.consultation_packets import (
+from dicom_guide.catalog import build_catalog
+from dicom_guide.cli import main, parser
+from dicom_guide.consultation_boards import consultation_board_summary
+from dicom_guide.consultation_boards import MAX_BOARD_TRANSPORT_BYTES
+from dicom_guide.consultation_packets import (
     CONSULTATION_KEY_IMAGE_IMPLEMENTATION,
     CONSULTATION_KEY_IMAGE_LIMITATIONS,
     consultation_packet_archive_bytes,
     consultation_packet_summary,
 )
-from scanview_agent.server import create_server
+from dicom_guide.server import create_server
 
 
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
@@ -249,12 +249,12 @@ def test_consultation_schemas_validate_generated_sidecars_and_packet(
 
     schema_root = Path(__file__).parents[3] / "schemas"
     key_schema = json.loads(
-        (schema_root / "scanview-consultation-key-image-v1.schema.json").read_text()
+        (schema_root / "dicom-guide-consultation-key-image-v1.schema.json").read_text()
     )
     packet_schema = json.loads(
         (
             schema_root
-            / "scanview-clinician-consultation-packet-v1.schema.json"
+            / "dicom-guide-clinician-consultation-packet-v1.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(key_schema)
@@ -301,7 +301,7 @@ def test_consultation_cli_assembles_and_validates_live_sources(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "assemble-consultation-packet",
             str(root),
             str(view_a),
@@ -318,7 +318,7 @@ def test_consultation_cli_assembles_and_validates_live_sources(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["scanview-agent", "validate-consultation-packet", str(output)],
+        ["dicom-guide", "validate-consultation-packet", str(output)],
     )
     main()
     validated = json.loads(capsys.readouterr().out)
@@ -348,7 +348,7 @@ def test_consultation_board_cli_assembles_and_privacy_validates_live_sources(
     assert parsed.command == "assemble-consultation-board"
     assert len(parsed.item) == 2
 
-    monkeypatch.setattr(sys, "argv", ["scanview-agent", *arguments])
+    monkeypatch.setattr(sys, "argv", ["dicom-guide", *arguments])
     main()
     assembled = json.loads(capsys.readouterr().out)
     assert assembled["valid"] is True
@@ -358,7 +358,7 @@ def test_consultation_board_cli_assembles_and_privacy_validates_live_sources(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["scanview-agent", "validate-consultation-board", str(output)],
+        ["dicom-guide", "validate-consultation-board", str(output)],
     )
     main()
     validated = json.loads(capsys.readouterr().out)
@@ -384,7 +384,7 @@ def test_consultation_endpoint_enforces_origin_media_type_and_live_sources(
     base_headers = {
         "Authorization": "Bearer consultation-session-token",
         "Origin": f"http://127.0.0.1:{port}",
-        "Content-Type": "application/vnd.scanview.consultation-input+zip",
+        "Content-Type": "application/vnd.dicom-guide.consultation-input+zip",
         "Accept": "application/zip",
     }
     try:
@@ -392,7 +392,7 @@ def test_consultation_endpoint_enforces_origin_media_type_and_live_sources(
             port,
             transport,
             headers={
-                "Content-Type": "application/vnd.scanview.consultation-input+zip",
+                "Content-Type": "application/vnd.dicom-guide.consultation-input+zip",
             },
         )
         assert status == HTTPStatus.FORBIDDEN
@@ -419,7 +419,7 @@ def test_consultation_endpoint_enforces_origin_media_type_and_live_sources(
         assert headers["Content-Type"] == "application/zip"
         assert headers["Cache-Control"] == "no-store"
         assert headers["Content-Disposition"].startswith(
-            'attachment; filename="scanview-consultation-packet-'
+            'attachment; filename="dicom-guide-consultation-packet-'
         )
         assert consultation_packet_summary(io.BytesIO(body))["valid"] is True
 
@@ -452,7 +452,7 @@ def test_consultation_board_endpoint_is_same_origin_source_bound_and_no_store(
     headers = {
         "Authorization": "Bearer consultation-board-token",
         "Origin": f"http://127.0.0.1:{port}",
-        "Content-Type": "application/vnd.scanview.consultation-board-input+zip",
+        "Content-Type": "application/vnd.dicom-guide.consultation-board-input+zip",
         "Accept": "application/zip",
     }
     try:
@@ -460,7 +460,7 @@ def test_consultation_board_endpoint_is_same_origin_source_bound_and_no_store(
             port,
             transport,
             headers={
-                "Content-Type": "application/vnd.scanview.consultation-board-input+zip",
+                "Content-Type": "application/vnd.dicom-guide.consultation-board-input+zip",
             },
             path="/v1/consultation-boards",
         )
@@ -498,7 +498,7 @@ def test_consultation_board_endpoint_is_same_origin_source_bound_and_no_store(
         assert response_headers["Content-Type"] == "application/zip"
         assert response_headers["Cache-Control"] == "no-store"
         assert response_headers["Content-Disposition"].startswith(
-            'attachment; filename="scanview-consultation-board-'
+            'attachment; filename="dicom-guide-consultation-board-'
         )
         summary = consultation_board_summary(io.BytesIO(body))
         assert summary["valid"] is True

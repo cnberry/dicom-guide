@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scanview_agent.cli import main
-from scanview_agent.navigation import build_navigation_intent
+from dicom_guide.cli import main
+from dicom_guide.navigation import build_navigation_intent
 
 
 SERIES_A = "series_0123456789abcdef0123"
@@ -58,14 +58,14 @@ def test_navigation_intent_is_exact_local_and_schema_valid() -> None:
     )
 
     assert intent["fragment"] == (
-        f"#scanview-v1?baseline_series={SERIES_A}&baseline_instance={INSTANCE_A}"
+        f"#dicom-guide-v1?baseline_series={SERIES_A}&baseline_instance={INSTANCE_A}"
         f"&followup_series={SERIES_B}&followup_instance={INSTANCE_B}"
     )
     assert intent["url"] == f"http://127.0.0.1:8765/{intent['fragment']}"
     assert intent["pairing_status"] == "not_assessed"
     repository_root = Path(__file__).parents[3]
     schema = json.loads(
-        (repository_root / "schemas" / "scanview-navigation-intent-v1.schema.json").read_text()
+        (repository_root / "schemas" / "dicom-guide-navigation-intent-v1.schema.json").read_text()
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(intent)
@@ -121,7 +121,7 @@ def test_navigation_refuses_non_loopback_or_credentialed_urls() -> None:
         baseline_instance_id=INSTANCE_A,
         base_url="http://[::1]:8765/",
     )
-    assert ipv6["url"].startswith("http://[::1]:8765/#scanview-v1?")
+    assert ipv6["url"].startswith("http://[::1]:8765/#dicom-guide-v1?")
 
 
 def test_viewer_link_cli_writes_owner_only_versioned_intent(
@@ -134,7 +134,7 @@ def test_viewer_link_cli_writes_owner_only_versioned_intent(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "viewer-link",
             str(manifest_path),
             "--baseline-series",

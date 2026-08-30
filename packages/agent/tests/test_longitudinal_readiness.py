@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scanview_agent.cli import main
-from scanview_agent.longitudinal_readiness import (
+from dicom_guide.cli import main
+from dicom_guide.longitudinal_readiness import (
     MAX_REPORTED_CANDIDATE_PAIRS,
     build_longitudinal_readiness,
 )
-from scanview_agent.server import create_server
+from dicom_guide.server import create_server
 
 
 PATIENT_A = "patient_aaaaaaaaaaaaaaaaaaaa"
@@ -93,7 +93,7 @@ def _schema() -> dict:
         (
             Path(__file__).parents[3]
             / "schemas"
-            / "scanview-longitudinal-readiness-v1.schema.json"
+            / "dicom-guide-longitudinal-readiness-v1.schema.json"
         ).read_text()
     )
 
@@ -241,13 +241,13 @@ def test_readiness_cli_writes_owner_only_report(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["scanview-agent", "readiness", str(manifest), "--output", str(output)],
+        ["dicom-guide", "readiness", str(manifest), "--output", str(output)],
     )
 
     main()
 
     report = json.loads(output.read_text())
-    assert report["artifact_type"] == "scanview.longitudinal-readiness"
+    assert report["artifact_type"] == "dicom-guide.longitudinal-readiness"
     assert report["source_summary"]["candidate_pair_count"] == 1
     assert output.stat().st_mode & 0o777 == 0o600
 

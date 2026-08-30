@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-import scanview_agent.registration as registration_module
-from scanview_agent.registration import (
+import dicom_guide.registration as registration_module
+from dicom_guide.registration import (
     BUNDLE_FILES,
     ENGINE_OUTPUTS,
     REGISTRATION_PARAMETERS,
@@ -134,9 +134,9 @@ import struct
 import sys
 from pathlib import Path
 
-request = json.loads(Path(os.environ['SCANVIEW_REGISTRATION_REQUEST']).read_text())
+request = json.loads(Path(os.environ['DICOM_GUIDE_REGISTRATION_REQUEST']).read_text())
 required = {'--disable-settings', '--ignore-slicerrc', '--no-splash', '--no-main-window'}
-private_temp = Path(os.environ['SCANVIEW_REGISTRATION_REQUEST']).parent
+private_temp = Path(os.environ['DICOM_GUIDE_REGISTRATION_REQUEST']).parent
 private_environment = all(
     Path(os.environ[name]) == private_temp for name in ('TMPDIR', 'TMP', 'TEMP')
 )
@@ -423,7 +423,7 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
     assert manifest["algorithm"]["parameters"] == REGISTRATION_PARAMETERS
     assert manifest["algorithm"]["module"] == "BRAINSFit"
     assert manifest["algorithm"]["coverage_module"] == "BRAINSResample"
-    assert manifest["algorithm"]["external_api_requested_by_scanview"] is False
+    assert manifest["algorithm"]["external_api_requested_by_dicom_guide"] is False
     network_isolation = manifest["algorithm"]["network_isolation"]
     assert network_isolation["status"] == "os_enforced"
     assert network_isolation["mechanism"] in {
@@ -471,7 +471,7 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
         "review_status": "unreviewed",
         "qa_status": "pending",
         "display_unlocked": False,
-        "external_api_requested_by_scanview": False,
+        "external_api_requested_by_dicom_guide": False,
         "errors": [],
         "modality": "MR",
         "file_count": 7,
@@ -479,7 +479,7 @@ def test_rigid_registration_is_local_immutable_and_locked_pending_qa(
     }
     repository_root = Path(__file__).parents[3]
     schema = json.loads(
-        (repository_root / "schemas" / "scanview-rigid-registration-v2.schema.json").read_text()
+        (repository_root / "schemas" / "dicom-guide-rigid-registration-v2.schema.json").read_text()
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(manifest)
@@ -922,7 +922,7 @@ def test_linux_engine_trust_record_keeps_checksum_and_signature_distinct() -> No
     record = json.loads(
         (repository / "packaging/slicer/linux-amd64-5.12.3.json").read_text()
     )
-    assert record["record_type"] == "scanview_slicer_engine_trust"
+    assert record["record_type"] == "dicom_guide_slicer_engine_trust"
     assert record["official_package"]["bytes"] == 498_683_944
     assert record["official_package"]["sha512"] == (
         "66bd3a1b9a7f636b40b96cb8c49f395ee783cdcaf7b43a4b895d6a40df9e0af"

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scanview_agent.agent_consultation_plans import (
+from dicom_guide.agent_consultation_plans import (
     ARTIFACT_TYPE,
     MAX_HEADING_CHARACTERS,
     MAX_PLAN_BYTES,
@@ -22,8 +22,8 @@ from scanview_agent.agent_consultation_plans import (
     load_strict_json,
     validate_agent_consultation_plan,
 )
-from scanview_agent.cli import main
-from scanview_agent.server import create_server
+from dicom_guide.cli import main
+from dicom_guide.server import create_server
 
 
 PATIENT_A = "patient_aaaaaaaaaaaaaaaaaaaa"
@@ -130,7 +130,7 @@ def _schema() -> dict:
         (
             Path(__file__).parents[3]
             / "schemas"
-            / "scanview-agent-consultation-plan-v1.schema.json"
+            / "dicom-guide-consultation-plan-v1.schema.json"
         ).read_text()
     )
 
@@ -289,7 +289,7 @@ def test_cli_creates_owner_only_plan_and_privacy_validates(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "create-consultation-plan",
             str(manifest),
             str(request),
@@ -305,7 +305,7 @@ def test_cli_creates_owner_only_plan_and_privacy_validates(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "validate-consultation-plan",
             str(manifest),
             str(output),

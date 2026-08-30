@@ -15,7 +15,7 @@ const INSTANCE_CT = 'instance_00000000000000000015';
 
 const plan = () => ({
   schema_version: '1.0.0',
-  artifact_type: 'scanview.agent-consultation-plan',
+  artifact_type: 'dicom-guide.agent-consultation-plan',
   generated_at: '2026-08-29T09:01:00Z',
   catalog_content_sha256: 'a'.repeat(64),
   local_only: true,

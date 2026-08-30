@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop DICOM Guide"
+  short_description: "Build, deploy, and contribute with synthetic DICOM"
+  default_prompt: "Use $dicom-guide-develop to set up this repository, make and verify the requested change, deploy it locally when useful, and prepare an upstream contribution."

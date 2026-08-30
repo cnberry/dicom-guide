@@ -11,12 +11,12 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scanview_agent.agent_access_audit import (
+from dicom_guide.agent_access_audit import (
     AgentAccessAudit,
     agent_access_audit_summary,
 )
-from scanview_agent.cli import main
-from scanview_agent.server import create_server
+from dicom_guide.cli import main
+from dicom_guide.server import create_server
 
 
 INSTANCE_ID = "instance_0123456789abcdef0123"
@@ -58,7 +58,7 @@ def test_agent_access_audit_appends_resumes_and_validates_schema(tmp_path: Path)
         (
             Path(__file__).parents[3]
             / "schemas"
-            / "scanview-agent-access-audit-event-v1.schema.json"
+            / "dicom-guide-access-audit-event-v1.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(schema)
@@ -123,7 +123,7 @@ def test_agent_access_audit_cli_returns_only_privacy_minimized_summary(
     audit = AgentAccessAudit.open(path)
     audit.record("manifest_read")
     audit.close()
-    monkeypatch.setattr(sys, "argv", ["scanview-agent", "verify-agent-audit", str(path)])
+    monkeypatch.setattr(sys, "argv", ["dicom-guide", "verify-agent-audit", str(path)])
     main()
     output = capsys.readouterr().out
     summary = json.loads(output)
@@ -145,7 +145,7 @@ def test_agent_access_audit_cli_rejects_unsafe_startup_without_traceback(
         sys,
         "argv",
         [
-            "scanview-agent",
+            "dicom-guide",
             "serve",
             str(source_root),
             "--port",

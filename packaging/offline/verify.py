@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify an extracted ScanView offline bundle with the Python standard library."""
+"""Verify an extracted DICOM Guide offline bundle with the Python standard library."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def _safe_relative_name(value: str) -> bool:
         and not path.is_absolute()
         and path.as_posix() == value
         and ".." not in path.parts
-        and path.parts[0] != ".scanview-runtime"
+        and path.parts[0] != ".dicom-guide-runtime"
         and value != "bundle.json"
     )
 
@@ -126,9 +126,9 @@ def _manifest(root: Path) -> dict[str, Any]:
         raise ValueError("bundle manifest fields are incomplete or unsupported")
     expected = {
         "schema_version": "1.0.0",
-        "artifact_type": "scanview_offline_runtime_bundle",
-        "project": "ScanView",
-        "version": "0.14.0",
+        "artifact_type": "dicom_guide_offline_runtime_bundle",
+        "project": "DICOM Guide",
+        "version": "0.15.0",
         "supported_platforms": ["macos", "linux"],
         "requires_python": ">=3.11",
         "runtime_network_required": False,
@@ -149,13 +149,13 @@ def _manifest(root: Path) -> dict[str, Any]:
 def _actual_payloads(root: Path) -> tuple[set[str], set[str]]:
     files: set[str] = set()
     directories: set[str] = set()
-    runtime = root / ".scanview-runtime"
+    runtime = root / ".dicom-guide-runtime"
     if runtime.exists() or runtime.is_symlink():
         if runtime.is_symlink() or not runtime.is_dir():
             raise ValueError("installed runtime path must be a local directory")
     for path in root.rglob("*"):
         relative = path.relative_to(root)
-        if relative.parts[0] == ".scanview-runtime":
+        if relative.parts[0] == ".dicom-guide-runtime":
             continue
         name = relative.as_posix()
         if path.is_symlink():
@@ -230,7 +230,7 @@ def main() -> None:
     try:
         result = verify_bundle(root)
     except (json.JSONDecodeError, OSError, ValueError) as error:
-        print(f"ScanView offline bundle verification failed: {error}", file=sys.stderr)
+        print(f"DICOM Guide offline bundle verification failed: {error}", file=sys.stderr)
         raise SystemExit(1) from error
     print(json.dumps(result, sort_keys=True))
 

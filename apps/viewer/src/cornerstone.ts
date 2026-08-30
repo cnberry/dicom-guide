@@ -364,8 +364,8 @@ export const createStackViewport = async (
   };
 };
 
-const MPR_PAINT_TOOL = 'ScanViewManualPaint';
-const MPR_ERASE_TOOL = 'ScanViewManualErase';
+const MPR_PAINT_TOOL = 'DicomGuideManualPaint';
+const MPR_ERASE_TOOL = 'DicomGuideManualErase';
 
 const normalizeDICOMText = (value: string, name: string, maximum: number): string => {
   const normalized = value.trim().replace(/\s+/g, ' ');
@@ -613,12 +613,12 @@ const buildDicomSeg = async ({
   };
   dataset.SegmentsOverlap = 'NO';
   dataset.SpecificCharacterSet = 'ISO_IR 192';
-  dataset.ContentLabel = 'SCANVIEW_SEG';
+  dataset.ContentLabel = 'DICOM_GUIDE_SEG';
   dataset.ContentDescription = 'Unreviewed local manual lesion ROI evidence';
-  dataset.SeriesDescription = 'ScanView unreviewed manual lesion ROI';
-  dataset.Manufacturer = 'ScanView local';
-  dataset.ManufacturerModelName = 'ScanView';
-  dataset.SoftwareVersions = '0.14.0';
+  dataset.SeriesDescription = 'DICOM Guide unreviewed manual lesion ROI';
+  dataset.Manufacturer = 'DICOM Guide local';
+  dataset.ManufacturerModelName = 'DICOM Guide';
+  dataset.SoftwareVersions = '0.15.0';
   const segmentItem = Array.isArray(dataset.SegmentSequence)
     ? dataset.SegmentSequence[0]
     : dataset.SegmentSequence;

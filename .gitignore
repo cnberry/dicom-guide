@@ -20,8 +20,8 @@ data/*
 *.dcm
 *.dicom
 DICOMDIR
-scanview-key-image-*.zip
-scanview-visit-packet*.zip
+dicom-guide-key-image-*.zip
+dicom-guide-visit-packet*.zip
 manifests/
 derivatives/
 audit/

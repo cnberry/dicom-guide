@@ -3,7 +3,7 @@ import type { DicomSeries } from './dicom';
 export const AGENT_CONSULTATION_PLAN_ENDPOINT =
   '/v1/agent-consultation-plans/validate';
 export const AGENT_CONSULTATION_PLAN_MEDIA_TYPE =
-  'application/vnd.scanview.agent-consultation-plan+json';
+  'application/vnd.dicom-guide.agent-consultation-plan+json';
 export const AGENT_CONSULTATION_PLAN_MAX_BYTES = 32 * 1024;
 export const AGENT_CONSULTATION_PLAN_MIN_ITEMS = 2;
 export const AGENT_CONSULTATION_PLAN_MAX_ITEMS = 8;
@@ -27,7 +27,7 @@ export type AgentConsultationPlanItem = {
 
 export type AgentConsultationPlan = {
   schema_version: '1.0.0';
-  artifact_type: 'scanview.agent-consultation-plan';
+  artifact_type: 'dicom-guide.agent-consultation-plan';
   generated_at: string;
   catalog_content_sha256: string;
   local_only: true;
@@ -190,7 +190,7 @@ export const parseAgentConsultationPlan = (text: string): AgentConsultationPlan 
     !isRecord(candidate) ||
     !exactKeys(candidate, topKeys) ||
     candidate.schema_version !== '1.0.0' ||
-    candidate.artifact_type !== 'scanview.agent-consultation-plan' ||
+    candidate.artifact_type !== 'dicom-guide.agent-consultation-plan' ||
     typeof candidate.generated_at !== 'string' ||
     Number.isNaN(Date.parse(candidate.generated_at)) ||
     typeof candidate.catalog_content_sha256 !== 'string' ||

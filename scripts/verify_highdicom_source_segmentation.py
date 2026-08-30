@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Verify ScanView SEG import against an independently generated highdicom object.
+"""Verify DICOM Guide SEG import against an independently generated highdicom object.
 
 This script is an optional, patient-free interoperability gate. highdicom and NumPy
-are test-only dependencies and never become part of the ScanView offline runtime.
+are test-only dependencies and never become part of the DICOM Guide offline runtime.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ import numpy as np  # noqa: E402
 from pydicom import dcmread  # noqa: E402
 from pydicom.uid import ExplicitVRLittleEndian  # noqa: E402
 
-from scanview_agent.catalog import build_catalog  # noqa: E402
-from scanview_agent.source_segmentations import (  # noqa: E402
+from dicom_guide.catalog import build_catalog  # noqa: E402
+from dicom_guide.source_segmentations import (  # noqa: E402
     build_source_segmentation_catalog,
     registry_segmentation_source_loader,
     source_segmentation_summary,
@@ -49,7 +49,7 @@ def _deny_network() -> None:
     socket.socket.connect_ex = blocked  # type: ignore[method-assign]
 
 
-def _generate_scanview_sources(output: Path) -> None:
+def _generate_dicom_guide_sources(output: Path) -> None:
     generator = REPOSITORY_ROOT / "scripts" / "generate_synthetic_source_segmentation.py"
     previous_argv = sys.argv
     try:
@@ -108,7 +108,7 @@ def _highdicom_segmentation(output: Path) -> tuple[np.ndarray, list[str]]:
         manufacturer_model_name="patient-free generator",
         software_versions=EXPECTED_VERSIONS["highdicom"],
         device_serial_number="SYNTHETIC-ONLY",
-        content_description="Independent patient-free ScanView SEG fixture",
+        content_description="Independent patient-free DICOM Guide SEG fixture",
         content_creator_name="Interoperability^Fixture",
         series_description="Highdicom independent source SEG",
         transfer_syntax_uid=ExplicitVRLittleEndian,
@@ -130,9 +130,9 @@ def main() -> None:
             + json.dumps(observed_versions, sort_keys=True)
         )
     _deny_network()
-    with tempfile.TemporaryDirectory(prefix="scanview-highdicom-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="dicom-guide-highdicom-") as temporary:
         root = Path(temporary) / "dicom"
-        _generate_scanview_sources(root)
+        _generate_dicom_guide_sources(root)
         expected_mask, source_uids = _highdicom_segmentation(root)
 
         # Independently reconstruct a dense source-ordered mask using highdicom's
@@ -155,27 +155,27 @@ def main() -> None:
             load_source=loader,
         )
         if not summary["valid"] or artifact["supported_segmentation_count"] != 1:
-            raise RuntimeError("ScanView did not accept the independent DICOM SEG")
+            raise RuntimeError("DICOM Guide did not accept the independent DICOM SEG")
         state = artifact["segmentations"][0]
         segment = state["segments"][0]
-        scanview_mask = masks[(state["segmentation_id"], 1)]
+        dicom_guide_mask = masks[(state["segmentation_id"], 1)]
         expected_bytes = expected_mask.tobytes(order="C")
-        if scanview_mask != expected_bytes:
-            raise RuntimeError("ScanView and highdicom dense masks differ")
+        if dicom_guide_mask != expected_bytes:
+            raise RuntimeError("DICOM Guide and highdicom dense masks differ")
         if (
             state["frame_count"] != 11
             or state["referenced_instance_count"] != 24
             or segment["marked_voxel_count"] != 3083
             or abs(segment["computed_volume_ml"] - 3.94624) > 1e-9
-            or hashlib.sha256(scanview_mask).hexdigest()
+            or hashlib.sha256(dicom_guide_mask).hexdigest()
             != segment["mask_sha256"]
             or len(guarded) != 25
         ):
-            raise RuntimeError("ScanView interoperability provenance or arithmetic differs")
+            raise RuntimeError("DICOM Guide interoperability provenance or arithmetic differs")
         print(
             json.dumps(
                 {
-                    "artifact_type": "scanview.highdicom-source-segmentation-interop",
+                    "artifact_type": "dicom-guide.highdicom-source-segmentation-interop",
                     "valid": True,
                     "patient_data_used": False,
                     "network_access_allowed": False,

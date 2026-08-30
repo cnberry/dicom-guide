@@ -40,7 +40,7 @@ describe('local consultation-packet service', () => {
         headers: {
           'Content-Type': 'application/zip',
           'Content-Disposition':
-            'attachment; filename="scanview-consultation-packet-test.zip"',
+            'attachment; filename="dicom-guide-consultation-packet-test.zip"',
         },
       }),
     );
@@ -53,7 +53,7 @@ describe('local consultation-packet service', () => {
 
     expect(CONSULTATION_PACKET_ENDPOINT).toBe('/v1/consultation-packets');
     expect(result).toEqual({
-      filename: 'scanview-consultation-packet-test.zip',
+      filename: 'dicom-guide-consultation-packet-test.zip',
       bytes: new Uint8Array([9, 8, 7]),
     });
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -82,7 +82,7 @@ describe('local consultation-packet service', () => {
           headers: {
             'Content-Type': 'application/zip',
             'Content-Disposition':
-              'attachment; filename="scanview-consultation-packet-saved.zip"',
+              'attachment; filename="dicom-guide-consultation-packet-saved.zip"',
           },
         }),
       ),
@@ -93,11 +93,11 @@ describe('local consultation-packet service', () => {
       new Uint8Array([2]),
     );
 
-    expect(result.filename).toBe('scanview-consultation-packet-saved.zip');
+    expect(result.filename).toBe('dicom-guide-consultation-packet-saved.zip');
     expect(downloadArchiveMock).toHaveBeenCalledOnce();
     expect(downloadArchiveMock).toHaveBeenCalledWith(
       new Uint8Array([7, 6, 5]),
-      'scanview-consultation-packet-saved.zip',
+      'dicom-guide-consultation-packet-saved.zip',
     );
   });
 

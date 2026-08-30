@@ -4,11 +4,11 @@ import type { LesionVolumeReviewerRole } from './lesionVolumeReview';
 
 export const LESION_VOLUME_COMPARISON_ENDPOINT = '/v1/lesion-volume-comparisons';
 export const LESION_VOLUME_COMPARISON_INPUT_MEDIA_TYPE =
-  'application/vnd.scanview.lesion-volume-comparison-input+zip';
+  'application/vnd.dicom-guide.lesion-volume-comparison-input+zip';
 export const MAX_BOUNDARY_REVIEW_ARCHIVE_BYTES = 160 * 1024 * 1024;
 export const MAX_BOUNDARY_REVIEW_TEXT_BYTES = 2 * 1024 * 1024;
 export const LESION_VOLUME_COMPARISON_ATTESTATION =
-  'I attest that I personally reviewed both accepted boundary records and their original local source images, and recorded my judgments about chronology, same-lesion identity, represented tissue, acquisition comparability, boundary comparability, and registration need. ScanView has not verified my identity or credentials.';
+  'I attest that I personally reviewed both accepted boundary records and their original local source images, and recorded my judgments about chronology, same-lesion identity, represented tissue, acquisition comparability, boundary comparability, and registration need. DICOM Guide has not verified my identity or credentials.';
 
 export type ImportedBoundaryReview = {
   filename: string;
@@ -36,7 +36,7 @@ export type LesionVolumeComparisonChecklist = {
 
 export type LesionVolumeComparisonRequest = {
   schema_version: '1.0.0';
-  artifact_type: 'scanview.lesion-volume-comparison-request';
+  artifact_type: 'dicom-guide.lesion-volume-comparison-request';
   reviewer: {
     name: string;
     role: LesionVolumeReviewerRole;
@@ -146,7 +146,7 @@ export const readBoundaryReviewArchive = (
   const review = objectValue(record.review);
   const permissions = objectValue(record.permitted_uses);
   if (
-    record.artifact_type !== 'scanview.lesion-volume-review' ||
+    record.artifact_type !== 'dicom-guide.lesion-volume-review' ||
     record.review_status !== 'accepted_for_discussion' ||
     permissions?.eligible_for_future_pairing_review !== true ||
     typeof record.review_id !== 'string' ||
@@ -235,7 +235,7 @@ export const buildPairingRequest = (
   }
   return {
     schema_version: '1.0.0',
-    artifact_type: 'scanview.lesion-volume-comparison-request',
+    artifact_type: 'dicom-guide.lesion-volume-comparison-request',
     reviewer: {
       name: reviewerName,
       role: input.reviewerRole,
@@ -278,7 +278,7 @@ const responseFilename = (header: string | null): string => {
   const candidate = header?.match(/filename="?([A-Za-z0-9._-]+)"?/i)?.[1];
   return candidate?.endsWith('.zip')
     ? candidate
-    : `scanview-lesion-volume-comparison-${new Date().toISOString().slice(0, 10)}.zip`;
+    : `dicom-guide-lesion-volume-comparison-${new Date().toISOString().slice(0, 10)}.zip`;
 };
 
 export const saveLesionVolumeComparison = async (

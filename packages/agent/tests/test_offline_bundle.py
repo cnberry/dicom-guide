@@ -13,7 +13,7 @@ import pytest
 
 def _builder() -> ModuleType:
     script = Path(__file__).parents[3] / "scripts" / "build_offline_bundle.py"
-    spec = importlib.util.spec_from_file_location("scanview_offline_builder", script)
+    spec = importlib.util.spec_from_file_location("dicom_guide_offline_builder", script)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -52,9 +52,9 @@ def _wheel(
 def _inputs(tmp_path: Path) -> tuple[Path, Path]:
     return (
         _wheel(
-            tmp_path / "scanview_agent-0.14.0-py3-none-any.whl",
-            name="scanview-agent",
-            version="0.14.0",
+            tmp_path / "dicom_guide-0.15.0-py3-none-any.whl",
+            name="dicom-guide",
+            version="0.15.0",
         ),
         _wheel(
             tmp_path / "pydicom-3.0.2-py3-none-any.whl",
@@ -66,9 +66,9 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path]:
 
 def _build(tmp_path: Path, output_name: str = "output") -> Path:
     builder = _builder()
-    scanview, pydicom = _inputs(tmp_path)
+    dicom_guide, pydicom = _inputs(tmp_path)
     return builder.build_offline_bundle(
-        scanview_wheel=scanview,
+        dicom_guide_wheel=dicom_guide,
         pydicom_wheel=pydicom,
         template_root=Path(__file__).parents[3] / "packaging" / "offline",
         output_dir=tmp_path / output_name,
@@ -103,18 +103,18 @@ def test_offline_bundle_is_exact_deterministic_and_local_only(tmp_path: Path) ->
         infos = archive.infolist()
         names = [info.filename for info in infos]
         assert len(names) == len(set(names)) == 9
-        assert all(name.startswith("scanview-offline-0.14.0/") for name in names)
+        assert all(name.startswith("dicom-guide-offline-0.15.0/") for name in names)
         assert all(info.date_time == (2020, 2, 2, 0, 0, 0) for info in infos)
         manifest = json.loads(
-            archive.read("scanview-offline-0.14.0/bundle.json")
+            archive.read("dicom-guide-offline-0.15.0/bundle.json")
         )
         requirements = archive.read(
-            "scanview-offline-0.14.0/requirements.lock"
+            "dicom-guide-offline-0.15.0/requirements.lock"
         ).decode()
-        install = archive.read("scanview-offline-0.14.0/install.sh").decode()
-        launch = archive.read("scanview-offline-0.14.0/launch.sh").decode()
+        install = archive.read("dicom-guide-offline-0.15.0/install.sh").decode()
+        launch = archive.read("dicom-guide-offline-0.15.0/launch.sh").decode()
         runtime_check = archive.read(
-            "scanview-offline-0.14.0/runtime_check.py"
+            "dicom-guide-offline-0.15.0/runtime_check.py"
         ).decode()
 
     assert manifest["supported_platforms"] == ["macos", "linux"]
@@ -128,24 +128,24 @@ def test_offline_bundle_is_exact_deterministic_and_local_only(tmp_path: Path) ->
         "runtime_check.py",
         "verify.py",
         "wheels/pydicom-3.0.2-py3-none-any.whl",
-        "wheels/scanview_agent-0.14.0-py3-none-any.whl",
+        "wheels/dicom_guide-0.15.0-py3-none-any.whl",
     }
     assert requirements.count("--hash=sha256:") == 2
     assert "--no-index" in install and "--require-hashes" in install
     assert "runtime_check.py" in install + launch
     assert '"external_dicom_processing_api_required": False' in runtime_check
-    assert "scanview_agent.consultation_boards" in runtime_check
+    assert "dicom_guide.consultation_boards" in runtime_check
     assert "schema_count != 32" in runtime_check
-    assert "scanview_agent.lesion_volume_reviews" in runtime_check
-    assert "scanview_agent.lesion_volume_comparisons" in runtime_check
-    assert "scanview_agent.lesion_volume_display" in runtime_check
-    assert "scanview_agent.agent_access_audit" in runtime_check
-    assert "scanview_agent.longitudinal_readiness" in runtime_check
-    assert "scanview_agent.agent_consultation_plans" in runtime_check
-    assert "scanview_agent.presentation_states" in runtime_check
-    assert "scanview_agent.source_segmentations" in runtime_check
-    assert "scanview_agent.source_segmentation_reviews" in runtime_check
-    assert "scanview_agent.viewer_state" in runtime_check
+    assert "dicom_guide.lesion_volume_reviews" in runtime_check
+    assert "dicom_guide.lesion_volume_comparisons" in runtime_check
+    assert "dicom_guide.lesion_volume_display" in runtime_check
+    assert "dicom_guide.agent_access_audit" in runtime_check
+    assert "dicom_guide.longitudinal_readiness" in runtime_check
+    assert "dicom_guide.agent_consultation_plans" in runtime_check
+    assert "dicom_guide.presentation_states" in runtime_check
+    assert "dicom_guide.source_segmentations" in runtime_check
+    assert "dicom_guide.source_segmentation_reviews" in runtime_check
+    assert "dicom_guide.viewer_state" in runtime_check
     assert "http://" not in install + launch
     assert "https://" not in install + launch
 
@@ -158,8 +158,8 @@ def test_verifier_accepts_runtime_but_rejects_tamper_and_extra_files(
     assert result.returncode == 0
     assert json.loads(result.stdout)["payload_files"] == 8
 
-    (root / ".scanview-runtime").mkdir()
-    (root / ".scanview-runtime" / "installed-runtime-file").write_text("local")
+    (root / ".dicom-guide-runtime").mkdir()
+    (root / ".dicom-guide-runtime" / "installed-runtime-file").write_text("local")
     assert _verify(root).returncode == 0
 
     (root / "README.md").write_text("tampered")
@@ -169,7 +169,7 @@ def test_verifier_accepts_runtime_but_rejects_tamper_and_extra_files(
 
     (root / "README.md").write_bytes(
         zipfile.ZipFile(_build(tmp_path, "fresh")).read(
-            "scanview-offline-0.14.0/README.md"
+            "dicom-guide-offline-0.15.0/README.md"
         )
     )
     (root / "extra.txt").write_text("unsupported")
@@ -206,7 +206,7 @@ def test_verifier_rejects_duplicate_manifest_fields_and_symlink_payload(
 
 def test_bundle_rejects_wrong_or_platform_specific_wheels(tmp_path: Path) -> None:
     builder = _builder()
-    scanview, pydicom = _inputs(tmp_path)
+    dicom_guide, pydicom = _inputs(tmp_path)
     wrong = _wheel(
         tmp_path / "pydicom-3.0.1-py3-none-any.whl",
         name="pydicom",
@@ -214,7 +214,7 @@ def test_bundle_rejects_wrong_or_platform_specific_wheels(tmp_path: Path) -> Non
     )
     with pytest.raises(ValueError, match="identity does not match"):
         builder.build_offline_bundle(
-            scanview_wheel=scanview,
+            dicom_guide_wheel=dicom_guide,
             pydicom_wheel=wrong,
             template_root=Path(__file__).parents[3] / "packaging" / "offline",
             output_dir=tmp_path / "wrong-output",
@@ -228,7 +228,7 @@ def test_bundle_rejects_wrong_or_platform_specific_wheels(tmp_path: Path) -> Non
     )
     with pytest.raises(ValueError, match="cross-platform pure-Python"):
         builder.build_offline_bundle(
-            scanview_wheel=scanview,
+            dicom_guide_wheel=dicom_guide,
             pydicom_wheel=platform_wheel,
             template_root=Path(__file__).parents[3] / "packaging" / "offline",
             output_dir=tmp_path / "platform-output",
@@ -243,7 +243,7 @@ def test_bundle_rejects_wrong_or_platform_specific_wheels(tmp_path: Path) -> Non
         archive.writestr("pydicom//ambiguous.py", "")
     with pytest.raises(ValueError, match="ambiguous or unsafe members"):
         builder.build_offline_bundle(
-            scanview_wheel=scanview,
+            dicom_guide_wheel=dicom_guide,
             pydicom_wheel=unsafe_wheel,
             template_root=Path(__file__).parents[3] / "packaging" / "offline",
             output_dir=tmp_path / "unsafe-output",
@@ -252,18 +252,18 @@ def test_bundle_rejects_wrong_or_platform_specific_wheels(tmp_path: Path) -> Non
 
 def test_bundle_output_is_non_overwriting(tmp_path: Path) -> None:
     builder = _builder()
-    scanview, pydicom = _inputs(tmp_path)
+    dicom_guide, pydicom = _inputs(tmp_path)
     template_root = Path(__file__).parents[3] / "packaging" / "offline"
     output_dir = tmp_path / "output"
     builder.build_offline_bundle(
-        scanview_wheel=scanview,
+        dicom_guide_wheel=dicom_guide,
         pydicom_wheel=pydicom,
         template_root=template_root,
         output_dir=output_dir,
     )
     with pytest.raises(FileExistsError):
         builder.build_offline_bundle(
-            scanview_wheel=scanview,
+            dicom_guide_wheel=dicom_guide,
             pydicom_wheel=pydicom,
             template_root=template_root,
             output_dir=output_dir,

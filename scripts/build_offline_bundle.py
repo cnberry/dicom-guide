@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a verifiable offline ScanView runtime bundle for macOS and Linux."""
+"""Build the legacy verifiable offline DICOM Guide runtime bundle."""
 
 from __future__ import annotations
 
@@ -18,12 +18,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
 
 
-PROJECT_NAME = "scanview-agent"
-PROJECT_VERSION = "0.14.0"
+PROJECT_NAME = "dicom-guide"
+PROJECT_VERSION = "0.15.0"
 PYDICOM_VERSION = "3.0.2"
 BUNDLE_SCHEMA_VERSION = "1.0.0"
-BUNDLE_ARTIFACT_TYPE = "scanview_offline_runtime_bundle"
-BUNDLE_DIRECTORY = f"scanview-offline-{PROJECT_VERSION}"
+BUNDLE_ARTIFACT_TYPE = "dicom_guide_offline_runtime_bundle"
+BUNDLE_DIRECTORY = f"dicom-guide-offline-{PROJECT_VERSION}"
 BUNDLE_FILENAME = f"{BUNDLE_DIRECTORY}.zip"
 FIXED_ZIP_TIMESTAMP = (2020, 2, 2, 0, 0, 0)
 MAX_WHEEL_MEMBER_BYTES = 128 * 1024 * 1024
@@ -142,14 +142,14 @@ def _file_record(path: Path) -> dict[str, Any]:
 
 
 def _requirements(
-    scanview: WheelIdentity,
-    scanview_hash: str,
+    dicom_guide: WheelIdentity,
+    dicom_guide_hash: str,
     pydicom: WheelIdentity,
     pydicom_hash: str,
 ) -> bytes:
     return (
         "# Hash-locked runtime requirements; install only with --no-index.\n"
-        f"{scanview.name}=={scanview.version} --hash=sha256:{scanview_hash}\n"
+        f"{dicom_guide.name}=={dicom_guide.version} --hash=sha256:{dicom_guide_hash}\n"
         f"{pydicom.name}=={pydicom.version} --hash=sha256:{pydicom_hash}\n"
     ).encode()
 
@@ -163,7 +163,7 @@ def _manifest(bundle_root: Path) -> dict[str, Any]:
     return {
         "schema_version": BUNDLE_SCHEMA_VERSION,
         "artifact_type": BUNDLE_ARTIFACT_TYPE,
-        "project": "ScanView",
+        "project": "DICOM Guide",
         "version": PROJECT_VERSION,
         "supported_platforms": ["macos", "linux"],
         "requires_python": ">=3.11",
@@ -222,13 +222,13 @@ def _archive(bundle_root: Path, output: Path) -> None:
 
 def build_offline_bundle(
     *,
-    scanview_wheel: Path,
+    dicom_guide_wheel: Path,
     pydicom_wheel: Path,
     template_root: Path,
     output_dir: Path,
 ) -> Path:
-    scanview = _wheel_identity(
-        scanview_wheel,
+    dicom_guide = _wheel_identity(
+        dicom_guide_wheel,
         expected_name=PROJECT_NAME,
         expected_version=PROJECT_VERSION,
     )
@@ -245,20 +245,20 @@ def build_offline_bundle(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_dir = output_dir.resolve(strict=True)
     output = output_dir / BUNDLE_FILENAME
-    with tempfile.TemporaryDirectory(prefix="scanview-offline-stage-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="dicom-guide-offline-stage-") as temporary:
         bundle_root = Path(temporary) / BUNDLE_DIRECTORY
         wheels = bundle_root / "wheels"
         wheels.mkdir(parents=True, mode=0o700)
-        scanview_destination = wheels / scanview.filename
+        dicom_guide_destination = wheels / dicom_guide.filename
         pydicom_destination = wheels / pydicom.filename
-        _copy_new(scanview_wheel, scanview_destination, 0o600)
+        _copy_new(dicom_guide_wheel, dicom_guide_destination, 0o600)
         _copy_new(pydicom_wheel, pydicom_destination, 0o600)
         for name in TEMPLATE_FILES:
             mode = 0o700 if name in EXECUTABLE_TEMPLATES else 0o600
             _copy_new(template_root / name, bundle_root / name, mode)
         requirements = _requirements(
-            scanview,
-            _digest(scanview_destination),
+            dicom_guide,
+            _digest(dicom_guide_destination),
             pydicom,
             _digest(pydicom_destination),
         )
@@ -281,8 +281,8 @@ def _single_wheel(directory: Path, project: str) -> Path:
     return wheels[0]
 
 
-def _prepare_scanview_wheel(repository: Path, temporary: Path) -> Path:
-    destination = temporary / "scanview-wheel"
+def _prepare_dicom_guide_wheel(repository: Path, temporary: Path) -> Path:
+    destination = temporary / "dicom-guide-wheel"
     destination.mkdir()
     subprocess.run(
         [
@@ -326,9 +326,9 @@ def main() -> None:
         help="Directory for the non-overwriting offline ZIP (default: ./release)",
     )
     parser.add_argument(
-        "--scanview-wheel",
+        "--dicom-guide-wheel",
         type=Path,
-        help="Use an existing UI-embedded ScanView wheel instead of building one",
+        help="Use an existing UI-embedded DICOM Guide wheel instead of building one",
     )
     parser.add_argument(
         "--pydicom-wheel",
@@ -340,12 +340,12 @@ def main() -> None:
     repository = Path(__file__).resolve().parents[1]
     template_root = repository / "packaging" / "offline"
     try:
-        with tempfile.TemporaryDirectory(prefix="scanview-offline-input-") as temporary_name:
+        with tempfile.TemporaryDirectory(prefix="dicom-guide-offline-input-") as temporary_name:
             temporary = Path(temporary_name)
-            scanview_wheel = (
-                args.scanview_wheel.expanduser().resolve(strict=True)
-                if args.scanview_wheel
-                else _prepare_scanview_wheel(repository, temporary)
+            dicom_guide_wheel = (
+                args.dicom_guide_wheel.expanduser().resolve(strict=True)
+                if args.dicom_guide_wheel
+                else _prepare_dicom_guide_wheel(repository, temporary)
             )
             pydicom_wheel = (
                 args.pydicom_wheel.expanduser().resolve(strict=True)
@@ -353,7 +353,7 @@ def main() -> None:
                 else _prepare_pydicom_wheel(temporary)
             )
             output = build_offline_bundle(
-                scanview_wheel=scanview_wheel,
+                dicom_guide_wheel=dicom_guide_wheel,
                 pydicom_wheel=pydicom_wheel,
                 template_root=template_root,
                 output_dir=args.output_dir.expanduser(),

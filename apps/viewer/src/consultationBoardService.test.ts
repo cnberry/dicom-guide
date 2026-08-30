@@ -78,7 +78,7 @@ describe('local consultation-board service', () => {
         headers: {
           'Content-Type': 'application/zip',
           'Content-Disposition':
-            'attachment; filename="scanview-consultation-board-test.zip"',
+            'attachment; filename="dicom-guide-consultation-board-test.zip"',
         },
       }),
     );
@@ -87,7 +87,7 @@ describe('local consultation-board service', () => {
     const result = await requestConsultationBoard(inputs.slice(0, 2));
 
     expect(CONSULTATION_BOARD_ENDPOINT).toBe('/v1/consultation-boards');
-    expect(result.filename).toBe('scanview-consultation-board-test.zip');
+    expect(result.filename).toBe('dicom-guide-consultation-board-test.zip');
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/v1/consultation-boards');
     expect(options).toMatchObject({
@@ -110,7 +110,7 @@ describe('local consultation-board service', () => {
           headers: {
             'Content-Type': 'application/zip',
             'Content-Disposition':
-              'attachment; filename="scanview-consultation-board-saved.zip"',
+              'attachment; filename="dicom-guide-consultation-board-saved.zip"',
           },
         }),
       ),
@@ -118,10 +118,10 @@ describe('local consultation-board service', () => {
 
     const result = await saveConsultationBoard(inputs.slice(0, 2));
 
-    expect(result.filename).toBe('scanview-consultation-board-saved.zip');
+    expect(result.filename).toBe('dicom-guide-consultation-board-saved.zip');
     expect(downloadArchiveMock).toHaveBeenCalledWith(
       new Uint8Array([7, 6, 5]),
-      'scanview-consultation-board-saved.zip',
+      'dicom-guide-consultation-board-saved.zip',
     );
   });
 

@@ -17,7 +17,7 @@ const reviewArchive = (
 ): Uint8Array => {
   const suffix = role === 'baseline' ? '1' : '2';
   const record = {
-    artifact_type: 'scanview.lesion-volume-review',
+    artifact_type: 'dicom-guide.lesion-volume-review',
     review_id: `review_${suffix.repeat(8)}-${suffix.repeat(4)}-4${suffix.repeat(3)}-8${suffix.repeat(3)}-${suffix.repeat(12)}`,
     review_status: 'accepted_for_discussion',
     source_snapshot: {
@@ -88,7 +88,7 @@ describe('reviewed manual ROI volume comparison service', () => {
 
   it('refuses oversized expanded preview members before retaining them', () => {
     const archive = zipSync({
-      'review.json': strToU8(JSON.stringify({ artifact_type: 'scanview.lesion-volume-review' })),
+      'review.json': strToU8(JSON.stringify({ artifact_type: 'dicom-guide.lesion-volume-review' })),
       'evidence.zip': strToU8('nested'),
       'review.html': new Uint8Array(2 * 1024 * 1024 + 1),
       'README.txt': strToU8('local'),
@@ -159,7 +159,7 @@ describe('reviewed manual ROI volume comparison service', () => {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="scanview-lesion-volume-comparison-test.zip"',
+        'Content-Disposition': 'attachment; filename="dicom-guide-lesion-volume-comparison-test.zip"',
       },
     }));
     vi.stubGlobal('fetch', fetchMock);
@@ -183,7 +183,7 @@ describe('reviewed manual ROI volume comparison service', () => {
     const followup = readBoundaryReviewArchive(reviewArchive('followup'), 'followup.zip');
     const result = await saveLesionVolumeComparison(baseline, followup, acceptedRequest());
 
-    expect(result.filename).toBe('scanview-lesion-volume-comparison-test.zip');
+    expect(result.filename).toBe('dicom-guide-lesion-volume-comparison-test.zip');
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(LESION_VOLUME_COMPARISON_ENDPOINT);

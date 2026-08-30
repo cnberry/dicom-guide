@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dicom-guide.local/schemas/dicom-guide-navigation-intent-v1.schema.json",
+  "title": "DICOM Guide local viewer navigation intent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "local_only",
+    "sensitive",
+    "pairing_status",
+    "baseline",
+    "fragment"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "local_only": { "const": true },
+    "sensitive": { "const": true },
+    "pairing_status": { "const": "not_assessed" },
+    "baseline": { "$ref": "#/$defs/target" },
+    "followup": { "$ref": "#/$defs/target" },
+    "fragment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 320,
+      "pattern": "^#dicom-guide-v1\\?baseline_series=series_[0-9a-f]{20}&baseline_instance=instance_[0-9a-f]{20}(?:&followup_series=series_[0-9a-f]{20}&followup_instance=instance_[0-9a-f]{20})?$"
+    },
+    "url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 420,
+      "pattern": "^http://(?:127\\.0\\.0\\.1|localhost|\\[::1\\]):[0-9]{1,5}/#dicom-guide-v1\\?baseline_series=series_[0-9a-f]{20}&baseline_instance=instance_[0-9a-f]{20}(?:&followup_series=series_[0-9a-f]{20}&followup_instance=instance_[0-9a-f]{20})?$"
+    }
+  },
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["series_id", "instance_id"],
+      "properties": {
+        "series_id": {
+          "type": "string",
+          "pattern": "^series_[0-9a-f]{20}$"
+        },
+        "instance_id": {
+          "type": "string",
+          "pattern": "^instance_[0-9a-f]{20}$"
+        }
+      }
+    }
+  }
+}

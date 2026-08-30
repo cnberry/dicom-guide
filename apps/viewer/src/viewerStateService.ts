@@ -2,7 +2,7 @@ import type { ViewerTool } from './cornerstone';
 import type { DicomSeries, LinkStrategy } from './dicom';
 
 export const VIEWER_STATE_ENDPOINT = '/v1/viewer-state';
-export const VIEWER_STATE_MEDIA_TYPE = 'application/vnd.scanview.viewer-state+json';
+export const VIEWER_STATE_MEDIA_TYPE = 'application/vnd.dicom-guide.viewer-state+json';
 export const VIEWER_STATE_HEARTBEAT_MS = 10_000;
 
 const publisherPattern = /^publisher_[0-9a-f]{32}$/;
@@ -41,7 +41,7 @@ export type ViewerStatePublication = {
     creator_identity_authenticated: false;
     segment_accuracy_verified: false;
     source_segment_clinical_meaning: 'not_assessed';
-    scanview_interpretation_added: false;
+    dicom_guide_interpretation_added: false;
   } | null;
   measurement_count: number;
   comparison_draft_present: boolean;
@@ -168,7 +168,7 @@ export const buildViewerStatePublication = (
         creator_identity_authenticated: false,
         segment_accuracy_verified: false,
         source_segment_clinical_meaning: 'not_assessed',
-        scanview_interpretation_added: false,
+        dicom_guide_interpretation_added: false,
       };
     }
     const sliceLink = !viewB

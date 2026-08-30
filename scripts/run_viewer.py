@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serve a built ScanView bundle on loopback without any external service."""
+"""Serve a built DICOM Guide bundle on loopback without any external service."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 class LocalOnlyHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
-        print(f"scanview-ui {self.command} {self.path.split('?', 1)[0]}")
+        print(f"dicom-guide-ui {self.command} {self.path.split('?', 1)[0]}")
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -36,7 +36,7 @@ def main() -> None:
     handler = partial(LocalOnlyHandler, directory=dist)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     url = f"http://127.0.0.1:{server.server_port}/"
-    print(f"ScanView local UI: {url}")
+    print(f"DICOM Guide local UI: {url}")
     print("No external API is used. Press Ctrl-C to stop.")
     if not args.no_open:
         webbrowser.open(url)

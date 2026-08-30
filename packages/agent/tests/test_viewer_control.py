@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from scanview_agent.server import create_server
-from scanview_agent.viewer_control import (
+from dicom_guide.server import create_server
+from dicom_guide.viewer_control import (
     MEDIA_TYPE,
     PERMISSIONS,
     PRIVACY,

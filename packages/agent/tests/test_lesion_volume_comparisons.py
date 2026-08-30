@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scanview_agent.lesion_volume_comparisons import (
+from dicom_guide.lesion_volume_comparisons import (
     ATTESTATION,
     lesion_volume_comparison_archive_bytes,
     lesion_volume_comparison_from_transport,
@@ -25,7 +25,7 @@ def _request(
     accepted = decision == "accepted_for_volume_change_discussion"
     return {
         "schema_version": "1.0.0",
-        "artifact_type": "scanview.lesion-volume-comparison-request",
+        "artifact_type": "dicom-guide.lesion-volume-comparison-request",
         "reviewer": {
             "name": "Synthetic Pairing Reviewer",
             "role": "neuro_oncologist",
@@ -170,7 +170,7 @@ def test_builds_and_recursively_validates_qualified_volume_change(tmp_path: Path
         (
             Path(__file__).parents[3]
             / "schemas"
-            / "scanview-lesion-volume-comparison-review-v1.schema.json"
+            / "dicom-guide-lesion-volume-comparison-review-v1.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(schema)

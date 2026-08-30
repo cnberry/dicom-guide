@@ -1373,7 +1373,7 @@ export const RegistrationQaWorkspace = ({
         <p className="qa-review-file-note">
           <strong>Required before a later reviewed launch:</strong> browser downloads are not
           accepted directly because the browser cannot guarantee owner-only file permissions.
-          Run <code>scanview-agent import-registration-review</code> with this live bundle and
+          Run <code>dicom-guide import-registration-review</code> with this live bundle and
           downloaded record; it validates the exact source anchor and creates a non-overwriting
           owner-only copy.
         </p>

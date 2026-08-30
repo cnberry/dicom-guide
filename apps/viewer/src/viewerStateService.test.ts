@@ -168,7 +168,7 @@ describe('privacy-minimized local viewer state', () => {
       creator_identity_authenticated: false,
       segment_accuracy_verified: false,
       source_segment_clinical_meaning: 'not_assessed',
-      scanview_interpretation_added: false,
+      dicom_guide_interpretation_added: false,
     });
     expect(result?.permissions.source_segmentation_mask_read_authorized).toBe(false);
     expect(result?.privacy).toMatchObject({

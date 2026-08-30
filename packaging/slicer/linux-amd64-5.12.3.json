@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "record_type": "scanview_slicer_engine_trust",
+  "record_type": "dicom_guide_slicer_engine_trust",
   "verified_at": "2026-08-28T21:15:00-07:00",
   "release": {
     "application_version": "5.12.3",
@@ -72,8 +72,8 @@
     "qt5dxcb-plugin": "5.7.12-1build3",
     "libxcb-icccm4": "0.4.2-1build1"
   },
-  "scanview_release": {
-    "filename": "scanview-offline-0.1.0.zip",
+  "dicom_guide_release": {
+    "filename": "dicom-guide-offline-0.1.0.zip",
     "bytes": 5340464,
     "sha256": "e6ca632f031268eed9139b2a70899c534f4f8a77cf75f3bf08ead86108c47c81",
     "offline_installation": "passed with PIP_NO_INDEX=1, --no-index, and required hashes",
@@ -83,21 +83,21 @@
   "verification": {
     "download_sha512_matches_official_page": true,
     "archive_structure_preflight": "passed",
-    "scanview_no_data_preflight": "passed",
-    "scanview_real_engine_synthetic_registration": "passed for equal and deliberately partial fixed fields",
-    "scanview_real_engine_v2_sampling_support_mask": "passed; 65536 of 65536 voxels for equal fields and 65536 of 69632 voxels for a deliberately wider fixed field",
-    "scanview_real_engine_equal_field_transform_x_mm": -2.0082900813167757,
-    "scanview_real_engine_partial_field_transform_x_mm": -1.9981585838559544,
+    "dicom_guide_no_data_preflight": "passed",
+    "dicom_guide_real_engine_synthetic_registration": "passed for equal and deliberately partial fixed fields",
+    "dicom_guide_real_engine_v2_sampling_support_mask": "passed; 65536 of 65536 voxels for equal fields and 65536 of 69632 voxels for a deliberately wider fixed field",
+    "dicom_guide_real_engine_equal_field_transform_x_mm": -2.0082900813167757,
+    "dicom_guide_real_engine_partial_field_transform_x_mm": -1.9981585838559544,
     "source_sha256_manifests_unchanged": true,
     "outputs_owner_only": true,
     "outputs_validated": true,
     "computed_results_empty": true,
     "candidate_interpretations_empty": true,
     "display_unlocks_false": true,
-    "scanview_network_isolation": "linux_bwrap_network_namespace_seccomp_no_network_sockets",
+    "dicom_guide_network_isolation": "linux_bwrap_network_namespace_seccomp_no_network_sockets",
     "seccomp_af_unix_socketpair": "allowed for private local display IPC",
     "seccomp_af_inet_socket": "denied with EPERM",
-    "scanview_display_runtime": "linux_private_xvfb_no_tcp",
+    "dicom_guide_display_runtime": "linux_private_xvfb_no_tcp",
     "xvfb_inside_bubblewrap_and_seccomp": true,
     "host_tmp_and_run_hidden_from_engine": true,
     "runner_hash_checked_before_and_after_private_staging": true,
@@ -107,9 +107,9 @@
   },
   "limitations": [
     "The Linux package has no independent publisher signature in Slicer's documented release process; official HTTPS plus the published SHA-512 establish the recorded provenance and integrity basis.",
-    "This record documents one official Linux package and one Strawberry installation; ScanView still requires the caller-supplied launcher SHA-256 at execution time.",
+    "This record documents one official Linux package and one Strawberry installation; DICOM Guide still requires the caller-supplied launcher SHA-256 at execution time.",
     "The private Xvfb connection requires local AF_UNIX IPC. Seccomp rejects network socket domains, bubblewrap supplies a separate network namespace, Xvfb disables TCP listening, and no unsandboxed fallback exists.",
-    "The retained ScanView offline bundle is unsigned and depends on the host Python interpreter and recorded local OS packages.",
+    "The retained DICOM Guide offline bundle is unsigned and depends on the host Python interpreter and recorded local OS packages.",
     "A successful synthetic registration does not validate a patient-specific registration or authorize medical interpretation."
   ]
 }

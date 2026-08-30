@@ -11,12 +11,12 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-import scanview_agent.server as server_module
-from scanview_agent.catalog import build_catalog
-from scanview_agent.lesion_volume_comparisons import lesion_volume_comparison_summary
-from scanview_agent.lesion_volume_comparisons import lesion_volume_comparison_archive_bytes
-from scanview_agent.registration_reviews import write_registration_review
-from scanview_agent.server import create_server
+import dicom_guide.server as server_module
+from dicom_guide.catalog import build_catalog
+from dicom_guide.lesion_volume_comparisons import lesion_volume_comparison_summary
+from dicom_guide.lesion_volume_comparisons import lesion_volume_comparison_archive_bytes
+from dicom_guide.registration_reviews import write_registration_review
+from dicom_guide.server import create_server
 from test_registration_reviews import registration_bundle, review_request
 from test_lesion_volume_comparisons import _pair
 
@@ -53,7 +53,7 @@ def test_unified_server_serves_clean_loopback_workspace_and_dicom(
     ui_dist = tmp_path / "ui"
     assets = ui_dist / "assets"
     assets.mkdir(parents=True)
-    (ui_dist / "index.html").write_text("<!doctype html><title>ScanView test</title>")
+    (ui_dist / "index.html").write_text("<!doctype html><title>DICOM Guide test</title>")
     (assets / "app.js").write_text("export {}")
     dicom = tmp_path / "source-image"
     dicom.write_bytes(b"DICM-local-test")
@@ -130,7 +130,7 @@ def test_local_server_assembles_source_recursive_lesion_volume_comparison(
         "Authorization": "Bearer volume-comparison-token",
         "Origin": f"http://127.0.0.1:{port}",
         "Host": f"127.0.0.1:{port}",
-        "Content-Type": "application/vnd.scanview.lesion-volume-comparison-input+zip",
+        "Content-Type": "application/vnd.dicom-guide.lesion-volume-comparison-input+zip",
     }
     try:
         status, response_headers, body = post(
@@ -160,7 +160,7 @@ def test_local_server_assembles_source_recursive_lesion_volume_comparison(
         assert status == HTTPStatus.OK
         assert response_headers["Content-Type"] == "application/zip"
         assert response_headers["Cache-Control"] == "no-store"
-        assert "scanview-lesion-volume-comparison" in response_headers["Content-Disposition"]
+        assert "dicom-guide-lesion-volume-comparison" in response_headers["Content-Disposition"]
         summary = lesion_volume_comparison_summary(
             io.BytesIO(body), source_root, catalog=catalog
         )
@@ -237,7 +237,7 @@ def test_reviewed_native_boundary_display_is_cached_guarded_and_loopback_availab
             (
                 Path(__file__).parents[3]
                 / "schemas"
-                / "scanview-native-boundary-display-v1.schema.json"
+                / "dicom-guide-native-boundary-display-v1.schema.json"
             ).read_text()
         )
         Draft202012Validator.check_schema(schema)
@@ -258,7 +258,7 @@ def test_reviewed_native_boundary_display_is_cached_guarded_and_loopback_availab
             descriptor = context["timepoints"][role]["mask"]
             assert status == HTTPStatus.OK
             assert mask_headers["Content-Type"] == (
-                "application/vnd.scanview.native-binary-mask"
+                "application/vnd.dicom-guide.native-binary-mask"
             )
             assert mask_headers["Cache-Control"] == "no-store"
             assert mask_headers["X-Content-SHA256"] == descriptor["sha256"]
@@ -339,7 +339,7 @@ def test_native_dicom_stream_refuses_sources_changed_after_startup(
 def test_static_server_refuses_asset_path_traversal(tmp_path: Path) -> None:
     ui_dist = tmp_path / "ui"
     (ui_dist / "assets").mkdir(parents=True)
-    (ui_dist / "index.html").write_text("ScanView")
+    (ui_dist / "index.html").write_text("DICOM Guide")
     secret = tmp_path / "secret.txt"
     secret.write_text("must not be served")
     server = create_server(
@@ -372,7 +372,7 @@ def test_registration_qa_preview_is_loopback_available_and_review_is_idempotent(
     bundle = registration_bundle(tmp_path)
     ui_dist = tmp_path / "ui"
     ui_dist.mkdir()
-    (ui_dist / "index.html").write_text("ScanView QA")
+    (ui_dist / "index.html").write_text("DICOM Guide QA")
     original_context = server_module.registration_qa_context
     original_review_builder = server_module.registration_review_bytes
     context_calls = 0
@@ -466,7 +466,7 @@ def test_registration_qa_preview_is_loopback_available_and_review_is_idempotent(
             headers={
                 "Origin": "http://example.invalid",
                 "Host": f"127.0.0.1:{port}",
-                "Content-Type": "application/vnd.scanview.registration-review-input+json",
+                "Content-Type": "application/vnd.dicom-guide.registration-review-input+json",
             },
         )
         assert status == HTTPStatus.FORBIDDEN
@@ -474,7 +474,7 @@ def test_registration_qa_preview_is_loopback_available_and_review_is_idempotent(
         review_headers = {
             "Origin": f"http://127.0.0.1:{port}",
             "Host": f"127.0.0.1:{port}",
-            "Content-Type": "application/vnd.scanview.registration-review-input+json",
+            "Content-Type": "application/vnd.dicom-guide.registration-review-input+json",
         }
         status, response_headers, body = post(
             port,
@@ -485,7 +485,7 @@ def test_registration_qa_preview_is_loopback_available_and_review_is_idempotent(
         assert status == HTTPStatus.OK
         assert response_headers["Cache-Control"] == "no-store"
         assert response_headers["Content-Type"] == (
-            "application/vnd.scanview.registration-review+json"
+            "application/vnd.dicom-guide.registration-review+json"
         )
         record = json.loads(body)
         assert record["review_status"] == "rejected"
@@ -559,7 +559,7 @@ def test_accepted_reviewed_registration_is_cached_and_loopback_available(
     write_registration_review(bundle, review_input, review)
     ui_dist = tmp_path / "ui"
     ui_dist.mkdir()
-    (ui_dist / "index.html").write_text("ScanView reviewed registration")
+    (ui_dist / "index.html").write_text("DICOM Guide reviewed registration")
 
     original_summary = server_module.reviewed_registration_display_summary
     original_context = server_module.reviewed_registration_display_context
@@ -737,7 +737,7 @@ def test_rejected_or_tampered_review_keeps_dicom_but_all_registration_pixels_loc
     }
     ui_dist = tmp_path / "ui"
     ui_dist.mkdir()
-    (ui_dist / "index.html").write_text("ScanView ordinary DICOM")
+    (ui_dist / "index.html").write_text("DICOM Guide ordinary DICOM")
 
     for review, expected_status, expected_available in (
         (rejected_review, "locked", True),

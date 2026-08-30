@@ -4,7 +4,7 @@ export const PRESENTATION_STATE_ENDPOINT = '/v1/presentation-states';
 export const PRESENTATION_STATE_MAX_BYTES = 32 * 1024 * 1024;
 export const PRESENTATION_STATE_LIMITATIONS = [
   'These are read-only display instructions extracted from source-carried DICOM Grayscale Softcopy Presentation State objects.',
-  'ScanView preserves supported source text and geometry but does not authenticate the creator or assess text for identifiers or clinical meaning.',
+  'DICOM Guide preserves supported source text and geometry but does not authenticate the creator or assess text for identifiers or clinical meaning.',
   'Only a conservative subset is displayed: hashed single-frame monochrome sources whose linear modality transform matches the GSPS, LINEAR VOI, identity presentation LUT, matching source/display aspect, unrotated and unflipped full-image SCALE TO FIT, and PIXEL POLYLINE/anchor-text annotations.',
   'Unsupported presentation-state features fail closed and native DICOM images remain authoritative.',
 ] as const;
@@ -75,20 +75,20 @@ export type SourcePresentationState = {
       bottom_right: PresentationStatePoint;
       presentation_size_mode: 'SCALE TO FIT';
     };
-    annotation_style: 'scanview_high_contrast_source_geometry';
+    annotation_style: 'dicom_guide_high_contrast_source_geometry';
   };
   annotations: PresentationStateAnnotation[];
   annotation_count: number;
   graphic_count: number;
   text_count: number;
   author_identity_authenticated: false;
-  scanview_interpretation_added: false;
+  dicom_guide_interpretation_added: false;
   source_text_clinical_meaning: 'not_assessed';
 };
 
 export type PresentationStateCatalog = {
   schema_version: '1.0.0';
-  artifact_type: 'scanview.presentation-state-catalog';
+  artifact_type: 'dicom-guide.presentation-state-catalog';
   generated_at: string;
   catalog_content_sha256: string;
   local_only: true;
@@ -325,7 +325,7 @@ const readState = (
     'graphic_count',
     'text_count',
     'author_identity_authenticated',
-    'scanview_interpretation_added',
+    'dicom_guide_interpretation_added',
     'source_text_clinical_meaning',
   ];
   if (
@@ -344,7 +344,7 @@ const readState = (
     !safeInteger(value.graphic_count, 0) ||
     !safeInteger(value.text_count, 0) ||
     value.author_identity_authenticated !== false ||
-    value.scanview_interpretation_added !== false ||
+    value.dicom_guide_interpretation_added !== false ||
     value.source_text_clinical_meaning !== 'not_assessed'
   ) {
     return false;
@@ -432,7 +432,7 @@ const readState = (
     !finite(presentation.window_center) ||
     !finite(presentation.window_width) ||
     presentation.window_width < 1 ||
-    presentation.annotation_style !== 'scanview_high_contrast_source_geometry' ||
+    presentation.annotation_style !== 'dicom_guide_high_contrast_source_geometry' ||
     !isRecord(presentation.voi_range) ||
     !exactKeys(presentation.voi_range, ['lower', 'upper']) ||
     !finite(presentation.voi_range.lower) ||
@@ -521,7 +521,7 @@ export const parsePresentationStateCatalog = (
     !isRecord(value) ||
     !exactKeys(value, topKeys) ||
     value.schema_version !== '1.0.0' ||
-    value.artifact_type !== 'scanview.presentation-state-catalog' ||
+    value.artifact_type !== 'dicom-guide.presentation-state-catalog' ||
     typeof value.generated_at !== 'string' ||
     !value.generated_at.endsWith('Z') ||
     Number.isNaN(Date.parse(value.generated_at)) ||

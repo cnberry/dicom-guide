@@ -60,7 +60,7 @@ const artifact = async (): Promise<SourceSegmentationCatalog> => {
   const mask = new Uint8Array([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
   return {
     schema_version: '2.0.0',
-    artifact_type: 'scanview.source-segmentation-catalog',
+    artifact_type: 'dicom-guide.source-segmentation-catalog',
     generated_at: '2026-08-29T12:00:00Z',
     catalog_content_sha256: 'a'.repeat(64),
     local_only: true,
@@ -104,7 +104,7 @@ const artifact = async (): Promise<SourceSegmentationCatalog> => {
         pixel_spacing_mm: [1, 1],
         projected_slice_spacing_mm: 2,
         voxel_volume_mm3: 2,
-        resampled_by_scanview: false,
+        resampled_by_dicom_guide: false,
       },
       frame_count: 2,
       segment_count: 1,
@@ -132,7 +132,7 @@ const artifact = async (): Promise<SourceSegmentationCatalog> => {
       }],
       creator_identity_authenticated: false,
       source_segment_clinical_meaning: 'not_assessed',
-      scanview_interpretation_added: false,
+      dicom_guide_interpretation_added: false,
     }],
     unsupported_segmentations: [],
     permissions: {
@@ -144,7 +144,7 @@ const artifact = async (): Promise<SourceSegmentationCatalog> => {
       browser_session_read_only_mask_display_authorized: true,
       browser_session_technical_volume_display_authorized: true,
       edit_source_segmentation_authorized: false,
-      convert_to_scanview_measurement_authorized: false,
+      convert_to_dicom_guide_measurement_authorized: false,
       creator_identity_authenticated: false,
       segment_accuracy_verified: false,
       diagnosis_authorized: false,
@@ -239,7 +239,7 @@ describe('strict source-carried DICOM SEG catalog', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(bytes, {
       status: 200,
       headers: {
-        'Content-Type': 'application/vnd.scanview.source-binary-mask',
+        'Content-Type': 'application/vnd.dicom-guide.source-binary-mask',
         'Content-Length': String(bytes.byteLength),
         'X-Content-SHA256': input.segmentations[0].segments[0].mask_sha256,
       },
@@ -261,7 +261,7 @@ describe('strict source-carried DICOM SEG catalog', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(changed, {
       status: 200,
       headers: {
-        'Content-Type': 'application/vnd.scanview.source-binary-mask',
+        'Content-Type': 'application/vnd.dicom-guide.source-binary-mask',
         'Content-Length': String(changed.byteLength),
         'X-Content-SHA256': input.segmentations[0].segments[0].mask_sha256,
       },

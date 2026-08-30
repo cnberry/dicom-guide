@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scanview_agent.server import create_server
-from scanview_agent.viewer_state import (
+from dicom_guide.server import create_server
+from dicom_guide.viewer_state import (
     MAX_VIEWER_STATE_BYTES,
     VIEWER_STATE_MEDIA_TYPE,
     VIEWER_STATE_TTL_SECONDS,
@@ -142,7 +142,7 @@ def source_segmentation_state() -> dict:
                 "creator_identity_authenticated": False,
                 "segment_accuracy_verified": False,
                 "source_segment_clinical_meaning": "not_assessed",
-                "scanview_interpretation_added": False,
+                "dicom_guide_interpretation_added": False,
             },
             "measurement_count": 0,
             "comparison_draft_present": False,
@@ -295,7 +295,7 @@ def test_opt_in_viewer_state_http_lifecycle_is_local_same_origin_and_atomic() ->
         assert "patient_name" not in body.decode()
         repository_root = Path(__file__).parents[3]
         schema = json.loads(
-            (repository_root / "schemas" / "scanview-viewer-state-v2.schema.json").read_text()
+            (repository_root / "schemas" / "dicom-guide-viewer-state-v2.schema.json").read_text()
         )
         Draft202012Validator.check_schema(schema)
         Draft202012Validator(schema, format_checker=FormatChecker()).validate(response)

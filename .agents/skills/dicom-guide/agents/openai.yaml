@@ -1,0 +1,4 @@
+interface:
+  display_name: "DICOM Guide"
+  short_description: "Understand local MRI and CT scans with a guide"
+  default_prompt: "Use $dicom-guide to orient me to this study, explain the current view, and guide me one useful step at a time."

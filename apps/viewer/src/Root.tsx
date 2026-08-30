@@ -93,7 +93,7 @@ export default function Root() {
   if (state.status === 'probing') {
     return (
       <main className="qa-probe">
-        <p className="eyebrow">ScanView local workspace</p>
+        <p className="eyebrow">DICOM Guide local workspace</p>
         <h1>Checking local display authorization…</h1>
       </main>
     );

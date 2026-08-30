@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
-from scanview_agent.registration import run_rigid_registration
-from scanview_agent.registration_reviews import (
+from dicom_guide.registration import run_rigid_registration
+from dicom_guide.registration_reviews import (
     ACCEPTED_DECISION,
     INSPECTION_MODES,
     QUALITATIVE_CHECKS,
@@ -149,7 +149,7 @@ def _schema() -> dict:
         (
             repository_root
             / "schemas"
-            / "scanview-registration-qa-review-v2.schema.json"
+            / "dicom-guide-registration-qa-review-v2.schema.json"
         ).read_text()
     )
 

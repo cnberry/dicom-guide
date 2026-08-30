@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scanview_agent import registration_display as registration_display_module
-from scanview_agent.registration_display import (
+from dicom_guide import registration_display as registration_display_module
+from dicom_guide.registration_display import (
     ALWAYS_LOCKED,
     MASK_FAILURE_BEHAVIOR,
     MASK_SAMPLING,
@@ -20,7 +20,7 @@ from scanview_agent.registration_display import (
     reviewed_registration_display_errors,
     reviewed_registration_display_summary,
 )
-from scanview_agent.registration_reviews import (
+from dicom_guide.registration_reviews import (
     ACCEPTED_DECISION,
     build_registration_review,
     write_registration_review,
@@ -34,7 +34,7 @@ def _schema() -> dict:
         (
             repository_root
             / "schemas"
-            / "scanview-reviewed-registration-display-v2.schema.json"
+            / "dicom-guide-reviewed-registration-display-v2.schema.json"
         ).read_text()
     )
 

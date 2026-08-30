@@ -46,7 +46,7 @@ describe('source DICOM SEG review transport', () => {
     const request = buildSourceSegmentationReviewRequest(acceptedInput());
     expect(request).toMatchObject({
       schema_version: '1.0.0',
-      artifact_type: 'scanview.source-segmentation-review-request',
+      artifact_type: 'dicom-guide.source-segmentation-review-request',
       source: {
         catalog_content_sha256: 'a'.repeat(64),
         segmentation_id: 'instance_0123456789abcdefabcd',
@@ -103,13 +103,13 @@ describe('source DICOM SEG review transport', () => {
         status: 200,
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Disposition': 'attachment; filename="scanview-source-segmentation-review-test.zip"',
+          'Content-Disposition': 'attachment; filename="dicom-guide-source-segmentation-review-test.zip"',
           'Content-Length': '4',
         },
       },
     ));
     const result = await requestSourceSegmentationReview(acceptedInput());
-    expect(result.filename).toBe('scanview-source-segmentation-review-test.zip');
+    expect(result.filename).toBe('dicom-guide-source-segmentation-review-test.zip');
     expect(result.bytes).toEqual(new Uint8Array([80, 75, 3, 4]));
     expect(fetchMock).toHaveBeenCalledWith(SOURCE_SEGMENTATION_REVIEW_ENDPOINT, expect.objectContaining({
       method: 'POST',

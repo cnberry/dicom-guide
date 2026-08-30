@@ -9,9 +9,9 @@ export const SOURCE_SEGMENTATION_MAX_CATALOG_BYTES = 32 * 1024 * 1024;
 export const SOURCE_SEGMENTATION_MAX_MASK_BYTES = 64 * 1024 * 1024;
 export const SOURCE_SEGMENTATION_LIMITATIONS = [
   'These are read-only masks extracted from source-carried DICOM Segmentation objects and rejoined to exact local MR/CT source instances.',
-  'ScanView does not authenticate the segmentation creator, verify the algorithm, or assess segment labels and coded properties for identifiers, accuracy, or clinical meaning.',
+  'DICOM Guide does not authenticate the segmentation creator, verify the algorithm, or assess segment labels and coded properties for identifiers, accuracy, or clinical meaning.',
   'Only a conservative native-grid subset is displayed: uncompressed binary SEG, one referenced MR/CT series, single-frame sources, exact matrix/orientation/position/spacing, and one exact source-image reference per frame. Spatial Locations Preserved may be YES or absent because DICOM defines it as optional; explicit NO, REORIENTED_ONLY, or any other value is refused.',
-  'Passing this narrow ScanView import profile is not full DICOM conformance certification; technical marked-voxel counts and native-grid volumes remain unreviewed, unsupported objects fail closed, and original DICOM objects remain authoritative.',
+  'Passing this narrow DICOM Guide import profile is not full DICOM conformance certification; technical marked-voxel counts and native-grid volumes remain unreviewed, unsupported objects fail closed, and original DICOM objects remain authoritative.',
 ] as const;
 
 const studyIdPattern = /^study_[0-9a-f]{20}$/;
@@ -70,19 +70,19 @@ export type SourceSegmentation = {
     pixel_spacing_mm: [number, number];
     projected_slice_spacing_mm: number;
     voxel_volume_mm3: number;
-    resampled_by_scanview: false;
+    resampled_by_dicom_guide: false;
   };
   frame_count: number;
   segment_count: number;
   segments: SourceSegment[];
   creator_identity_authenticated: false;
   source_segment_clinical_meaning: 'not_assessed';
-  scanview_interpretation_added: false;
+  dicom_guide_interpretation_added: false;
 };
 
 export type SourceSegmentationCatalog = {
   schema_version: '2.0.0';
-  artifact_type: 'scanview.source-segmentation-catalog';
+  artifact_type: 'dicom-guide.source-segmentation-catalog';
   generated_at: string;
   catalog_content_sha256: string;
   local_only: true;
@@ -114,7 +114,7 @@ export type SourceSegmentationCatalog = {
     browser_session_read_only_mask_display_authorized: true;
     browser_session_technical_volume_display_authorized: true;
     edit_source_segmentation_authorized: false;
-    convert_to_scanview_measurement_authorized: false;
+    convert_to_dicom_guide_measurement_authorized: false;
     creator_identity_authenticated: false;
     segment_accuracy_verified: false;
     diagnosis_authorized: false;
@@ -295,7 +295,7 @@ const readState = (
       'segments',
       'creator_identity_authenticated',
       'source_segment_clinical_meaning',
-      'scanview_interpretation_added',
+      'dicom_guide_interpretation_added',
     ]) ||
     typeof value.segmentation_id !== 'string' ||
     !instanceIdPattern.test(value.segmentation_id) ||
@@ -332,7 +332,7 @@ const readState = (
       'pixel_spacing_mm',
       'projected_slice_spacing_mm',
       'voxel_volume_mm3',
-      'resampled_by_scanview',
+      'resampled_by_dicom_guide',
     ]) ||
     value.grid.relationship !== 'exact_native_source_grid' ||
     !finiteTuple(value.grid.dimensions, 3) ||
@@ -344,14 +344,14 @@ const readState = (
     value.grid.projected_slice_spacing_mm <= 0 ||
     !finite(value.grid.voxel_volume_mm3) ||
     value.grid.voxel_volume_mm3 <= 0 ||
-    value.grid.resampled_by_scanview !== false ||
+    value.grid.resampled_by_dicom_guide !== false ||
     !safeInteger(value.frame_count, 1, 131072) ||
     !safeInteger(value.segment_count, 1, 32) ||
     !Array.isArray(value.segments) ||
     value.segments.length !== value.segment_count ||
     value.creator_identity_authenticated !== false ||
     value.source_segment_clinical_meaning !== 'not_assessed' ||
-    value.scanview_interpretation_added !== false
+    value.dicom_guide_interpretation_added !== false
   ) {
     return false;
   }
@@ -464,7 +464,7 @@ const fixedPermissions = (value: unknown): boolean => {
     'browser_session_read_only_mask_display_authorized',
     'browser_session_technical_volume_display_authorized',
     'edit_source_segmentation_authorized',
-    'convert_to_scanview_measurement_authorized',
+    'convert_to_dicom_guide_measurement_authorized',
     'creator_identity_authenticated',
     'segment_accuracy_verified',
     'diagnosis_authorized',
@@ -506,7 +506,7 @@ export const readSourceSegmentationCatalog = (
     !isRecord(value) ||
     !exactKeys(value, keys) ||
     value.schema_version !== '2.0.0' ||
-    value.artifact_type !== 'scanview.source-segmentation-catalog' ||
+    value.artifact_type !== 'dicom-guide.source-segmentation-catalog' ||
     typeof value.generated_at !== 'string' ||
     !value.generated_at.endsWith('Z') ||
     !Number.isFinite(Date.parse(value.generated_at)) ||
@@ -642,7 +642,7 @@ export const loadSourceSegmentationMask = async (
     {
       cache: 'no-store',
       credentials: 'same-origin',
-      headers: { Accept: 'application/vnd.scanview.source-binary-mask' },
+      headers: { Accept: 'application/vnd.dicom-guide.source-binary-mask' },
       signal,
     },
   );
@@ -655,7 +655,7 @@ export const loadSourceSegmentationMask = async (
   }
   if (
     response.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !==
-      'application/vnd.scanview.source-binary-mask' ||
+      'application/vnd.dicom-guide.source-binary-mask' ||
     Number(response.headers.get('Content-Length')) !== expectedBytes ||
     response.headers.get('X-Content-SHA256') !== catalogSegment.mask_sha256
   ) {

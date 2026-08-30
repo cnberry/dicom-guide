@@ -50,7 +50,7 @@ export type KeyImageEvidencePacket = {
     sha256: string;
   };
   implementation: {
-    name: 'ScanView key-image exporter';
+    name: 'DICOM Guide key-image exporter';
     version: '0.2.0';
     renderer: 'Cornerstone3D 5.8.2';
   };
@@ -60,7 +60,7 @@ export type KeyImageEvidencePacket = {
 export type ConsultationSelectionSlot = 'view_a' | 'view_b';
 
 export const CONSULTATION_KEY_IMAGE_IMPLEMENTATION = {
-  name: 'ScanView consultation key-image normalizer',
+  name: 'DICOM Guide consultation key-image normalizer',
   version: '0.1.0',
   renderer: 'Cornerstone3D 5.8.2',
   source_key_image_schema: '2.0.0',
@@ -327,7 +327,7 @@ export const buildKeyImageEvidencePacket = async ({
     sha256: await sha256Hex(measurementBytes),
   },
   implementation: {
-    name: 'ScanView key-image exporter',
+    name: 'DICOM Guide key-image exporter',
     version: '0.2.0',
     renderer: 'Cornerstone3D 5.8.2',
   },
@@ -425,7 +425,7 @@ export const createKeyImageArchive = async ({
     { level: 6 },
   );
   const timestamp = createdAt.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  const filename = `scanview-key-image-${timestamp}-${viewportRole}.zip`;
+  const filename = `dicom-guide-key-image-${timestamp}-${viewportRole}.zip`;
   return { filename, packet, bytes: archive };
 };
 
@@ -483,7 +483,7 @@ export const createConsultationKeyImageArchive = async ({
   const timestamp = createdAt.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const slot = selectionSlot.replace('_', '-');
   return {
-    filename: `scanview-consultation-key-image-${timestamp}-${slot}.zip`,
+    filename: `dicom-guide-consultation-key-image-${timestamp}-${slot}.zip`,
     packet,
     bytes: archive,
   };

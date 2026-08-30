@@ -37,22 +37,22 @@ describe('one-use local viewer navigation', () => {
     const fragment = buildNavigationFragment(intent);
 
     expect(fragment).toBe(
-      `#scanview-v1?baseline_series=${SERIES_A}&baseline_instance=${INSTANCE_A}` +
+      `#dicom-guide-v1?baseline_series=${SERIES_A}&baseline_instance=${INSTANCE_A}` +
         `&followup_series=${SERIES_B}&followup_instance=${INSTANCE_B}`,
     );
     expect(parseNavigationFragment(fragment)).toEqual({ present: true, intent });
   });
 
-  it('ignores unrelated fragments but consumes and rejects malformed ScanView intents', () => {
+  it('ignores unrelated fragments but consumes and rejects malformed DICOM Guide intents', () => {
     expect(parseNavigationFragment('#other')).toEqual({ present: false });
     for (const fragment of [
-      `#scanview-v1?baseline_series=${SERIES_A}&baseline_instance=not-an-instance`,
-      `#scanview-v1?baseline_series=${SERIES_A}&baseline_instance=${INSTANCE_A}&extra=value`,
-      `#scanview-v1?baseline_series=${SERIES_A}&baseline_series=${SERIES_B}&baseline_instance=${INSTANCE_A}`,
-      `#scanview-v1?baseline_series=${SERIES_A}&baseline_instance=${INSTANCE_A}&followup_series=${SERIES_B}`,
-      `#scanview-v1?baseline_series=${SERIES_A}&baseline_instance=${INSTANCE_A}&followup_series=${SERIES_A}&followup_instance=${INSTANCE_A}`,
-      `#scanview-v1?baseline_series=0123456789abcdef&baseline_instance=0123456789abcdef`,
-      `#scanview-v1?${'x'.repeat(MAX_NAVIGATION_FRAGMENT_LENGTH)}`,
+      `#dicom-guide-v1?baseline_series=${SERIES_A}&baseline_instance=not-an-instance`,
+      `#dicom-guide-v1?baseline_series=${SERIES_A}&baseline_instance=${INSTANCE_A}&extra=value`,
+      `#dicom-guide-v1?baseline_series=${SERIES_A}&baseline_series=${SERIES_B}&baseline_instance=${INSTANCE_A}`,
+      `#dicom-guide-v1?baseline_series=${SERIES_A}&baseline_instance=${INSTANCE_A}&followup_series=${SERIES_B}`,
+      `#dicom-guide-v1?baseline_series=${SERIES_A}&baseline_instance=${INSTANCE_A}&followup_series=${SERIES_A}&followup_instance=${INSTANCE_A}`,
+      `#dicom-guide-v1?baseline_series=0123456789abcdef&baseline_instance=0123456789abcdef`,
+      `#dicom-guide-v1?${'x'.repeat(MAX_NAVIGATION_FRAGMENT_LENGTH)}`,
     ]) {
       const parsed = parseNavigationFragment(fragment);
       expect(parsed.present).toBe(true);

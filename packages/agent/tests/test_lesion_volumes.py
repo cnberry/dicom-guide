@@ -19,9 +19,9 @@ from pydicom.uid import (
     generate_uid,
 )
 
-from scanview_agent.catalog import opaque_id
-from scanview_agent.lesion_volumes import lesion_volume_archive_summary
-from scanview_agent.lesion_volume_reviews import (
+from dicom_guide.catalog import opaque_id
+from dicom_guide.lesion_volumes import lesion_volume_archive_summary
+from dicom_guide.lesion_volume_reviews import (
     ATTESTATION as REVIEW_ATTESTATION,
     LIMITATIONS as REVIEW_LIMITATIONS,
     lesion_volume_review_summary,
@@ -302,7 +302,7 @@ def _build_bundle(
     voxel_volume = 0.5 * 0.75 * slice_spacing
     evidence = {
         "schema_version": "1.0.0",
-        "artifact_type": "scanview.lesion-volume-evidence",
+        "artifact_type": "dicom-guide.lesion-volume-evidence",
         "artifact_id": artifact_id,
         "created_at": "2026-08-28T12:00:00.000Z",
         "state": "draft_unreviewed",
@@ -404,7 +404,7 @@ def test_validates_source_bound_sparse_binary_seg_and_recomputes_volume(tmp_path
         (
             Path(__file__).parents[3]
             / "schemas"
-            / "scanview-lesion-volume-evidence-v1.schema.json"
+            / "dicom-guide-lesion-volume-evidence-v1.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(schema)
@@ -415,7 +415,7 @@ def test_validates_source_bound_sparse_binary_seg_and_recomputes_volume(tmp_path
         "valid": True,
         "errors": [],
         "schema_version": "1.0.0",
-        "artifact_type": "scanview.lesion-volume-evidence",
+        "artifact_type": "dicom-guide.lesion-volume-evidence",
         "artifact_id": evidence["artifact_id"],
         "artifact_state": "draft_unreviewed",
         "validation_state": "source_validated_pending_review",
@@ -655,7 +655,7 @@ def _build_review_bundle(
     }
     record = {
         "schema_version": "1.0.0",
-        "artifact_type": "scanview.lesion-volume-review",
+        "artifact_type": "dicom-guide.lesion-volume-review",
         "review_id": review_id,
         "created_at": "2026-08-28T13:00:00.000Z",
         "review_status": decision,
@@ -758,7 +758,7 @@ def test_validates_self_attested_boundary_review_and_exact_nested_source(
         (
             Path(__file__).parents[3]
             / "schemas"
-            / "scanview-lesion-volume-review-v1.schema.json"
+            / "dicom-guide-lesion-volume-review-v1.schema.json"
         ).read_text()
     )
     Draft202012Validator.check_schema(schema)
@@ -769,7 +769,7 @@ def test_validates_self_attested_boundary_review_and_exact_nested_source(
         "valid": True,
         "errors": [],
         "schema_version": "1.0.0",
-        "artifact_type": "scanview.lesion-volume-review",
+        "artifact_type": "dicom-guide.lesion-volume-review",
         "review_status": "accepted_for_discussion",
         "identity_verification": "self_asserted_unverified",
         "source_validated": True,
