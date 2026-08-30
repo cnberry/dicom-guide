@@ -3,6 +3,7 @@ import {
   assessCompatibility,
   assessLesionVolumeEligibility,
   assessMprEligibility,
+  imagePlaneMetadataForInstance,
   formatDicomDate,
   getPatientOrientationLabels,
   getLinkStrategy,
@@ -225,6 +226,20 @@ describe('MPR geometry gate', () => {
       eligible: true,
       reason: 'Geometry supports local orthographic reslicing.',
       sliceSpacingMm: 1,
+    });
+  });
+
+  it('provides volume metadata before Cornerstone loads source pixels', () => {
+    const source = volumetricSeries();
+    expect(imagePlaneMetadataForInstance(source, source.instances[1])).toMatchObject({
+      frameOfReferenceUID: source.frameOfReferenceId,
+      imagePositionPatient: [0, 0, 1],
+      rowCosines: [1, 0, 0],
+      columnCosines: [0, 1, 0],
+      rowPixelSpacing: 0.8,
+      columnPixelSpacing: 0.8,
+      rows: 128,
+      columns: 128,
     });
   });
 

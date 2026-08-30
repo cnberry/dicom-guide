@@ -62,15 +62,14 @@ path is missing, ask only for the top-level folder copied from the disc or downl
    GitHub or any other service.
 4. Install for the current platform.
 
-macOS and Linux packages contain `install.sh` and install to
-`/usr/local/lib/dicom-guide/<version>` with `/usr/local/bin/dicom-guide`. Run the
-installer normally first. If it explicitly reports that `/usr/local` is not writable,
-rerun that exact installer with `sudo`; do not silently choose a hidden home folder.
-On macOS, an elevated process may be denied access to an extracted bundle under
-`Desktop`, `Documents`, or another privacy-protected folder. If that happens, verify
-the archive again, extract it to a fresh owner-only directory under `/private/tmp`,
-and rerun the same installer there. Never ask the person to paste an administrator
-password into chat.
+macOS and Linux packages contain `install.sh`. Run it normally: it uses `/usr/local`
+when writable and otherwise selects the current user's `~/.local` prefix without an
+administrator prompt. Capture the printed `Command:` path and use that exact absolute
+command for validation and launch; do not assume the per-user bin directory is already
+on `PATH`. Only use `DICOM_GUIDE_PREFIX` when the person explicitly requests another
+managed prefix. The package also includes `uninstall.sh`; run it from the extracted
+bundle, with the same explicit prefix if one was used, during a requested clean-room
+reset. Never ask the person to paste an administrator password into chat.
 
 Windows packages contain `install.ps1` and install per-user to
 `%LOCALAPPDATA%\Programs\DICOM Guide`, with a command shim in its `bin` directory.

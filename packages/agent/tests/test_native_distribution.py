@@ -69,3 +69,13 @@ def test_unix_archive_keeps_one_top_level_directory(tmp_path) -> None:
 
     with tarfile.open(archive) as bundle:
         assert f"{root.name}/install.sh" in bundle.getnames()
+
+
+def test_unix_templates_include_reversible_user_install() -> None:
+    root = Path(__file__).parents[3]
+    install = (root / "packaging/native/install.sh").read_text()
+    uninstall = (root / "packaging/native/uninstall.sh").read_text()
+
+    assert 'prefix="$HOME/.local"' in install
+    assert "Administrator access is unavailable; installing for this user instead." in install
+    assert 'rm -r "$install_dir"' in uninstall

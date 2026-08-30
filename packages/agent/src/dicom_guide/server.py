@@ -543,6 +543,8 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         # Never log filesystem paths, DICOM headers, query strings, or response bodies.
         path = urlparse(self.path).path
+        if path in {"/v1/viewer-control", "/v1/viewer-control/observation"}:
+            return
         if path.startswith("/v1/instances/"):
             path = "/v1/instances/{opaque_id}"
         elif path.startswith("/v1/source-segmentations/"):
