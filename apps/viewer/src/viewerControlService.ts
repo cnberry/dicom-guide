@@ -161,11 +161,21 @@ const parseCommand = (value: unknown): ViewerControlCommand | undefined => {
   };
 };
 
-export const fetchViewerControl = async (): Promise<ViewerControlResponse> => {
-  const response = await fetch(VIEWER_CONTROL_ENDPOINT, {
+export const fetchViewerControl = async (
+  afterRevision = 0,
+  viewerId?: string,
+  signal?: AbortSignal,
+): Promise<ViewerControlResponse> => {
+  const query = new URLSearchParams({
+    after_revision: String(afterRevision),
+    wait_seconds: '10',
+    ...(viewerId ? { viewer_id: viewerId } : {}),
+  });
+  const response = await fetch(`${VIEWER_CONTROL_ENDPOINT}?${query}`, {
     cache: 'no-store',
     credentials: 'same-origin',
     headers: { Accept: 'application/json' },
+    signal,
   });
   if (!response.ok) throw new Error(`Viewer control is unavailable (${response.status}).`);
   const value = (await response.json()) as Record<string, unknown>;

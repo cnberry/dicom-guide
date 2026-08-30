@@ -133,8 +133,13 @@ For an obvious target in the current native view, use the fast path:
 
 1. Read state once and inspect the image read-only.
 2. Approximate a discussion path in normalized source-image `[x, y]` coordinates.
-3. Run `dicom-guide highlight add --color ... --image-normalized ...`.
-4. Verify one ready render and answer directly.
+3. Immediately before adding the mark, confirm the ready observation still has the
+   inspected `viewer_id`, `series_id`, and `instance_id`. A browser reconnect can
+   create a new viewer with a default series; if any value changed, restore the exact
+   inspected native view with `dicom-guide show` first.
+4. Run `dicom-guide highlight add --color ... --image-normalized ...`. Let the command
+   generate its opaque mark ID unless an exact previously returned mark ID is needed.
+5. Verify one ready render on the same source and answer directly.
 
 Do not fetch DICOM, decode pixels, or traverse other planes for an unambiguous visual
 highlight. Use slower local inspection when the target is uncertain or quantitative

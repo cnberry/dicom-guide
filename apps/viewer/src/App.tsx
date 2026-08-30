@@ -1495,65 +1495,73 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   useEffect(() => {
     if (!active || series.length === 0) return;
     let effectActive = true;
+    const controller = new AbortController();
     const poll = async () => {
-      try {
-        const response = await fetchViewerControl();
-        if (!effectActive) return;
-        const command = response.command;
-        if (!command || command.revision <= lastViewerControlRevisionRef.current) return;
-        if (
-          command.target_viewer_id !== undefined &&
-          command.target_viewer_id !== viewerControlIdRef.current
-        ) {
-          return;
-        }
-        const selected = series.find((item) => item.id === command.series_id);
-        const selectedIndex = selected?.instances.findIndex(
-          (item) => item.instanceId === command.instance_id,
-        );
-        if (!selected || selectedIndex === undefined || selectedIndex < 0) return;
-        lastViewerControlRevisionRef.current = command.revision;
-        setAppliedAgentCommand({ commandId: command.command_id, revision: command.revision });
-        setViewerRenderStatus('loading');
-        setBaselinePresentationState(undefined);
-        setBaselineId(selected.id);
-        setBaselineIndex(selectedIndex);
-        if (command.view_mode === 'mpr') {
-          setMprTool(command.tool);
-          setDiscussionMarks((current) =>
-            discussionMarksAfterCommand(current, command.discussion_marks),
+      while (effectActive) {
+        try {
+          const response = await fetchViewerControl(
+            lastViewerControlRevisionRef.current,
+            viewerControlIdRef.current,
+            controller.signal,
           );
-          const requestedPoint =
-            command.patient_point_lps_mm ?? instanceCenterPatientPoint(selected, selectedIndex);
-          setRequestedMprPoint(requestedPoint);
-          setPatientPoint(requestedPoint);
-          setMprSeriesId(selected.id);
-        } else {
-          setActiveTool(command.tool as ViewerTool);
-          setRequestedMprPoint(undefined);
-          setMprSeriesId(undefined);
-          setPatientPoint(command.patient_point_lps_mm ?? undefined);
-          setDiscussionMarks((current) =>
-            discussionMarksAfterCommand(current, command.discussion_marks),
+          if (!effectActive) return;
+          const command = response.command;
+          if (!command || command.revision <= lastViewerControlRevisionRef.current) continue;
+          if (
+            command.target_viewer_id !== undefined &&
+            command.target_viewer_id !== viewerControlIdRef.current
+          ) {
+            lastViewerControlRevisionRef.current = command.revision;
+            continue;
+          }
+          const selected = series.find((item) => item.id === command.series_id);
+          const selectedIndex = selected?.instances.findIndex(
+            (item) => item.instanceId === command.instance_id,
           );
-        }
-        if (command.reset_view) setResetNonce((value) => value + 1);
-        setViewerControlMessage(
-          `Codex control applied · revision ${command.revision.toLocaleString()}`,
-        );
-      } catch {
-        if (effectActive) {
+          if (!selected || selectedIndex === undefined || selectedIndex < 0) continue;
+          lastViewerControlRevisionRef.current = command.revision;
+          setAppliedAgentCommand({ commandId: command.command_id, revision: command.revision });
+          setViewerRenderStatus('loading');
+          setBaselinePresentationState(undefined);
+          setBaselineId(selected.id);
+          setBaselineIndex(selectedIndex);
+          if (command.view_mode === 'mpr') {
+            setMprTool(command.tool);
+            setDiscussionMarks((current) =>
+              discussionMarksAfterCommand(current, command.discussion_marks),
+            );
+            const requestedPoint =
+              command.patient_point_lps_mm ?? instanceCenterPatientPoint(selected, selectedIndex);
+            setRequestedMprPoint(requestedPoint);
+            setPatientPoint(requestedPoint);
+            setMprSeriesId(selected.id);
+          } else {
+            setActiveTool(command.tool as ViewerTool);
+            setRequestedMprPoint(undefined);
+            setMprSeriesId(undefined);
+            setPatientPoint(command.patient_point_lps_mm ?? undefined);
+            setDiscussionMarks((current) =>
+              discussionMarksAfterCommand(current, command.discussion_marks),
+            );
+          }
+          if (command.reset_view) setResetNonce((value) => value + 1);
           setViewerControlMessage(
-            'Codex control API is unavailable until the local viewer is relaunched.',
+            `Codex control applied · revision ${command.revision.toLocaleString()}`,
           );
+        } catch (error) {
+          if (effectActive && !(error instanceof DOMException && error.name === 'AbortError')) {
+            setViewerControlMessage(
+              'Codex control API is unavailable until the local viewer is relaunched.',
+            );
+            await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+          }
         }
       }
     };
     void poll();
-    const interval = window.setInterval(() => void poll(), 500);
     return () => {
       effectActive = false;
-      window.clearInterval(interval);
+      controller.abort();
     };
   }, [active, series]);
 

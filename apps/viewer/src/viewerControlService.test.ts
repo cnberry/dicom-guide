@@ -88,11 +88,11 @@ describe('Codex viewer control bridge', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ accepted: true })));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchViewerControl()).resolves.toMatchObject({ command });
+    await expect(fetchViewerControl(2, viewerId)).resolves.toMatchObject({ command });
     await publishViewerControlObservation(observation);
 
     expect(fetchMock.mock.calls[0]).toEqual([
-      VIEWER_CONTROL_ENDPOINT,
+      `${VIEWER_CONTROL_ENDPOINT}?after_revision=2&wait_seconds=10&viewer_id=${viewerId}`,
       expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }),
     ]);
     expect(fetchMock.mock.calls[1][0]).toBe(VIEWER_CONTROL_OBSERVATION_ENDPOINT);
