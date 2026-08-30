@@ -14,10 +14,12 @@ Every published archive has an adjacent `.sha256` file. A release also includes 
 Verify that the archive was built by this repository's release workflow:
 
 ```bash
-gh attestation verify <downloaded-archive> \
-  --repo cnberry/dicom-guide \
-  --signer-workflow cnberry/dicom-guide/.github/workflows/release.yml \
-  --bundle dicom-guide-v<version>-provenance.sigstore.json
+python -m pip install "sigstore==4.5.0"
+python -m sigstore verify github SHA256SUMS \
+  --bundle dicom-guide-v<version>-provenance.sigstore.json \
+  --cert-identity \
+    "https://github.com/cnberry/dicom-guide/.github/workflows/release.yml@refs/heads/main" \
+  --repository cnberry/dicom-guide
 ```
 
 Then verify the downloaded bytes against the adjacent checksum. On macOS or Linux:
@@ -26,9 +28,10 @@ Then verify the downloaded bytes against the adjacent checksum. On macOS or Linu
 shasum -a 256 -c <downloaded-archive>.sha256
 ```
 
-The signed provenance authenticates the source repository, workflow, commit, and
-archive digest. It does not replace operating-system publisher signing: macOS builds
-remain ad-hoc signed rather than Apple-notarized, and Windows builds are not currently
+The verified SLSA statement authenticates the source repository, workflow, commit,
+and `SHA256SUMS` digest. The manifest then authenticates all four archive digests. It
+does not replace operating-system publisher signing: macOS builds remain ad-hoc
+signed rather than Apple-notarized, and Windows builds are not currently
 Authenticode-signed.
 
 ## Publish a release
@@ -47,9 +50,11 @@ To publish after the version change is merged:
 The release job rejects a tag that differs from `packages/agent/pyproject.toml`, an
 incomplete platform set, extra files, malformed checksum sidecars, or a checksum
 mismatch. It then creates the tag at the tested `main` commit, signs one provenance
-statement covering all four archives with GitHub Actions OIDC and Sigstore, attaches
-the portable bundle, and publishes all assets in one GitHub release. Pushing the exact
-version tag remains an equivalent automation entry point.
+statement covering the checksum manifest with GitHub Actions OIDC and public Sigstore
+transparency services, verifies the bundle before upload, and publishes all assets in
+one GitHub release. Pushing the exact version tag remains an equivalent automation
+entry point; verify those bundles with a certificate identity ending in
+`@refs/tags/v<version>` instead of `@refs/heads/main`.
 
 Repository owners should also enable GitHub's immutable releases setting. When it is
 enabled, the same draft-upload-publish flow locks the tag and assets and GitHub adds a
