@@ -4,7 +4,10 @@ import sys
 
 
 VERSION = "0.15.0"
-HELP = """DICOM Guide — the local MRI and CT viewer your agent can control
+HELP = """DICOM Guide — open medical scan files and explore them with your agent
+
+Have a folder copied from an imaging disc or portal download? Open the top-level
+folder. DICOM Guide finds MRI and CT files beneath it even when they have no extension.
 
 Usage:
   dicom-guide open DICOM_FOLDER [options]
@@ -17,6 +20,9 @@ Usage:
 
 Run `dicom-guide <command> --help` for command details.
 All DICOM processing stays on this computer.
+
+In Codex, try:
+  $dicom-guide Give me a visual tour of this study. Start with the series list.
 """
 
 

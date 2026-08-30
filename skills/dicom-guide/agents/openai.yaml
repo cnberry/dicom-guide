@@ -1,4 +1,0 @@
-interface:
-  display_name: "DICOM Guide"
-  short_description: "Guide local MRI and CT exploration"
-  default_prompt: "Use $dicom-guide to guide me through the active scan with terse anatomical explanations and API-only navigation."

@@ -1,21 +1,81 @@
 # DICOM Guide
 
-![DICOM Guide: a local Codex-first MRI viewer](docs/assets/dicom-guide-codex-mri.png)
+![A person using DICOM Guide while a friendly agent points out regions on three scan views](docs/assets/dicom-guide-guided-tour.png)
 
-**The local MRI and CT viewer your agent can control.**
+**You have medical scan files. DICOM Guide helps you open them, see what matters,
+and ask better questions.**
 
-DICOM Guide keeps the viewer beside your Codex conversation. Ask what is under the
-crosshairs, mark an area with a brush, or let the agent move to an exact series,
-slice, plane, or patient-space point. DICOM parsing and rendering stay on this
-computer; no external processing API is used.
+DICOM is the standard hospitals and imaging centers use to store and exchange MRI,
+CT, and many other scans. A scan folder may contain hundreds of oddly named
+files—sometimes without extensions—plus a `DICOMDIR` index. Do not rename or sort
+them. Point DICOM Guide at the folder you received, and it will find the images.
 
-The focused interface explores one MRI or CT series as a native stack or linked
-axial, coronal, and sagittal views. It is investigational software, not a medical
-device; use it to understand imagery and prepare precise questions for clinicians.
+DICOM Guide is a small local viewer built to be driven by a Codex agent. The agent
+can inventory the study, choose a useful series, move through exact slices, point to
+anatomy with colored highlights, and explain what a sequence commonly helps experts
+assess. The scan pixels and metadata stay on your computer.
 
-## Install
+## Start with the folder you have
 
-Download the archive for macOS or Linux from Releases, then:
+Open this repository in Codex and ask:
+
+```text
+$dicom-guide-install Install DICOM Guide and give me a tour using /path/to/DICOM-folder
+```
+
+The install skill chooses the correct macOS, Linux, or Windows package, starts the
+local viewer, and opens it beside the conversation. If you want the skills available
+from any Codex task first, ask:
+
+```text
+$skill-installer Install the DICOM Guide skills from https://github.com/cnberry/scan-view/tree/main/.agents/skills
+```
+
+Then try one of these:
+
+```text
+$dicom-guide What does the series I am looking at mean?
+$dicom-guide What is the green highlighted area?
+$dicom-guide Highlight the pons in this view using green.
+$dicom-guide Give me a visual tour of this study. Explain one view at a time.
+$dicom-guide Take me on a visual tour of this radiology report: <paste report text>
+$dicom-guide Which series would best help an expert assess the finding in my report?
+```
+
+You do not need to know which files are images, what “T2 FLAIR” means, or which
+plane to open. That orientation is part of the guide’s job.
+
+## What a guided session does
+
+1. Finds MRI and CT studies beneath the folder without changing the source files.
+2. Explains the available series in plain language before choosing one.
+3. Opens the most useful series and walks through anatomy or report findings visually.
+4. Keeps visible observations, DICOM metadata, anatomical inference, and report text
+   distinct so the explanation does not sound more certain than the evidence.
+5. Offers reputable sources and a focused next question after medical explanations.
+
+The viewer supports native image stacks and linked axial, coronal, and sagittal
+views, plus reversible discussion highlights. It is designed for guided exploration
+and preparing precise questions—not validated diagnosis, segmentation, or
+longitudinal measurement.
+
+## Local by design
+
+- DICOM parsing, rendering, metadata inspection, and agent control are local.
+- The service binds only to loopback and source DICOM files are read-only.
+- No account, login, Python environment, Node.js install, or external processing API
+  is required by a packaged application.
+- When the agent looks up a general medical source, it must use generic terms and
+  never send scan pixels, metadata, names, report text, or patient-specific details.
+
+The viewer needs the DICOM source files. It ignores unrelated CD viewer programs and
+documents, though keeping an untouched copy of the complete original folder is wise.
+
+## Install without Codex
+
+Download the package for your computer from Releases.
+
+**macOS or Linux**
 
 ```bash
 tar -xzf dicom-guide-<version>-<platform>.tar.gz
@@ -24,73 +84,63 @@ sh install.sh
 dicom-guide open '/path/to/DICOM-folder'
 ```
 
-The installer uses `/usr/local/lib/dicom-guide` and `/usr/local/bin/dicom-guide`.
-It will explicitly request a rerun with `sudo` when `/usr/local` is not writable.
+This installs under `/usr/local/lib/dicom-guide` with the command at
+`/usr/local/bin/dicom-guide`. The installer asks you to rerun with `sudo` only when
+`/usr/local` requires it. macOS packages are currently ad-hoc signed rather than
+Apple-notarized, so the first launch may require **Open Anyway** in Privacy & Security.
 
-The packaged application includes its runtime and web viewer. It needs no Python,
-Node.js, virtual environment, account, login, or network connection at runtime.
-Open the printed loopback URL in Codex's side panel or any local Chrome window.
-Current macOS archives are ad-hoc signed but not Apple-notarized, so the first launch
-may require **Open Anyway** in System Settings → Privacy & Security.
+**Windows**
 
-Use the bundled Codex skills for guided work:
+Extract `dicom-guide-<version>-windows-x86_64.zip`, open PowerShell in the extracted
+folder, and run:
 
-- `$dicom-guide-install` — install, launch, and troubleshoot.
-- `$dicom-guide` — answer questions about the current image and control the viewer.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+dicom-guide open 'C:\path\to\DICOM-folder'
+```
 
-## Viewer and agent controls
+The Windows installer uses the standard per-user application directory at
+`%LOCALAPPDATA%\Programs\DICOM Guide` and adds its `bin` folder to the user `PATH`.
+Open a new terminal if the command is not immediately visible.
 
-- Native MRI/CT stacks with window, pan, zoom, and automatic fit.
-- Linked three-plane MPR with shared crosshairs.
-- Reversible color discussion highlights in Single and 3-plane views.
-- Exact local state: series, instance, plane, slice, tool, render status, and LPS point.
-- API control of navigation, tools, reset, and discussion highlights.
-- Local retrieval of minimized metadata or one exact DICOM instance for deeper
-  on-device analysis.
+## Agent interface
 
-The installed command discovers the active session securely, so no token copying is
-needed:
+The supported command surface securely discovers the active local session:
 
 ```bash
 dicom-guide state
 dicom-guide series
-dicom-guide show \
-  --series-id series_0123456789abcdef0123 \
-  --instance-id instance_0123456789abcdef0123 \
-  --view mpr --tool crosshairs --lps 12.5 -8.25 43.0
+dicom-guide show --series-id SERIES_ID --instance-id INSTANCE_ID --view native --reset
+dicom-guide highlight add --color green --image-normalized 0.46 0.46
 ```
 
-The complete machine contract is in [docs/AGENT-API.md](docs/AGENT-API.md). The API
-binds only to loopback, agent operations require an owner-only session credential,
-and source DICOM files are read-only.
+The complete state and control contract is in [docs/AGENT-API.md](docs/AGENT-API.md).
+Repository-scoped workflows live in [.agents/skills](.agents/skills):
 
-## Core projects
+- `$dicom-guide-install` — turn a folder path into a running local session.
+- `$dicom-guide` — explain and control the current imagery.
+- `$dicom-guide-develop` — set up the repository, make a change, test it, and prepare
+  an upstream contribution with synthetic data.
 
-| Project | Role | Required? |
-| --- | --- | --- |
-| [Cornerstone3D](https://github.com/cornerstonejs/cornerstone3D) | Browser rendering, DICOM loading, viewports, and tools | Yes |
-| [pydicom](https://github.com/pydicom/pydicom) | Local DICOM indexing and metadata | Yes |
-| [dcmjs](https://github.com/dcmjs-org/dcmjs) | DICOM web utilities and derived-object support | Yes |
-| [3D Slicer](https://github.com/Slicer/Slicer) | Optional local registration experiments | No |
-| [React](https://github.com/facebook/react) + [Vite](https://github.com/vitejs/vite) | Viewer application and build | Yes |
+## Built on
 
-## Develop and distribute
+| Project | Role |
+| --- | --- |
+| [Cornerstone3D](https://github.com/cornerstonejs/cornerstone3D) | DICOM loading, rendering, viewports, and tools |
+| [pydicom](https://github.com/pydicom/pydicom) | Local DICOM indexing and metadata |
+| [dcmjs](https://github.com/dcmjs-org/dcmjs) | DICOM utilities and derived-object support |
+| [3D Slicer](https://github.com/Slicer/Slicer) | Optional local registration research; not required by the viewer |
+| [React](https://github.com/facebook/react) + [Vite](https://github.com/vitejs/vite) | Viewer application and build |
 
-Contributors need Python 3.11+, Node.js 22+, and pnpm 11+.
+## Develop with Codex
 
-```bash
-pnpm install
-pnpm test
-pnpm typecheck
-pnpm build
-python -m pytest packages/agent/tests
-python scripts/build_native_distribution.py
+Start with an outcome instead of setup instructions:
+
+```text
+$dicom-guide-develop Set up this repository, run its checks, and tell me the smallest useful first contribution.
+$dicom-guide-develop Fix <problem>, verify it on every affected platform, and prepare a PR.
+$dicom-guide-develop Build a release for this computer and smoke-test it with synthetic DICOM.
 ```
 
-Tagged releases build self-contained `macos-arm64`, `macos-x86_64`, and
-`linux-x86_64` archives in GitHub Actions. The Python namespace is `dicom_guide`;
-media types, schema IDs, and artifact types use `dicom-guide` consistently. This is
-an intentional breaking rename, so pre-rename artifacts must be recreated or migrated.
-
-Patient scans, generated findings, tokens, local paths, and screenshots do not belong
-in Git. Tests use synthetic data. Licensed under [MIT](LICENSE).
+Patient scans, local paths, tokens, reports, findings, and screenshots do not belong
+in Git. Development and tests use synthetic data. Licensed under [MIT](LICENSE).

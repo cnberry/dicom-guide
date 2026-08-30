@@ -3,6 +3,29 @@
 DICOM Guide exposes a small loopback HTTP API so an agent can observe and control the
 same viewer a person sees. It is memory-only and source-read-only.
 
+## Start from a person's question
+
+The public agent workflow is intentionally smaller than the raw HTTP surface:
+
+| Need | Supported command | Result |
+| --- | --- | --- |
+| What is visible now? | `dicom-guide state` | Exact ready series, instance, plane, slice, tool, LPS point, and discussion marks |
+| What scans are available? | `dicom-guide series` | PHI-minimized MRI/CT study and series inventory with opaque IDs |
+| Show a useful view | `dicom-guide show ...` | Targeted native or MPR display change with exact ready confirmation |
+| Point something out | `dicom-guide highlight ...` | Reversible agent discussion mark that preserves person-authored marks |
+| Clarify the acquisition | `dicom-guide metadata ...` | Selected non-identifier DICOM headers for one exact source instance |
+| Inspect pixels locally | `dicom-guide fetch-instance ...` | Hash-verified, owner-only local copy of one source object |
+
+A guide should inventory and explain candidate series before choosing one, use the
+least invasive command that answers the question, reread ready state after every
+change, and distinguish visible observation from metadata, anatomical inference,
+supplied report text, and clinical conclusion. See
+`.agents/skills/dicom-guide/SKILL.md` for that behavioral contract.
+
+Someone who has only a folder path should not need to understand this API. The
+`$dicom-guide-install` skill owns installation, recursive DICOM discovery, launch,
+health verification, and the handoff to a first guided tour.
+
 ## Connection
 
 - Base URL: `http://127.0.0.1:<port>` (also `localhost` or `[::1]`).

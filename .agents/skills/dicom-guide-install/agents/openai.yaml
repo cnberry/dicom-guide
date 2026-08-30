@@ -1,0 +1,4 @@
+interface:
+  display_name: "Install DICOM Guide"
+  short_description: "Open a local medical scan folder with Codex"
+  default_prompt: "Use $dicom-guide-install to install DICOM Guide, open my scan folder, and begin a guided local session."

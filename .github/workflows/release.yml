@@ -22,6 +22,8 @@ jobs:
             os: macos-15-intel
           - platform: macos-arm64
             os: macos-15
+          - platform: windows-x86_64
+            os: windows-2025
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -35,12 +37,26 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: python scripts/build_native_distribution.py --output-dir release
+      - if: runner.os == 'Windows'
+        name: Smoke test Windows package
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem release/dicom-guide-*-windows-x86_64.zip | Select-Object -First 1
+          $expected = (Get-Content "$($archive.FullName).sha256").Split()[0]
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive.FullName).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Release checksum mismatch" }
+          $extract = Join-Path $env:RUNNER_TEMP "dicom-guide-package"
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $extract
+          $bundle = Get-ChildItem $extract -Directory | Select-Object -First 1
+          $installRoot = Join-Path $env:RUNNER_TEMP "DICOM Guide"
+          & (Join-Path $bundle.FullName "install.ps1") -InstallRoot $installRoot
+          & (Join-Path $installRoot "bin\dicom-guide.cmd") --version
       - uses: actions/upload-artifact@v4
         with:
           name: dicom-guide-${{ matrix.platform }}
-          path: release/*.tar.gz
+          path: release/*
           if-no-files-found: error
       - if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.tar.gz
+          files: release/*

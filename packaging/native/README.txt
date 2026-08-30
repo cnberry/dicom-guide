@@ -11,6 +11,9 @@ Then open a local DICOM folder:
 
     dicom-guide open '/path/to/DICOM-folder'
 
+The folder can be the top level copied from an imaging disc or portal download.
+DICOM Guide searches nested folders; filenames do not need .dcm extensions.
+
 All DICOM parsing and display remain on this computer. No Python, Node.js,
 account, or external processing API is required by this packaged application.
 
