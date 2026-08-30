@@ -53,8 +53,13 @@ path is missing, ask only for the top-level folder copied from the disc or downl
    - `macos-x86_64`
    - `linux-x86_64`
    - `windows-x86_64`
-3. Download the adjacent `.sha256` file when available and verify the archive before
-   extracting it. Do not send the scan folder to GitHub or any other service.
+3. Download the adjacent `.sha256` file and the release's portable
+   `dicom-guide-v<version>-provenance.sigstore.json` bundle. Verify the archive with
+   `gh attestation verify`, scoped to `cnberry/dicom-guide` and
+   `.github/workflows/release.yml`, then verify the adjacent checksum before extracting
+   it. If the local GitHub CLI cannot verify attestations, state that limitation rather
+   than describing a checksum as a publisher signature. Do not send the scan folder to
+   GitHub or any other service.
 4. Install for the current platform.
 
 macOS and Linux packages contain `install.sh` and install to
