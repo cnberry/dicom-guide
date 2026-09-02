@@ -19,4 +19,4 @@ def test_public_help_is_focused(capsys, monkeypatch) -> None:
 def test_public_version(capsys, monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["dicom-guide", "--version"])
     public_cli.main()
-    assert capsys.readouterr().out == "DICOM Guide 0.15.0\n"
+    assert capsys.readouterr().out == "DICOM Guide 0.16.0\n"

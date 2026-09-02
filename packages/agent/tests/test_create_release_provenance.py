@@ -29,7 +29,7 @@ def _predicate(**overrides: str) -> dict[str, object]:
         "event_name": "workflow_dispatch",
         "run_id": "789",
         "run_attempt": "1",
-        "release_tag": "v0.15.0",
+        "release_tag": "v0.16.0",
     }
     values.update(overrides)
     return provenance.release_provenance(**values)
@@ -41,7 +41,7 @@ def test_manual_release_predicate_captures_workflow_input_and_source() -> None:
     assert isinstance(definition, dict)
     assert definition["buildType"] == provenance.BUILD_TYPE
     assert definition["externalParameters"] == {
-        "inputs": {"release_tag": "v0.15.0"},
+        "inputs": {"release_tag": "v0.16.0"},
         "workflow": {
             "path": ".github/workflows/release.yml",
             "ref": "refs/heads/main",
@@ -57,7 +57,7 @@ def test_manual_release_predicate_captures_workflow_input_and_source() -> None:
 
 
 def test_tag_push_omits_manual_inputs() -> None:
-    predicate = _predicate(event_name="push", ref="refs/tags/v0.15.0")
+    predicate = _predicate(event_name="push", ref="refs/tags/v0.16.0")
     definition = predicate["buildDefinition"]
     assert isinstance(definition, dict)
     external = definition["externalParameters"]
@@ -73,7 +73,7 @@ def test_tag_push_omits_manual_inputs() -> None:
         ("sha", "short"),
         ("event_name", "pull_request"),
         ("run_id", "not-numeric"),
-        ("release_tag", "0.15.0"),
+        ("release_tag", "0.16.0"),
     ],
 )
 def test_rejects_ambiguous_provenance_inputs(field: str, value: str) -> None:

@@ -23,7 +23,7 @@ from dicom_guide.viewer_state import SCHEMA_VERSION as VIEWER_STATE_SCHEMA_VERSI
 
 
 def main() -> None:
-    if version("dicom-guide") != "0.15.0" or version("pydicom") != "3.0.2":
+    if version("dicom-guide") != "0.16.0" or version("pydicom") != "3.0.2":
         raise SystemExit("installed DICOM Guide runtime versions are invalid")
     if ARTIFACT_TYPE != "clinician_consultation_packet":
         raise SystemExit("installed DICOM Guide consultation contract is unavailable")
@@ -61,7 +61,7 @@ def main() -> None:
         json.dumps(
             {
                 "valid": True,
-                "dicom_guide": "0.15.0",
+                "dicom_guide": "0.16.0",
                 "pydicom": "3.0.2",
                 "embedded_ui": True,
                 "schema_count": schema_count,

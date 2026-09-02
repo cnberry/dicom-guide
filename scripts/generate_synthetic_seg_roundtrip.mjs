@@ -135,7 +135,7 @@ Object.assign(dataset, {
   SeriesDescription: 'DICOM Guide unreviewed manual lesion ROI',
   Manufacturer: 'DICOM Guide local',
   ManufacturerModelName: 'DICOM Guide',
-  SoftwareVersions: '0.15.0',
+  SoftwareVersions: '0.16.0',
 });
 const segment = Array.isArray(dataset.SegmentSequence)
   ? dataset.SegmentSequence[0]

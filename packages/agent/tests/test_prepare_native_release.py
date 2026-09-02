@@ -20,7 +20,7 @@ def _release_module() -> ModuleType:
 release = _release_module()
 
 
-def _repository(tmp_path: Path, version: str = "0.15.0") -> Path:
+def _repository(tmp_path: Path, version: str = "0.16.0") -> Path:
     repository = tmp_path / "repository"
     package = repository / "packages" / "agent"
     package.mkdir(parents=True)
@@ -30,7 +30,7 @@ def _repository(tmp_path: Path, version: str = "0.15.0") -> Path:
     return repository
 
 
-def _release_dir(tmp_path: Path, version: str = "0.15.0") -> Path:
+def _release_dir(tmp_path: Path, version: str = "0.16.0") -> Path:
     directory = tmp_path / "release"
     directory.mkdir()
     for index, name in enumerate(release.archive_names(version)):
@@ -44,19 +44,19 @@ def _release_dir(tmp_path: Path, version: str = "0.15.0") -> Path:
 def test_prepares_exact_complete_release_and_aggregate_checksums(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     directory = _release_dir(tmp_path)
-    windows = directory / "dicom-guide-0.15.0-windows-x86_64.zip.sha256"
+    windows = directory / "dicom-guide-0.16.0-windows-x86_64.zip.sha256"
     windows.write_bytes(windows.read_text().rstrip("\n").encode() + b"\r\n")
 
     aggregate = release.prepare_native_release(
-        directory, tag="v0.15.0", repository=repository
+        directory, tag="v0.16.0", repository=repository
     )
 
     names = [line.split("  ", 1)[1] for line in aggregate.read_text().splitlines()]
-    assert names == release.archive_names("0.15.0")
+    assert names == release.archive_names("0.16.0")
 
 
 def test_rejects_tag_that_does_not_match_the_packaged_version(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="release tag must be v0.15.0"):
+    with pytest.raises(ValueError, match="release tag must be v0.16.0"):
         release.prepare_native_release(
             _release_dir(tmp_path),
             tag="v0.15.1",
@@ -70,7 +70,7 @@ def test_rejects_incomplete_or_unverified_release_set(
 ) -> None:
     repository = _repository(tmp_path)
     directory = _release_dir(tmp_path)
-    first = release.archive_names("0.15.0")[0]
+    first = release.archive_names("0.16.0")[0]
     if failure == "missing":
         (directory / first).unlink()
     elif failure == "unexpected":
@@ -80,5 +80,5 @@ def test_rejects_incomplete_or_unverified_release_set(
 
     with pytest.raises(ValueError):
         release.prepare_native_release(
-            directory, tag="v0.15.0", repository=repository
+            directory, tag="v0.16.0", repository=repository
         )

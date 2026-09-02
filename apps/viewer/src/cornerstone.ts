@@ -631,7 +631,7 @@ const buildDicomSeg = async ({
   dataset.SeriesDescription = 'DICOM Guide unreviewed manual lesion ROI';
   dataset.Manufacturer = 'DICOM Guide local';
   dataset.ManufacturerModelName = 'DICOM Guide';
-  dataset.SoftwareVersions = '0.15.0';
+  dataset.SoftwareVersions = '0.16.0';
   const segmentItem = Array.isArray(dataset.SegmentSequence)
     ? dataset.SegmentSequence[0]
     : dataset.SegmentSequence;

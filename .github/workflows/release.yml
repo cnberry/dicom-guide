@@ -5,7 +5,7 @@ on:
     inputs:
       release_tag:
         description: >-
-          Publish this exact version tag from main, for example v0.15.0;
+          Publish this exact version tag from main, for example v0.16.0;
           leave blank for a build-only run
         required: false
         type: string

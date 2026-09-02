@@ -3,7 +3,8 @@
 DICOM Guide releases contain self-contained applications for Linux x86_64, macOS
 Intel and Apple silicon, and Windows x86_64. The packaged applications include the
 viewer and Python runtime; they do not require Node.js, Python, or a network connection
-at runtime.
+at runtime. User-facing changes are summarized in the
+[release notes](RELEASE_NOTES.md).
 
 ## Verify a download
 
@@ -44,7 +45,7 @@ To publish after the version change is merged:
 
 1. Open **Actions → Native release → Run workflow**.
 2. Select `main` and enter the exact project version prefixed with `v`, such as
-   `v0.15.0`.
+   `v0.16.0`.
 3. Wait for every platform build and smoke test to pass.
 
 The release job rejects a tag that differs from `packages/agent/pyproject.toml`, an
