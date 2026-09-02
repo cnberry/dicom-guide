@@ -223,7 +223,7 @@ export const DicomViewport = forwardRef<DicomViewportHandle, Props>(function Dic
         toolsRef.current = undefined;
       }
     };
-  }, [id, series?.id]);
+  }, [id, series]);
 
   useEffect(() => {
     toolsRef.current?.setPrimaryTool(activeTool);

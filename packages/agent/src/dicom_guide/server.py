@@ -12,6 +12,7 @@ import tempfile
 import threading
 import time
 import webbrowser
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +27,7 @@ from .agent_consultation_plans import (
     agent_consultation_plan_summary,
     load_strict_json,
 )
+from .catalog import build_catalog
 from .comparison import suggest_pairs
 from .comparison_reviews import (
     MAX_COMPARISON_REVIEW_TRANSPORT_BYTES,
@@ -42,6 +44,7 @@ from .consultation_packets import (
     consultation_packet_from_transport,
     consultation_packet_summary,
 )
+from .folder_picker import FolderPickerUnavailable, choose_local_folder
 from .longitudinal_readiness import build_longitudinal_readiness
 from .lesion_volume_comparisons import (
     MAX_TRANSPORT_BYTES as MAX_LESION_VOLUME_COMPARISON_TRANSPORT_BYTES,
@@ -114,6 +117,27 @@ REVIEWED_REGISTRATION_BUNDLE_FILES = (
     "registered-moving.nrrd",
     "registration.json",
 )
+
+
+class NoRenderableDicomError(ValueError):
+    """Raised when a selected folder has no MR or CT pixel series."""
+
+
+class SourceSwitchLockedError(RuntimeError):
+    """Raised when a special review must stay bound to its launch source."""
+
+
+@dataclass(frozen=True)
+class _PreparedSource:
+    catalog: dict[str, Any]
+    registry: dict[str, Path]
+    source_root: Path | None
+    instance_guards: dict[str, dict[str, Any]]
+    presentation_state_catalog: dict[str, Any]
+    presentation_state_instance_ids: set[str]
+    source_segmentation_catalog: dict[str, Any]
+    source_segmentation_masks: dict[tuple[str, int], bytes]
+    source_segmentation_instance_ids: set[str]
 
 
 def _agent_audit_operation(path: str) -> str | None:
@@ -211,6 +235,64 @@ def _guard_instance_sources(
     return guarded_registry, guards
 
 
+def _has_renderable_series(catalog: dict[str, Any]) -> bool:
+    return any(
+        series.get("modality") in {"MR", "CT"} and bool(series.get("instances"))
+        for study in catalog.get("studies", [])
+        if isinstance(study, dict)
+        for series in study.get("series", [])
+        if isinstance(series, dict)
+    )
+
+
+def _prepare_source(
+    catalog: dict[str, Any],
+    registry: dict[str, Path],
+    source_root: Path | None,
+) -> _PreparedSource:
+    guarded_registry, instance_guards = _guard_instance_sources(catalog, registry)
+    presentation_state_catalog = build_presentation_state_catalog(
+        catalog,
+        registry_source_loader(catalog, guarded_registry),
+    )
+    presentation_state_instance_ids = {
+        state["source"]["instance_id"]
+        for state in presentation_state_catalog["states"]
+    } | {
+        instance_id
+        for state in presentation_state_catalog["states"]
+        for referenced_series in state["referenced_series"]
+        for instance_id in referenced_series["instance_ids"]
+    } | {
+        state["presentation_state_id"]
+        for state in presentation_state_catalog["unsupported_states"]
+    }
+    (
+        source_segmentation_catalog,
+        source_segmentation_masks,
+        source_segmentation_instance_ids,
+    ) = build_source_segmentation_catalog(
+        catalog,
+        registry_segmentation_source_loader(catalog, guarded_registry),
+    )
+    resolved_source_root = (
+        source_root.expanduser().resolve(strict=True) if source_root is not None else None
+    )
+    if resolved_source_root is not None and not resolved_source_root.is_dir():
+        raise ValueError("DICOM Guide DICOM source root must be a directory")
+    return _PreparedSource(
+        catalog=catalog,
+        registry=guarded_registry,
+        source_root=resolved_source_root,
+        instance_guards=instance_guards,
+        presentation_state_catalog=presentation_state_catalog,
+        presentation_state_instance_ids=presentation_state_instance_ids,
+        source_segmentation_catalog=source_segmentation_catalog,
+        source_segmentation_masks=source_segmentation_masks,
+        source_segmentation_instance_ids=source_segmentation_instance_ids,
+    )
+
+
 def _path_metadata_guard(path: Path) -> dict[str, Any]:
     metadata = path.lstat()
     return {
@@ -284,6 +366,11 @@ class DicomGuideServer(ThreadingHTTPServer):
     registry: dict[str, Path]
     source_root: Path | None
     instance_guards: dict[str, dict[str, Any]]
+    source_lock: threading.RLock
+    source_revision: int
+    include_hashes: bool
+    folder_selection_lock: threading.Lock
+    folder_picker: Callable[[], Path | None]
     token: str
     ui_dist: Path | None
     viewer_state_lock: threading.Lock
@@ -327,6 +414,75 @@ class DicomGuideServer(ThreadingHTTPServer):
             audit = getattr(self, "agent_access_audit", None)
             if audit is not None:
                 audit.close()
+
+    def source_catalog(self) -> dict[str, Any]:
+        with self.source_lock:
+            return self.catalog
+
+    def instance_source(
+        self, instance_id: str
+    ) -> tuple[Path | None, dict[str, Any] | None]:
+        with self.source_lock:
+            return self.registry.get(instance_id), self.instance_guards.get(instance_id)
+
+    def replace_source(self, selected_root: Path) -> dict[str, Any]:
+        if (
+            self.registration_bundle is not None
+            or self.registration_review is not None
+            or self.lesion_volume_comparison is not None
+        ):
+            raise SourceSwitchLockedError("special display source is locked")
+        catalog, registry = build_catalog(
+            selected_root,
+            include_hashes=self.include_hashes,
+        )
+        if not _has_renderable_series(catalog):
+            raise NoRenderableDicomError("no renderable MR or CT image series found")
+        prepared = _prepare_source(catalog, registry, selected_root)
+        with self.source_lock:
+            self.catalog = prepared.catalog
+            self.registry = prepared.registry
+            self.source_root = prepared.source_root
+            self.instance_guards = prepared.instance_guards
+            self.presentation_state_catalog = prepared.presentation_state_catalog
+            self.presentation_state_instance_ids = (
+                prepared.presentation_state_instance_ids
+            )
+            self.source_segmentation_catalog = prepared.source_segmentation_catalog
+            self.source_segmentation_masks = prepared.source_segmentation_masks
+            self.source_segmentation_instance_ids = (
+                prepared.source_segmentation_instance_ids
+            )
+            self.source_revision += 1
+        with self.viewer_state_lock:
+            if self.viewer_state is not None:
+                publisher_id = self.viewer_state.get("publisher_id")
+                if isinstance(publisher_id, str):
+                    self.viewer_state_revoked_publishers.add(publisher_id)
+            self.viewer_state = None
+            self.viewer_state_received_at = None
+            self.viewer_state_received_monotonic = None
+        with self.viewer_control_changed:
+            self.viewer_control_revision += 1
+            self.viewer_control_command = None
+            self.viewer_control_observation = None
+            self.viewer_control_observation_received_monotonic = None
+            self.viewer_control_changed.notify_all()
+        return {
+            "status": "selected",
+            "source_revision": self.source_revision,
+            "study_count": len(catalog.get("studies", [])),
+            "renderable_series": sum(
+                1
+                for study in catalog.get("studies", [])
+                if isinstance(study, dict)
+                for series in study.get("series", [])
+                if isinstance(series, dict)
+                and series.get("modality") in {"MR", "CT"}
+                and bool(series.get("instances"))
+            ),
+            "dicom_instances": catalog.get("source", {}).get("dicom_instances", 0),
+        }
 
     def reviewed_registration_inputs_unchanged(self) -> bool:
         if self.registration_review is None:
@@ -685,10 +841,11 @@ class Handler(BaseHTTPRequestHandler):
         if self._send_static(path):
             return
         if path == "/v1/health":
+            catalog = self.server.source_catalog()
             self._send_json(
                 {
                     "status": "ok",
-                    "schema_version": self.server.catalog["schema_version"],
+                    "schema_version": catalog["schema_version"],
                     "ui_available": self.server.ui_dist is not None,
                 }
             )
@@ -696,7 +853,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._audit_bearer_get(path):
             return
         if path == "/v1/manifest":
-            self._send_json(self.server.catalog)
+            self._send_json(self.server.source_catalog())
             return
         if path == "/v1/viewer-state":
             self._send_json(self.server.viewer_state_response())
@@ -726,11 +883,11 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/v1/comparison-candidates":
-            self._send_json(suggest_pairs(self.server.catalog))
+            self._send_json(suggest_pairs(self.server.source_catalog()))
             return
         if path == "/v1/longitudinal-readiness":
             try:
-                report = build_longitudinal_readiness(self.server.catalog)
+                report = build_longitudinal_readiness(self.server.source_catalog())
             except (KeyError, TypeError, ValueError):
                 self._send_json(
                     {"error": "longitudinal_readiness_unavailable"},
@@ -859,6 +1016,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if path == "/v1/local-folders/select":
+            self._handle_local_folder_selection_post()
+            return
         if path == "/v1/viewer-control":
             self._handle_viewer_control_command_post()
             return
@@ -1015,6 +1175,86 @@ class Handler(BaseHTTPRequestHandler):
         self._security_headers()
         self.end_headers()
         self.wfile.write(payload)
+
+    def _handle_local_folder_selection_post(self) -> None:
+        if self.server.ui_dist is None:
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        if not self._same_origin():
+            self._send_json({"error": "same_origin_required"}, HTTPStatus.FORBIDDEN)
+            return
+        if (
+            self.server.registration_bundle is not None
+            or self.server.registration_review is not None
+            or self.server.lesion_volume_comparison is not None
+        ):
+            self._send_json({"error": "source_locked"}, HTTPStatus.LOCKED)
+            return
+        if self.server.source_root is None:
+            self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
+            return
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != "application/json":
+            self._send_json(
+                {"error": "unsupported_media_type"},
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            )
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send_json(
+                {"error": "content_length_required"}, HTTPStatus.LENGTH_REQUIRED
+            )
+            return
+        if content_length <= 0 or content_length > 64:
+            self._send_json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            request_value = json.loads(self.rfile.read(content_length))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+            return
+        if request_value != {}:
+            self._send_json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+            return
+        if not self.server.folder_selection_lock.acquire(blocking=False):
+            self._send_json(
+                {"error": "folder_selection_in_progress"},
+                HTTPStatus.CONFLICT,
+            )
+            return
+        try:
+            try:
+                selected_root = self.server.folder_picker()
+                if selected_root is None:
+                    self._send_json({"status": "cancelled"})
+                    return
+                summary = self.server.replace_source(selected_root)
+            except FolderPickerUnavailable:
+                self._send_json(
+                    {"error": "folder_picker_unavailable"},
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+                return
+            except NoRenderableDicomError:
+                self._send_json(
+                    {"error": "no_renderable_dicom"},
+                    HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+                return
+            except SourceSwitchLockedError:
+                self._send_json({"error": "source_locked"}, HTTPStatus.LOCKED)
+                return
+            except (OSError, ValueError):
+                self._send_json(
+                    {"error": "folder_index_failed"},
+                    HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+                return
+            self._send_json(summary)
+        finally:
+            self.server.folder_selection_lock.release()
 
     def _handle_agent_consultation_plan_post(self) -> None:
         if not self._same_origin():
@@ -1180,8 +1420,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def _send_instance_file(self, instance_id: str) -> None:
-        source = self.server.registry.get(instance_id)
-        guard = self.server.instance_guards.get(instance_id)
+        source, guard = self.server.instance_source(instance_id)
         if source is None or guard is None:
             self._send_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
             return
@@ -1656,39 +1895,14 @@ def create_server(
     lesion_volume_comparison: Path | None = None,
     agent_audit_log: Path | None = None,
     source_root: Path | None = None,
+    include_hashes: bool = True,
+    folder_picker: Callable[[], Path | None] = choose_local_folder,
 ) -> DicomGuideServer:
     if host not in {"127.0.0.1", "::1", "localhost"}:
         raise ValueError("DICOM Guide only supports loopback binding in this release")
-    guarded_registry, instance_guards = _guard_instance_sources(catalog, registry)
-    cached_presentation_state_catalog = build_presentation_state_catalog(
-        catalog,
-        registry_source_loader(catalog, guarded_registry),
-    )
-    presentation_state_instance_ids = {
-        state["source"]["instance_id"]
-        for state in cached_presentation_state_catalog["states"]
-    } | {
-        instance_id
-        for state in cached_presentation_state_catalog["states"]
-        for referenced_series in state["referenced_series"]
-        for instance_id in referenced_series["instance_ids"]
-    } | {
-        state["presentation_state_id"]
-        for state in cached_presentation_state_catalog["unsupported_states"]
-    }
-    (
-        cached_source_segmentation_catalog,
-        cached_source_segmentation_masks,
-        source_segmentation_instance_ids,
-    ) = build_source_segmentation_catalog(
-        catalog,
-        registry_segmentation_source_loader(catalog, guarded_registry),
-    )
-    resolved_source_root = (
-        source_root.expanduser().resolve(strict=True) if source_root is not None else None
-    )
-    if resolved_source_root is not None and not resolved_source_root.is_dir():
-        raise ValueError("DICOM Guide DICOM source root must be a directory")
+    prepared_source = _prepare_source(catalog, registry, source_root)
+    guarded_registry = prepared_source.registry
+    resolved_source_root = prepared_source.source_root
     resolved_ui = ui_dist.expanduser().resolve(strict=True) if ui_dist else None
     if resolved_ui is not None and not (resolved_ui / "index.html").is_file():
         raise ValueError(f"DICOM Guide UI bundle is missing index.html: {resolved_ui}")
@@ -1829,10 +2043,15 @@ def create_server(
     except BaseException:
         server.server_close()
         raise
-    server.catalog = catalog
-    server.registry = guarded_registry
+    server.catalog = prepared_source.catalog
+    server.registry = prepared_source.registry
     server.source_root = resolved_source_root
-    server.instance_guards = instance_guards
+    server.instance_guards = prepared_source.instance_guards
+    server.source_lock = threading.RLock()
+    server.source_revision = 0
+    server.include_hashes = include_hashes
+    server.folder_selection_lock = threading.Lock()
+    server.folder_picker = folder_picker
     server.token = token or secrets.token_urlsafe(24)
     server.ui_dist = resolved_ui
     server.viewer_state_lock = threading.Lock()
@@ -1865,11 +2084,15 @@ def create_server(
         cached_lesion_volume_display_summary
     )
     server.agent_access_audit = agent_access_audit
-    server.presentation_state_catalog = cached_presentation_state_catalog
-    server.presentation_state_instance_ids = presentation_state_instance_ids
-    server.source_segmentation_catalog = cached_source_segmentation_catalog
-    server.source_segmentation_masks = cached_source_segmentation_masks
-    server.source_segmentation_instance_ids = source_segmentation_instance_ids
+    server.presentation_state_catalog = prepared_source.presentation_state_catalog
+    server.presentation_state_instance_ids = (
+        prepared_source.presentation_state_instance_ids
+    )
+    server.source_segmentation_catalog = prepared_source.source_segmentation_catalog
+    server.source_segmentation_masks = prepared_source.source_segmentation_masks
+    server.source_segmentation_instance_ids = (
+        prepared_source.source_segmentation_instance_ids
+    )
     return server
 
 
@@ -1888,6 +2111,7 @@ def serve(
     lesion_volume_comparison: Path | None = None,
     agent_audit_log: Path | None = None,
     source_root: Path | None = None,
+    include_hashes: bool = True,
     on_ready: Callable[[str, str], None] | None = None,
 ) -> None:
     if navigation_fragment is not None and (
@@ -1907,6 +2131,7 @@ def serve(
         lesion_volume_comparison=lesion_volume_comparison,
         agent_audit_log=agent_audit_log,
         source_root=source_root,
+        include_hashes=include_hashes,
     )
     url_host = f"[{host}]" if ":" in host else host
     base_url = f"http://{url_host}:{server.server_port}"

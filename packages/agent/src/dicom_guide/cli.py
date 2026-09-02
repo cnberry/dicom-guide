@@ -696,6 +696,7 @@ def main() -> None:
                 lesion_volume_comparison=args.lesion_volume_comparison,
                 agent_audit_log=args.agent_audit_log,
                 source_root=args.root,
+                include_hashes=not args.no_hashes,
                 on_ready=write_session,
             )
         except (OSError, ValueError) as error:
@@ -751,6 +752,7 @@ def main() -> None:
                 lesion_volume_comparison=args.lesion_volume_comparison,
                 agent_audit_log=args.agent_audit_log,
                 source_root=args.root,
+                include_hashes=not args.no_hashes,
                 on_ready=write_session,
             )
         except (OSError, ValueError) as error:

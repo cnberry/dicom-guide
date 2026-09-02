@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dicomGuideThumbnail from '../../../docs/assets/dicom-guide-thumbnail.png';
 import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
 import { MeasurementWorkspace } from './components/MeasurementWorkspace';
 import { MprPanel } from './components/MprPanel';
@@ -34,7 +35,20 @@ import {
   findComparisonSourceIndexes,
   type MeasurementComparisonDraft,
 } from './measurementComparison';
-import { loadLocalServiceCatalog } from './localService';
+import { loadLocalServiceCatalog, selectLocalServiceFolder } from './localService';
+import {
+  pickLocalDirectory,
+  rememberLocalDirectory,
+  restoreLocalDirectory,
+  supportsLocalDirectoryPicker,
+  type LocalDirectoryHandle,
+} from './localFolder';
+import {
+  folderLoadMessage,
+  folderViewSelection,
+  resetAfterFolderViewTeardown,
+  type FolderLoadState,
+} from './folderWorkflow';
 import {
   parseNavigationFragment,
   resolveNavigationIntent,
@@ -90,8 +104,13 @@ import {
 } from './viewerControlService';
 import { discussionMarksAfterCommand, type DiscussionMark } from './discussionMarkup';
 
-type ImportState = { processed: number; total: number } | undefined;
 type ExportState = 'idle' | 'working' | 'saved' | 'error';
+type LoadLocalFilesOptions = {
+  handle?: LocalDirectoryHandle;
+  preserveMpr: boolean;
+  restoring: boolean;
+};
+type LoadLocalFiles = (files: File[], options: LoadLocalFilesOptions) => Promise<boolean>;
 type ConsultationBoardDraftItem = {
   id: string;
   selectionSlot: 'view_a' | 'view_b';
@@ -110,11 +129,23 @@ const maxPastedMeasurementBytes = 2_000_000;
 // intentionally narrowed to one-series review. Comparison will replace this gate only
 // after its alignment and measurement safeguards are ready.
 const focusedInterfaceEnabled = true;
+const mprPreferenceKey = 'dicom-guide-view-mode';
 
-const defaultFocusedSeries = (items: DicomSeries[]): DicomSeries | undefined =>
-  [...items]
-    .filter((item) => assessMprEligibility(item).eligible)
-    .sort((left, right) => right.instances.length - left.instances.length)[0] ?? items[0];
+const readMprPreference = (): boolean => {
+  try {
+    return window.sessionStorage.getItem(mprPreferenceKey) === '3-plane';
+  } catch {
+    return false;
+  }
+};
+
+const writeMprPreference = (enabled: boolean): void => {
+  try {
+    window.sessionStorage.setItem(mprPreferenceKey, enabled ? '3-plane' : 'single');
+  } catch {
+    // The active view still works when an embedded browser withholds session storage.
+  }
+};
 
 const instanceCenterPatientPoint = (
   series: DicomSeries,
@@ -183,6 +214,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const baselineViewportRef = useRef<DicomViewportHandle>(null);
   const followupViewportRef = useRef<DicomViewportHandle>(null);
   const consultationBoardOperationRef = useRef(false);
+  const loadLocalFilesRef = useRef<LoadLocalFiles>(async () => false);
   const sourceGenerationRef = useRef(0);
   const sourceSegmentationOperationRef = useRef(0);
   const sourceSegmentationAbortRef = useRef<AbortController | undefined>(undefined);
@@ -216,7 +248,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     'Codex control uses the authenticated local API.',
   );
   const [resetNonce, setResetNonce] = useState(0);
-  const [importState, setImportState] = useState<ImportState>();
+  const [folderLoadState, setFolderLoadState] = useState<FolderLoadState>();
   const [importMessage, setImportMessage] = useState('No scan folder loaded');
   const [sourceReady, setSourceReady] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<NavigationParseResult>();
@@ -626,11 +658,35 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   useEffect(() => {
     const controller = new AbortController();
     const generation = sourceGenerationRef.current;
-    void loadLocalServiceCatalog(controller.signal).then(async (catalog) => {
+    const initializeSource = async () => {
+      setFolderLoadState({ phase: 'collecting', fileCount: 0, restoring: true });
+      const catalog = await loadLocalServiceCatalog(controller.signal);
       if (controller.signal.aborted || generation !== sourceGenerationRef.current) {
         return;
       }
       if (!catalog) {
+        try {
+          const restored = await restoreLocalDirectory((fileCount) => {
+            if (!controller.signal.aborted) {
+              setFolderLoadState({ phase: 'collecting', fileCount, restoring: true });
+            }
+          });
+          if (controller.signal.aborted) return;
+          if (
+            restored &&
+            (await loadLocalFilesRef.current(restored.files, {
+              handle: restored.handle,
+              preserveMpr: readMprPreference(),
+              restoring: true,
+            }))
+          ) {
+            return;
+          }
+        } catch {
+          // Browser folder memory is only a fallback outside the packaged local service.
+        }
+        if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
+        setFolderLoadState(undefined);
         setPresentationStateLoading(false);
         setPresentationStateMessage(
           'Source-carried GSPS states are unavailable until the local DICOM Guide service is running.',
@@ -642,16 +698,18 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         setSourceReady(true);
         return;
       }
+      setFolderLoadState(undefined);
       setSeries(catalog.series);
-      const defaultSeries = defaultFocusedSeries(catalog.series);
+      const selection = folderViewSelection(catalog.series, readMprPreference());
       const catalogMessage = catalog.series.length
-        ? `${catalog.studyCount} studies · ${catalog.series.length} renderable series · ${catalog.instanceCount.toLocaleString()} indexed instances · local loopback service · no upload`
+        ? `${catalog.studyCount} studies · ${catalog.series.length} renderable series · ${catalog.instanceCount.toLocaleString()} indexed instances · local loopback service`
         : `${catalog.studyCount} studies · no renderable MR/CT pixel series · local loopback service`;
       sourceSummaryRef.current = catalogMessage;
       setImportMessage(catalogMessage);
-      setBaselineId(defaultSeries?.id);
+      setBaselineId(selection.series?.id);
+      setMprSeriesId(selection.mprSeriesId);
       setFollowupId(undefined);
-      setBaselineIndex(Math.floor((defaultSeries?.instances.length ?? 1) / 2));
+      setBaselineIndex(selection.instanceIndex);
       setFollowupIndex(0);
       setBaselinePresentationState(undefined);
       setFollowupPresentationState(undefined);
@@ -726,7 +784,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         }
       }
       setSourceReady(true);
-    });
+    };
+    void initializeSource();
     return () => controller.abort();
   }, []);
 
@@ -757,25 +816,61 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setPendingNavigation(undefined);
   }, [pendingNavigation, series, sourceReady]);
 
-  const openFolder = () => {
-    if (!inputRef.current) return;
-    inputRef.current.value = '';
-    inputRef.current.click();
-  };
+  const loadLocalFiles: LoadLocalFiles = async (candidateFiles, options) => {
+    const files = candidateFiles.filter((file) => !file.name.startsWith('.'));
+    if (!files.length) {
+      setFolderLoadState(undefined);
+      setImportMessage('That folder contains no readable files. The current folder remains open.');
+      return false;
+    }
+    setFolderLoadState({
+      phase: 'reading',
+      processed: 0,
+      total: files.length,
+      restoring: options.restoring,
+    });
+    setImportMessage('Reading local DICOM headers… Please wait; the folder will open automatically.');
+    let imported: DicomSeries[];
+    try {
+      imported = await parseDicomFiles(files, (processed, total) =>
+        setFolderLoadState({
+          phase: 'reading',
+          processed,
+          total,
+          restoring: options.restoring,
+        }),
+      );
+    } catch (error) {
+      setImportMessage(
+        `${error instanceof Error ? error.message : 'The local folder could not be read.'} The current folder remains open.`,
+      );
+      setFolderLoadState(undefined);
+      return false;
+    }
+    if (!imported.length) {
+      setImportMessage('No readable DICOM image series found. The current folder remains open.');
+      setFolderLoadState(undefined);
+      return false;
+    }
 
-  const chooseFiles = async (fileList: FileList | null) => {
-    if (!fileList?.length) return;
+    const selection = folderViewSelection(imported, options.preserveMpr);
+    const hadMountedFolderView = series.length > 0;
     sourceGenerationRef.current += 1;
     sourceSegmentationOperationRef.current += 1;
     sourceSegmentationAbortRef.current?.abort();
     sourceSegmentationAbortRef.current = undefined;
-    const files = Array.from(fileList).filter((file) => !file.name.startsWith('.'));
-    setSeries([]);
     setSourceReady(false);
+    setSeries([]);
     setBaselineId(undefined);
     setFollowupId(undefined);
     setMprSeriesId(undefined);
     setPatientPoint(undefined);
+    setRequestedMprPoint(undefined);
+    setDiscussionMarks([]);
+    setViewerRenderStatus('loading');
+    setAppliedAgentCommand(undefined);
+    lastViewerControlRevisionRef.current = 0;
+    setPendingNavigation(undefined);
     setLoadedSourceSegmentation(undefined);
     setSourceSegmentationCatalog(undefined);
     setSourceSegmentationLoading(false);
@@ -808,27 +903,108 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setAgentConsultationPlanMessage(
       'Paste a locally created agent consultation plan. Nothing opens or captures automatically.',
     );
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    resetLocalImagingSession();
-    setImportState({ processed: 0, total: files.length });
-    setImportMessage('Reading DICOM headers in this browser only…');
-    const imported = await parseDicomFiles(files, (processed, total) =>
-      setImportState({ processed, total }),
-    );
-    setSeries(imported);
-    setImportState(undefined);
+    try {
+      if (hadMountedFolderView) {
+        // Let React destroy the old Cornerstone engines before purging their shared caches.
+        await resetAfterFolderViewTeardown(resetLocalImagingSession);
+      } else {
+        resetLocalImagingSession();
+      }
+    } catch (error) {
+      setImportMessage(
+        `${error instanceof Error ? error.message : 'The local imaging workspace could not be reset.'} Reopen a folder to continue.`,
+      );
+      setFolderLoadState(undefined);
+      return false;
+    }
     const importedStudies = new Set(imported.map((item) => item.studyId)).size;
-    const importedMessage = imported.length
-      ? `${importedStudies} studies · ${imported.length} series · follow-up not auto-selected · no upload`
-      : 'No readable DICOM image series found.';
+    let importedMessage = `${importedStudies} studies · ${imported.length} series · local folder · follow-up not auto-selected`;
+    if (options.handle) {
+      try {
+        await rememberLocalDirectory(options.handle);
+      } catch {
+        importedMessage += ' · browser could not remember this folder for refresh';
+      }
+    }
     sourceSummaryRef.current = importedMessage;
     setImportMessage(importedMessage);
-    const defaultSeries = defaultFocusedSeries(imported);
-    setBaselineId(defaultSeries?.id);
+    setSeries(imported);
+    setBaselineId(selection.series?.id);
+    setMprSeriesId(selection.mprSeriesId);
     setFollowupId(undefined);
-    setBaselineIndex(Math.floor((defaultSeries?.instances.length ?? 1) / 2));
+    setBaselineIndex(selection.instanceIndex);
     setFollowupIndex(0);
     setSourceReady(true);
+    setFolderLoadState(undefined);
+    return true;
+  };
+  loadLocalFilesRef.current = loadLocalFiles;
+
+  const openFolder = async () => {
+    if (folderLoadState) return;
+    const preserveMpr = Boolean(mprSeries);
+    setFolderLoadState({ phase: 'collecting', fileCount: 0, restoring: false });
+    setImportMessage(
+      'Choose a local folder. It will be indexed on this computer and open automatically.',
+    );
+    try {
+      const localSelection = await selectLocalServiceFolder();
+      if (localSelection?.status === 'cancelled') {
+        setFolderLoadState(undefined);
+        return;
+      }
+      if (localSelection?.status === 'selected') {
+        setImportMessage(
+          `${localSelection.studyCount} studies · ${localSelection.seriesCount} renderable series · ${localSelection.instanceCount.toLocaleString()} indexed instances · reopening local viewer…`,
+        );
+        window.location.reload();
+        return;
+      }
+    } catch (error) {
+      setFolderLoadState(undefined);
+      setImportMessage(
+        error instanceof Error
+          ? error.message
+          : 'The local folder could not be indexed. The current folder remains open.',
+      );
+      return;
+    }
+    setFolderLoadState(undefined);
+    if (supportsLocalDirectoryPicker()) {
+      setFolderLoadState({ phase: 'collecting', fileCount: 0, restoring: false });
+      setImportMessage('Opening a local folder on this computer…');
+      try {
+        const selection = await pickLocalDirectory((fileCount) =>
+          setFolderLoadState({ phase: 'collecting', fileCount, restoring: false }),
+        );
+        if (!selection) {
+          setFolderLoadState(undefined);
+          return;
+        }
+        await loadLocalFiles(selection.files, {
+          handle: selection.handle,
+          preserveMpr,
+          restoring: false,
+        });
+      } catch (error) {
+        setFolderLoadState(undefined);
+        setImportMessage(
+          `${error instanceof Error ? error.message : 'The local folder could not be opened.'} The current folder remains open.`,
+        );
+      }
+      return;
+    }
+    if (!inputRef.current) return;
+    inputRef.current.value = '';
+    inputRef.current.click();
+  };
+
+  const chooseFiles = async (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    await loadLocalFiles(Array.from(fileList), {
+      preserveMpr: Boolean(mprSeries),
+      restoring: false,
+    });
   };
 
   const updateIndex = (side: 'baseline' | 'followup', next: number) => {
@@ -1630,8 +1806,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
 
   if (focusedInterfaceEnabled) {
     const studyCount = new Set(series.map((item) => item.studyId)).size;
-    const sourceStatus = importState
-      ? `Reading ${importState.processed.toLocaleString()} of ${importState.total.toLocaleString()} files`
+    const sourceStatus = folderLoadState
+      ? folderLoadMessage(folderLoadState)
       : series.length
         ? `${studyCount} ${studyCount === 1 ? 'study' : 'studies'} · ${series.length} series · local only`
         : 'No folder open';
@@ -1645,6 +1821,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           className="hidden-input"
           type="file"
           multiple
+          disabled={Boolean(folderLoadState)}
           // Supported by current Chromium and Safari; React's type omits the attribute.
           {...({ webkitdirectory: '' } as Record<string, string>)}
           onChange={(event) => void chooseFiles(event.target.files)}
@@ -1655,18 +1832,39 @@ export default function App({ active = true }: { active?: boolean } = {}) {
 
         <div className="simple-workspace">
           <div className="image-workspace">
+            {folderLoadState && series.length > 0 && (
+              <div className="simple-folder-progress" role="status" aria-live="polite">
+                <strong>{folderLoadMessage(folderLoadState)}</strong>
+                <span>Please wait. The new folder will open automatically when it is ready.</span>
+              </div>
+            )}
             {series.length === 0 ? (
               <div className="simple-empty">
-                <h2>Open a DICOM folder</h2>
-                <p>Images are read on this computer and are not uploaded.</p>
-                <button className="primary-action" onClick={openFolder}>
-                  Open folder
-                </button>
+                {folderLoadState ? (
+                  <>
+                    <h2>{folderLoadMessage(folderLoadState)}</h2>
+                    <p>Please wait. The folder will open automatically when it is ready.</p>
+                  </>
+                ) : (
+                  <>
+                    <h2>Open a DICOM folder</h2>
+                    <p>Images and metadata stay on this computer.</p>
+                    <button className="primary-action" onClick={() => void openFolder()}>
+                      Open folder
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <>
                 <div className="simple-controls">
                   <div className="simple-series-control">
+                    <img
+                      className="simple-brand-icon"
+                      src={dicomGuideThumbnail}
+                      alt=""
+                      aria-hidden="true"
+                    />
                     <SeriesSelect
                       label="Series"
                       value={baselineId}
@@ -1674,8 +1872,10 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                       onChange={(id) => {
                         notePersonInteraction();
                         const selected = series.find((item) => item.id === id);
+                        const keepMpr = Boolean(mprSeries) && assessMprEligibility(selected).eligible;
                         setBaselinePresentationState(undefined);
-                        setMprSeriesId(undefined);
+                        setMprSeriesId(keepMpr ? id : undefined);
+                        if (mprSeries) writeMprPreference(keepMpr);
                         setPatientPoint(undefined);
                         setRequestedMprPoint(undefined);
                         setDiscussionMarks([]);
@@ -1685,8 +1885,13 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                         setMeasurementComparisonDraft(undefined);
                       }}
                     />
-                    <button className="import-button" aria-label="Open folder" onClick={openFolder}>
-                      Folder
+                    <button
+                      className="import-button"
+                      aria-label="Open folder"
+                      disabled={Boolean(folderLoadState)}
+                      onClick={() => void openFolder()}
+                    >
+                      {folderLoadState ? 'Wait…' : 'Folder'}
                     </button>
                   </div>
                   <div className="simple-control-groups">
@@ -1696,6 +1901,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                         aria-pressed={!mprSeries}
                         onClick={() => {
                           notePersonInteraction();
+                          writeMprPreference(false);
                           if (mprSeries && baseline && patientPoint) {
                             setBaselineIndex(
                               sourceIndexForPatientPoint(baseline, baselineIndex, patientPoint),
@@ -1716,6 +1922,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                         title={mprEligibility.reason}
                         onClick={() => {
                           notePersonInteraction();
+                          writeMprPreference(true);
                           setPatientPoint(undefined);
                           setRequestedMprPoint(undefined);
                           setViewerRenderStatus('loading');
@@ -1830,6 +2037,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
                     onPersonInteraction={notePersonInteraction}
                     controlRevision={appliedAgentCommand?.revision}
                     onClose={() => {
+                      writeMprPreference(false);
                       if (baseline && patientPoint) {
                         setBaselineIndex(
                           sourceIndexForPatientPoint(baseline, baselineIndex, patientPoint),
@@ -1896,14 +2104,19 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           <strong>Research &amp; communication tool</strong>
           <span>Not validated for diagnosis. Clinician review is required.</span>
         </div>
-        <button className="import-button" onClick={openFolder}>
-          Open DICOM folder
+        <button
+          className="import-button"
+          disabled={Boolean(folderLoadState)}
+          onClick={() => void openFolder()}
+        >
+          {folderLoadState ? 'Please wait…' : 'Open DICOM folder'}
         </button>
         <input
           ref={inputRef}
           className="hidden-input"
           type="file"
           multiple
+          disabled={Boolean(folderLoadState)}
           // Supported by current Chromium and Safari; React's type omits the attribute.
           {...({ webkitdirectory: '' } as Record<string, string>)}
           onChange={(event) => void chooseFiles(event.target.files)}
@@ -1920,8 +2133,8 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       <section className="workspace-summary">
         <div>
           <span className={`status-dot ${series.length ? 'ready' : ''}`} />
-          {importState
-            ? `Reading ${importState.processed.toLocaleString()} of ${importState.total.toLocaleString()} files`
+          {folderLoadState
+            ? folderLoadMessage(folderLoadState)
             : importMessage}
         </div>
         <div className="privacy-note">Local processing · no telemetry · originals remain unchanged</div>
@@ -1935,11 +2148,15 @@ export default function App({ active = true }: { active?: boolean } = {}) {
           <span className="eyebrow">Start with source fidelity</span>
           <h2>Open a copied DICOM folder</h2>
           <p>
-            DICOM Guide reads headers and pixels locally. It does not upload studies, modify source
-            files, or claim a clinical interpretation.
+            DICOM Guide reads headers and pixels locally. Studies stay on this computer, source
+            files remain unchanged, and no clinical interpretation is claimed.
           </p>
-          <button className="primary-action" onClick={openFolder}>
-            Choose folder
+          <button
+            className="primary-action"
+            disabled={Boolean(folderLoadState)}
+            onClick={() => void openFolder()}
+          >
+            {folderLoadState ? 'Please wait…' : 'Choose folder'}
           </button>
           <div className="empty-steps">
             <span><b>1</b> Inventory studies</span>
