@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
+from pydicom.uid import generate_uid
 
 import dicom_guide.server as server_module
 from dicom_guide.catalog import build_catalog
@@ -17,6 +18,7 @@ from dicom_guide.lesion_volume_comparisons import lesion_volume_comparison_summa
 from dicom_guide.lesion_volume_comparisons import lesion_volume_comparison_archive_bytes
 from dicom_guide.registration_reviews import write_registration_review
 from dicom_guide.server import create_server
+from test_catalog import write_dicom
 from test_registration_reviews import registration_bundle, review_request
 from test_lesion_volume_comparisons import _pair
 
@@ -100,6 +102,123 @@ def test_unified_server_serves_clean_loopback_workspace_and_dicom(
             headers={"Authorization": "Bearer test-session-token"},
         )
         assert status == HTTPStatus.OK
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_packaged_viewer_switches_local_source_without_browser_file_materialization(
+    tmp_path: Path,
+) -> None:
+    ui_dist = tmp_path / "ui"
+    ui_dist.mkdir()
+    (ui_dist / "index.html").write_text("<!doctype html><title>DICOM Guide test</title>")
+    first_root = tmp_path / "synthetic-first"
+    second_root = tmp_path / "synthetic-second"
+    empty_root = tmp_path / "synthetic-empty"
+    first_root.mkdir()
+    second_root.mkdir()
+    empty_root.mkdir()
+    for root, date, description in (
+        (first_root, "20260101", "Synthetic first MPR"),
+        (second_root, "20260202", "Synthetic second MPR"),
+    ):
+        study_uid = generate_uid()
+        series_uid = generate_uid()
+        for instance in range(1, 4):
+            write_dicom(
+                root / f"image-{instance}.dcm",
+                study_uid=study_uid,
+                series_uid=series_uid,
+                date=date,
+                instance=instance,
+                description=description,
+            )
+
+    first_catalog, first_registry = build_catalog(first_root, include_hashes=False)
+    selections: list[Path | None] = [second_root, None, empty_root]
+    picker_calls = 0
+
+    def select_folder() -> Path | None:
+        nonlocal picker_calls
+        picker_calls += 1
+        return selections.pop(0)
+
+    server = create_server(
+        first_catalog,
+        first_registry,
+        port=0,
+        token="folder-switch-token",
+        ui_dist=ui_dist,
+        source_root=first_root,
+        include_hashes=False,
+        folder_picker=select_folder,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_port
+    headers = {
+        "Origin": f"http://127.0.0.1:{port}",
+        "Host": f"127.0.0.1:{port}",
+        "Content-Type": "application/json",
+    }
+    first_instance_id = next(iter(first_registry))
+    try:
+        status, _, _ = post(
+            port,
+            "/v1/local-folders/select",
+            b"{}",
+            headers={**headers, "Origin": "http://example.invalid"},
+        )
+        assert status == HTTPStatus.FORBIDDEN
+        assert picker_calls == 0
+
+        status, _, body = post(
+            port, "/v1/local-folders/select", b"{}", headers=headers
+        )
+        assert status == HTTPStatus.OK
+        summary = json.loads(body)
+        assert summary == {
+            "status": "selected",
+            "source_revision": 1,
+            "study_count": 1,
+            "renderable_series": 1,
+            "dicom_instances": 3,
+        }
+        assert str(second_root) not in body.decode()
+
+        status, _, body = request(port, "/v1/manifest")
+        assert status == HTTPStatus.OK
+        selected_manifest = json.loads(body)
+        assert selected_manifest["source"]["root_label"] == second_root.name
+        assert selected_manifest["studies"][0]["series"][0]["series_description"] == (
+            "Synthetic second MPR"
+        )
+        second_instance_id = selected_manifest["studies"][0]["series"][0][
+            "instances"
+        ][0]["id"]
+        status, _, _ = request(port, f"/v1/instances/{first_instance_id}")
+        assert status == HTTPStatus.NOT_FOUND
+        status, _, body = request(port, f"/v1/instances/{second_instance_id}")
+        assert status == HTTPStatus.OK
+        assert body.startswith(b"\x00" * 32)
+
+        status, _, body = post(
+            port, "/v1/local-folders/select", b"{}", headers=headers
+        )
+        assert status == HTTPStatus.OK
+        assert json.loads(body) == {"status": "cancelled"}
+        status, _, body = request(port, "/v1/manifest")
+        assert json.loads(body)["source"]["root_label"] == second_root.name
+
+        status, _, body = post(
+            port, "/v1/local-folders/select", b"{}", headers=headers
+        )
+        assert status == HTTPStatus.UNPROCESSABLE_ENTITY
+        assert json.loads(body) == {"error": "no_renderable_dicom"}
+        status, _, body = request(port, "/v1/manifest")
+        assert json.loads(body)["source"]["root_label"] == second_root.name
     finally:
         server.shutdown()
         server.server_close()
@@ -420,6 +539,19 @@ def test_registration_qa_preview_is_loopback_available_and_review_is_idempotent(
     port = server.server_port
     bearer = {"Authorization": "Bearer qa-session-token"}
     try:
+        status, _, body = post(
+            port,
+            "/v1/local-folders/select",
+            b"{}",
+            headers={
+                "Origin": f"http://127.0.0.1:{port}",
+                "Host": f"127.0.0.1:{port}",
+                "Content-Type": "application/json",
+            },
+        )
+        assert status == HTTPStatus.LOCKED
+        assert json.loads(body) == {"error": "source_locked"}
+
         status, _, body = request(port, "/v1/registration-qa", headers=bearer)
         assert status == HTTPStatus.OK
         agent_summary = json.loads(body)

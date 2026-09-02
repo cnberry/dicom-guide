@@ -6,6 +6,16 @@ export type LocalServiceCatalog = {
   instanceCount: number;
 };
 
+export type LocalFolderSelection =
+  | { status: 'cancelled' }
+  | {
+      status: 'selected';
+      sourceRevision: number;
+      studyCount: number;
+      seriesCount: number;
+      instanceCount: number;
+    };
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
@@ -152,4 +162,67 @@ export const loadLocalServiceCatalog = async (
     if (error instanceof DOMException && error.name === 'AbortError') return undefined;
     return undefined;
   }
+};
+
+const localFolderError = (value: unknown): string => {
+  const code = isRecord(value) && typeof value.error === 'string' ? value.error : undefined;
+  if (code === 'no_renderable_dicom') {
+    return 'No readable MR or CT image series were found. The current folder remains open.';
+  }
+  if (code === 'folder_picker_unavailable') {
+    return 'The native folder chooser is unavailable on this computer.';
+  }
+  if (code === 'folder_selection_in_progress') {
+    return 'A folder is already being opened. Please wait.';
+  }
+  if (code === 'source_locked') {
+    return 'This special review session is locked to its launch folder.';
+  }
+  return 'The local folder could not be indexed. The current folder remains open.';
+};
+
+export const selectLocalServiceFolder = async (): Promise<
+  LocalFolderSelection | undefined
+> => {
+  let response: Response;
+  try {
+    response = await fetch('/v1/local-folders/select', {
+      method: 'POST',
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+  } catch {
+    throw new Error('The local folder service is unavailable. The current folder remains open.');
+  }
+  if (response.status === 404) return undefined;
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error('The local folder service returned an invalid response.');
+  }
+  if (!response.ok) throw new Error(localFolderError(value));
+  if (isRecord(value) && value.status === 'cancelled') return { status: 'cancelled' };
+  if (
+    !isRecord(value) ||
+    value.status !== 'selected' ||
+    !Number.isSafeInteger(value.source_revision) ||
+    !Number.isSafeInteger(value.study_count) ||
+    !Number.isSafeInteger(value.renderable_series) ||
+    !Number.isSafeInteger(value.dicom_instances)
+  ) {
+    throw new Error('The local folder service returned an invalid response.');
+  }
+  return {
+    status: 'selected',
+    sourceRevision: value.source_revision as number,
+    studyCount: value.study_count as number,
+    seriesCount: value.renderable_series as number,
+    instanceCount: value.dicom_instances as number,
+  };
 };

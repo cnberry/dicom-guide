@@ -34,7 +34,7 @@ import {
   findComparisonSourceIndexes,
   type MeasurementComparisonDraft,
 } from './measurementComparison';
-import { loadLocalServiceCatalog } from './localService';
+import { loadLocalServiceCatalog, selectLocalServiceFolder } from './localService';
 import {
   pickLocalDirectory,
   rememberLocalDirectory,
@@ -659,33 +659,33 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     const generation = sourceGenerationRef.current;
     const initializeSource = async () => {
       setFolderLoadState({ phase: 'collecting', fileCount: 0, restoring: true });
-      try {
-        const restored = await restoreLocalDirectory((fileCount) => {
-          if (!controller.signal.aborted) {
-            setFolderLoadState({ phase: 'collecting', fileCount, restoring: true });
-          }
-        });
-        if (controller.signal.aborted) return;
-        if (
-          restored &&
-          (await loadLocalFilesRef.current(restored.files, {
-            handle: restored.handle,
-            preserveMpr: readMprPreference(),
-            restoring: true,
-          }))
-        ) {
-          return;
-        }
-      } catch {
-        // If browser folder memory is unavailable, fall back to the launch folder.
-      }
-      if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
-      setFolderLoadState(undefined);
       const catalog = await loadLocalServiceCatalog(controller.signal);
       if (controller.signal.aborted || generation !== sourceGenerationRef.current) {
         return;
       }
       if (!catalog) {
+        try {
+          const restored = await restoreLocalDirectory((fileCount) => {
+            if (!controller.signal.aborted) {
+              setFolderLoadState({ phase: 'collecting', fileCount, restoring: true });
+            }
+          });
+          if (controller.signal.aborted) return;
+          if (
+            restored &&
+            (await loadLocalFilesRef.current(restored.files, {
+              handle: restored.handle,
+              preserveMpr: readMprPreference(),
+              restoring: true,
+            }))
+          ) {
+            return;
+          }
+        } catch {
+          // Browser folder memory is only a fallback outside the packaged local service.
+        }
+        if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
+        setFolderLoadState(undefined);
         setPresentationStateLoading(false);
         setPresentationStateMessage(
           'Source-carried GSPS states are unavailable until the local DICOM Guide service is running.',
@@ -697,6 +697,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
         setSourceReady(true);
         return;
       }
+      setFolderLoadState(undefined);
       setSeries(catalog.series);
       const selection = folderViewSelection(catalog.series, readMprPreference());
       const catalogMessage = catalog.series.length
@@ -941,9 +942,36 @@ export default function App({ active = true }: { active?: boolean } = {}) {
   const openFolder = async () => {
     if (folderLoadState) return;
     const preserveMpr = Boolean(mprSeries);
+    setFolderLoadState({ phase: 'collecting', fileCount: 0, restoring: false });
+    setImportMessage(
+      'Choose a local folder. It will be indexed on this computer and open automatically.',
+    );
+    try {
+      const localSelection = await selectLocalServiceFolder();
+      if (localSelection?.status === 'cancelled') {
+        setFolderLoadState(undefined);
+        return;
+      }
+      if (localSelection?.status === 'selected') {
+        setImportMessage(
+          `${localSelection.studyCount} studies · ${localSelection.seriesCount} renderable series · ${localSelection.instanceCount.toLocaleString()} indexed instances · reopening local viewer…`,
+        );
+        window.location.reload();
+        return;
+      }
+    } catch (error) {
+      setFolderLoadState(undefined);
+      setImportMessage(
+        error instanceof Error
+          ? error.message
+          : 'The local folder could not be indexed. The current folder remains open.',
+      );
+      return;
+    }
+    setFolderLoadState(undefined);
     if (supportsLocalDirectoryPicker()) {
       setFolderLoadState({ phase: 'collecting', fileCount: 0, restoring: false });
-      setImportMessage('Opening a local folder…');
+      setImportMessage('Opening a local folder on this computer…');
       try {
         const selection = await pickLocalDirectory((fileCount) =>
           setFolderLoadState({ phase: 'collecting', fileCount, restoring: false }),
