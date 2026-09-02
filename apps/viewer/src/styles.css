@@ -89,6 +89,12 @@ main { min-height: 100vh; }
 }
 .import-button { justify-self: end; }
 .import-button:hover, .primary-action:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.import-button:disabled, .primary-action:disabled {
+  cursor: wait;
+  opacity: 0.58;
+  transform: none;
+  filter: none;
+}
 .hidden-input { display: none; }
 
 .simple-app { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -146,6 +152,31 @@ main { min-height: 100vh; }
   background: #050c0b;
 }
 .image-workspace { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.simple-folder-progress {
+  position: absolute;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 30px;
+  background: rgba(5, 12, 11, 0.92);
+  text-align: center;
+  cursor: wait;
+}
+.simple-folder-progress::before {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(110, 231, 194, 0.24);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  content: '';
+  animation: local-folder-spin 800ms linear infinite;
+}
+.simple-folder-progress strong { font-size: 14px; }
+.simple-folder-progress span { max-width: 420px; color: var(--muted); font-size: 11px; }
+@keyframes local-folder-spin { to { transform: rotate(360deg); } }
 .single-viewport-grid { flex: 1 1 auto; min-height: 0; display: flex; padding: 0 6px 6px; }
 .single-viewport-grid .viewport-shell { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .single-viewport-grid .viewport-heading { display: none; }

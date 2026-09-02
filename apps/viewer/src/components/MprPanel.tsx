@@ -352,7 +352,7 @@ export function MprPanel({
       if (controllerRef.current === ownedController) controllerRef.current = undefined;
     };
   }, [
-    series.id,
+    series,
     readonlySourceSegmentation?.state.segmentation_id,
     readonlySourceSegmentation?.segment.segment_number,
     onReadonlyReady,
