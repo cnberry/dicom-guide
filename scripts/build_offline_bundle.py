@@ -19,7 +19,7 @@ from typing import Any, NamedTuple
 
 
 PROJECT_NAME = "dicom-guide"
-PROJECT_VERSION = "0.15.0"
+PROJECT_VERSION = "0.16.0"
 PYDICOM_VERSION = "3.0.2"
 BUNDLE_SCHEMA_VERSION = "1.0.0"
 BUNDLE_ARTIFACT_TYPE = "dicom_guide_offline_runtime_bundle"

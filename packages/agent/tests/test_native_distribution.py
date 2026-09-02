@@ -42,7 +42,7 @@ def test_platform_tag_rejects_unknown_host() -> None:
 
 
 def test_windows_archive_and_checksum(tmp_path) -> None:
-    root = tmp_path / "dicom-guide-0.15.0-windows-x86_64"
+    root = tmp_path / "dicom-guide-0.16.0-windows-x86_64"
     (root / "app").mkdir(parents=True)
     (root / "app" / "dicom-guide.exe").write_bytes(b"synthetic executable")
     (root / "install.ps1").write_text("Write-Host synthetic")
@@ -60,7 +60,7 @@ def test_windows_archive_and_checksum(tmp_path) -> None:
 
 
 def test_unix_archive_keeps_one_top_level_directory(tmp_path) -> None:
-    root = tmp_path / "dicom-guide-0.15.0-linux-x86_64"
+    root = tmp_path / "dicom-guide-0.16.0-linux-x86_64"
     root.mkdir()
     (root / "install.sh").write_text("#!/bin/sh\n")
     archive = native.archive_path(tmp_path, "linux-x86_64")

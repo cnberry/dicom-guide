@@ -166,7 +166,7 @@ def main() -> None:
     segmentation.ContentDescription = "Patient-free local source SEG validation"
     segmentation.Manufacturer = "DICOM Guide local"
     segmentation.ManufacturerModelName = "DICOM Guide synthetic generator"
-    segmentation.SoftwareVersions = "0.15.0"
+    segmentation.SoftwareVersions = "0.16.0"
     segmentation.Rows = ROWS
     segmentation.Columns = COLUMNS
     segmentation.NumberOfFrames = len(nonempty)

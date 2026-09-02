@@ -17,7 +17,7 @@ import zipfile
 from pathlib import Path
 
 
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 PYINSTALLER_VERSION = "6.16.0"
 
 

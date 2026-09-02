@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 HELP = """DICOM Guide — open medical scan files and explore them with your agent
 
 Have a folder copied from an imaging disc or portal download? Open the top-level
