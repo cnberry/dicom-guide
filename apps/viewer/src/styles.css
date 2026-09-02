@@ -132,7 +132,8 @@ main { min-height: 100vh; }
   border-bottom: 1px solid var(--line);
   background: #07110f;
 }
-.simple-series-control { display: grid; grid-template-columns: minmax(120px, 1fr) auto; align-items: end; gap: 4px; min-width: 0; }
+.simple-series-control { display: grid; grid-template-columns: 31px minmax(120px, 1fr) auto; align-items: end; gap: 4px; min-width: 0; }
+.simple-brand-icon { align-self: center; width: 31px; height: 31px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(110, 231, 194, 0.18)); }
 .simple-series-control .series-select > span { display: none; }
 .simple-series-control .series-select select { min-height: 31px; padding: 6px 28px 6px 8px; border-radius: 6px; font-size: 10px; }
 .simple-series-control .import-button { min-height: 31px; padding: 5px 8px; border-radius: 6px; white-space: nowrap; font-size: 9px; }

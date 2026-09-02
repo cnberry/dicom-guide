@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dicomGuideThumbnail from '../../../docs/assets/dicom-guide-thumbnail.png';
 import { DicomViewport, type DicomViewportHandle } from './components/DicomViewport';
 import { MeasurementWorkspace } from './components/MeasurementWorkspace';
 import { MprPanel } from './components/MprPanel';
@@ -1858,6 +1859,12 @@ export default function App({ active = true }: { active?: boolean } = {}) {
               <>
                 <div className="simple-controls">
                   <div className="simple-series-control">
+                    <img
+                      className="simple-brand-icon"
+                      src={dicomGuideThumbnail}
+                      alt=""
+                      aria-hidden="true"
+                    />
                     <SeriesSelect
                       label="Series"
                       value={baselineId}
