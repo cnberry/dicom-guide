@@ -32,3 +32,16 @@ export const folderLoadMessage = (state: FolderLoadState): string => {
   }
   return `Reading ${state.processed.toLocaleString()} of ${state.total.toLocaleString()} local files…`;
 };
+
+type FrameScheduler = (callback: FrameRequestCallback) => number;
+
+export const resetAfterFolderViewTeardown = async (
+  reset: () => void,
+  scheduleFrame: FrameScheduler = requestAnimationFrame,
+): Promise<void> => {
+  // The first frame commits the empty source; the second follows passive effect cleanup.
+  await new Promise<void>((resolve) => {
+    scheduleFrame(() => scheduleFrame(() => resolve()));
+  });
+  reset();
+};

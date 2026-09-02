@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { folderLoadMessage, folderViewSelection } from './folderWorkflow';
+import {
+  folderLoadMessage,
+  folderViewSelection,
+  resetAfterFolderViewTeardown,
+} from './folderWorkflow';
 import type { DicomSeries } from './dicom';
 
 const series = (id: string, instanceCount: number, eligible = true): DicomSeries => ({
@@ -54,5 +58,40 @@ describe('folder loading workflow', () => {
     expect(folderLoadMessage({ phase: 'reading', processed: 4, total: 12, restoring: false })).toBe(
       'Reading 4 of 12 local files…',
     );
+  });
+
+  it('resets imaging only after mounted folder views have had two frames to tear down', async () => {
+    const callbacks: FrameRequestCallback[] = [];
+    const scheduleFrame = (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    };
+    let reset = false;
+
+    const pending = resetAfterFolderViewTeardown(() => {
+      reset = true;
+    }, scheduleFrame);
+
+    expect(reset).toBe(false);
+    expect(callbacks).toHaveLength(1);
+    callbacks.shift()?.(0);
+    expect(reset).toBe(false);
+    expect(callbacks).toHaveLength(1);
+    callbacks.shift()?.(16);
+    await pending;
+    expect(reset).toBe(true);
+  });
+
+  it('rejects a reset failure after teardown so the folder workflow can handle it', async () => {
+    const scheduleFrame = (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    };
+
+    await expect(
+      resetAfterFolderViewTeardown(() => {
+        throw new Error('reset failed');
+      }, scheduleFrame),
+    ).rejects.toThrow('reset failed');
   });
 });

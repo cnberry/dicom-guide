@@ -45,6 +45,7 @@ import {
 import {
   folderLoadMessage,
   folderViewSelection,
+  resetAfterFolderViewTeardown,
   type FolderLoadState,
 } from './folderWorkflow';
 import {
@@ -850,12 +851,17 @@ export default function App({ active = true }: { active?: boolean } = {}) {
       return false;
     }
 
+    const selection = folderViewSelection(imported, options.preserveMpr);
+    const hadMountedFolderView = series.length > 0;
     sourceGenerationRef.current += 1;
     sourceSegmentationOperationRef.current += 1;
     sourceSegmentationAbortRef.current?.abort();
     sourceSegmentationAbortRef.current = undefined;
     setSourceReady(false);
+    setSeries([]);
+    setBaselineId(undefined);
     setFollowupId(undefined);
+    setMprSeriesId(undefined);
     setPatientPoint(undefined);
     setRequestedMprPoint(undefined);
     setDiscussionMarks([]);
@@ -895,8 +901,20 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     setAgentConsultationPlanMessage(
       'Paste a locally created agent consultation plan. Nothing opens or captures automatically.',
     );
-    resetLocalImagingSession();
-    setSeries(imported);
+    try {
+      if (hadMountedFolderView) {
+        // Let React destroy the old Cornerstone engines before purging their shared caches.
+        await resetAfterFolderViewTeardown(resetLocalImagingSession);
+      } else {
+        resetLocalImagingSession();
+      }
+    } catch (error) {
+      setImportMessage(
+        `${error instanceof Error ? error.message : 'The local imaging workspace could not be reset.'} Reopen a folder to continue.`,
+      );
+      setFolderLoadState(undefined);
+      return false;
+    }
     const importedStudies = new Set(imported.map((item) => item.studyId)).size;
     let importedMessage = `${importedStudies} studies · ${imported.length} series · local folder · follow-up not auto-selected`;
     if (options.handle) {
@@ -908,7 +926,7 @@ export default function App({ active = true }: { active?: boolean } = {}) {
     }
     sourceSummaryRef.current = importedMessage;
     setImportMessage(importedMessage);
-    const selection = folderViewSelection(imported, options.preserveMpr);
+    setSeries(imported);
     setBaselineId(selection.series?.id);
     setMprSeriesId(selection.mprSeriesId);
     setFollowupId(undefined);
