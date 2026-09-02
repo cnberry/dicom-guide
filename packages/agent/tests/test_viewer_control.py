@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from http import HTTPStatus
 from http.client import HTTPConnection
 from pathlib import Path
@@ -342,7 +343,7 @@ def test_response_withholds_stale_observation() -> None:
     available = response(command=current, observation=observation(), observation_age_seconds=1.2)
     assert available["viewer_connected"] is True
     assert available["observation"]["instance_id"] == INSTANCE_IDS[1]
-    stale = response(command=current, observation=observation(), observation_age_seconds=5.1)
+    stale = response(command=current, observation=observation(), observation_age_seconds=30.1)
     assert stale["viewer_connected"] is False
     assert stale["observation"] is None
 
@@ -428,6 +429,23 @@ def test_loopback_control_separates_bearer_command_from_browser_observation(
         assert status == HTTPStatus.OK
         assert body["viewer_connected"] is True
         assert body["observation"]["applied_revision"] == 1
+
+        server.viewer_control_observation_received_monotonic = time.monotonic() - 60
+        renewed = server.wait_for_viewer_control_response(
+            after_revision=1,
+            viewer_id=VIEWER_ID,
+            wait_seconds=0,
+        )
+        assert renewed["viewer_connected"] is True
+        assert renewed["observation"]["viewer_id"] == VIEWER_ID
+
+        server.viewer_control_observation_received_monotonic = time.monotonic() - 60
+        stale = server.wait_for_viewer_control_response(
+            after_revision=1,
+            viewer_id="viewer_aaaaaaaaaaaaaaaaaaaa",
+            wait_seconds=0,
+        )
+        assert stale["viewer_connected"] is False
     finally:
         server.shutdown()
         server.server_close()

@@ -9,7 +9,10 @@ from typing import Any
 SCHEMA_VERSION = "1.0.0"
 MEDIA_TYPE = "application/vnd.dicom-guide.viewer-control+json"
 MAX_REQUEST_BYTES = 128 * 1024
-OBSERVATION_TTL_SECONDS = 5.0
+# The browser renews this lease through a 10-second long poll as well as observation
+# heartbeats. Keep enough margin for background-tab scheduling without treating a
+# closed viewer as connected for minutes.
+OBSERVATION_TTL_SECONDS = 30.0
 PATIENT_POINT_DISPLAY_TOLERANCE_MM = 1.0
 
 COMMAND_ID = re.compile(r"^control_[0-9a-f]{32}$")

@@ -47,6 +47,11 @@ hashes, and securely discover the active owner-only local session.
 4. Poll `GET /v1/viewer-control` until the observation has the accepted command ID
    and revision with `render_status: "ready"`.
 
+The browser viewer uses one long poll at a time with `after_revision`, `wait_seconds`
+(at most 25), and its opaque `viewer_id`. A matching long poll renews the exact
+viewer's short local lease, so background-tab timer throttling does not make an open
+viewer appear disconnected. Agent clients may continue using the immediate route.
+
 The browser publishes a heartbeat every two seconds. `viewer_connected` becomes
 false when no current browser observation has arrived for five seconds.
 

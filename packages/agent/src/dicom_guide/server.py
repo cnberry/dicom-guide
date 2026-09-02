@@ -17,7 +17,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .agent_access_audit import AgentAccessAudit
 from .agent_consultation_plans import (
@@ -292,6 +292,7 @@ class DicomGuideServer(ThreadingHTTPServer):
     viewer_state_received_monotonic: float | None
     viewer_state_revoked_publishers: set[str]
     viewer_control_lock: threading.Lock
+    viewer_control_changed: threading.Condition
     viewer_control_revision: int
     viewer_control_command: dict[str, Any] | None
     viewer_control_observation: dict[str, Any] | None
@@ -466,7 +467,7 @@ class DicomGuideServer(ThreadingHTTPServer):
             )
 
     def set_viewer_control_command(self, command: dict[str, Any]) -> dict[str, Any]:
-        with self.viewer_control_lock:
+        with self.viewer_control_changed:
             patch = command.pop("discussion_marks_patch", None)
             if patch is not None:
                 current_marks = (
@@ -484,7 +485,47 @@ class DicomGuideServer(ThreadingHTTPServer):
                 "issued_at": viewer_control_utc_now(),
             }
             self.viewer_control_command = issued
+            self.viewer_control_changed.notify_all()
             return dict(issued)
+
+    def wait_for_viewer_control_response(
+        self, *, after_revision: int, viewer_id: str | None, wait_seconds: float
+    ) -> dict[str, Any]:
+        with self.viewer_control_changed:
+            if (
+                viewer_id is not None
+                and self.viewer_control_observation is not None
+                and self.viewer_control_observation.get("viewer_id") == viewer_id
+            ):
+                # A matching long poll is an active lease from the exact browser viewer.
+                # This stays reliable when background tabs throttle JavaScript timers.
+                self.viewer_control_observation_received_monotonic = time.monotonic()
+            if (
+                wait_seconds > 0
+                and self.viewer_control_revision <= after_revision
+            ):
+                self.viewer_control_changed.wait_for(
+                    lambda: self.viewer_control_revision > after_revision,
+                    timeout=wait_seconds,
+                )
+            age = (
+                time.monotonic() - self.viewer_control_observation_received_monotonic
+                if self.viewer_control_observation_received_monotonic is not None
+                else None
+            )
+            return viewer_control_response(
+                command=(
+                    dict(self.viewer_control_command)
+                    if self.viewer_control_command is not None
+                    else None
+                ),
+                observation=(
+                    dict(self.viewer_control_observation)
+                    if self.viewer_control_observation is not None
+                    else None
+                ),
+                observation_age_seconds=age,
+            )
 
     def validate_and_publish_viewer_control_observation(
         self, value: Any
@@ -661,7 +702,28 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(self.server.viewer_state_response())
             return
         if path == "/v1/viewer-control":
-            self._send_json(self.server.viewer_control_response())
+            query = parse_qs(parsed.query, keep_blank_values=True)
+            try:
+                after_revision = int(query.get("after_revision", ["0"])[0])
+                wait_seconds = float(query.get("wait_seconds", ["0"])[0])
+            except (TypeError, ValueError):
+                self._send_json({"error": "invalid_viewer_control_poll"}, HTTPStatus.BAD_REQUEST)
+                return
+            viewer_id = query.get("viewer_id", [None])[0]
+            if (
+                after_revision < 0
+                or not 0 <= wait_seconds <= 25
+                or (viewer_id is not None and not re.fullmatch(r"viewer_[0-9a-f]{20}", viewer_id))
+            ):
+                self._send_json({"error": "invalid_viewer_control_poll"}, HTTPStatus.BAD_REQUEST)
+                return
+            self._send_json(
+                self.server.wait_for_viewer_control_response(
+                    after_revision=after_revision,
+                    viewer_id=viewer_id,
+                    wait_seconds=wait_seconds,
+                )
+            )
             return
         if path == "/v1/comparison-candidates":
             self._send_json(suggest_pairs(self.server.catalog))
@@ -1779,6 +1841,7 @@ def create_server(
     server.viewer_state_received_monotonic = None
     server.viewer_state_revoked_publishers = set()
     server.viewer_control_lock = threading.Lock()
+    server.viewer_control_changed = threading.Condition(server.viewer_control_lock)
     server.viewer_control_revision = 0
     server.viewer_control_command = None
     server.viewer_control_observation = None
